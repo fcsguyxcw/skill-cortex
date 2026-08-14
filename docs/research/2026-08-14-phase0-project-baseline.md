@@ -13,7 +13,7 @@
 | 1 | 源码根目录 / 语言 / 模块布局 | 冻结：`D:\Users\a1324\Desktop\skill机制` + TypeScript + `src/*` 模块布局 | 设计决策 |
 | 2 | package manager / 精确命令 / 版本来源 | 冻结：npm + npm scripts；`npm install` / `npm test` / `npm run typecheck`；版本见 §2.3 | 证据 + 决策 |
 | 3 | skill_id / revision / source_hash / manifest / 同名 / move-rename | 冻结：完整 SHA-256（64 hex）内容与路径派生；move/rename 按新实例 | 设计决策（宿主无 ID） |
-| 4 | 首个 pilot Skill + 外部 verifier | 冻结：`docx`，首版边界收窄为只读验证/分析 + 临时目录内幂等 unpack/validate/text-readback | 证据 + 决策 |
+| 4 | 首个 pilot Skill + 外部 verifier | 历史选择：`docx`；已由 ADR-0010 替换为只读 SQL pagination 静态检测 | 证据 + 决策 |
 | 5 | persistence / retention / delete seam | 冻结：Phase 1 不持久化真实事件；Phase 2 仅 `sensitivity=none`，`retentionClass=project_manual`，无自动 TTL | 设计决策 |
 | 6 | 风险 / 阻塞 / Gate P0 结论 | **Gate P0 = PASS**（六项均有文件证据）；仍待验证项见 §6.3，均不阻塞 Phase 1 fixture | 结论 |
 
@@ -230,7 +230,9 @@ Array<{ locator: string /* 相对 skill 根、正斜杠 */; contentHash: string 
 
 ## 4. 首个 Pilot Skill 与外部 verifier（冻结）
 
-### 4.1 选择：`docx`
+### 4.1 历史选择：`docx`（已由 ADR-0010 替换）
+
+> 2026-08-14 复核发现 `docx/LICENSE.txt` 禁止在服务外保留复制件、复制及制作派生作品，因此本节的 fixture 与 procedure 方案不得执行。Phase 3 当前 pilot、边界和许可决策以 ADR-0010 为准；本节只保留为决策历史。
 
 | 项 | 值 |
 |---|---|
@@ -244,9 +246,9 @@ Array<{ locator: string /* 相对 skill 根、正斜杠 */; contentHash: string 
 2. **输入/环境/工具依赖可枚举**：输入=docx 文件路径；工具=`office/validate.py`、`office/unpack.py`（Python3 + lxml/xsd）；可选=`office/pack.py`、`office/soffice.py`（LibreOffice）、`docx`（npm 库，属生成，首版不用）。
 3. **外部可观测 postcondition/verifier**：`python scripts/office/validate.py doc.docx` 做 OOXML XSD schema 校验，退出码 0/1（确定性、非 LLM）；内容正确性用 `unpack.py` + 对 `word/document.xml` 的确定性文本片段断言回读。
 4. **多任务变体与边界反例**：报告/备忘录/信函/表格/TOC/页码/批注/修订等变体；边界=缺 page-size（默认 A4 陷阱）、`xml:space="preserve"`、paraId/durableId 溢出（可 auto-repair）、空内容、非 docx 输入。
-5. **原 Skill 只读**：实验复制到 `fixtures/skills/docx/`，不修改 `~/.agents/skills/docx`。
+5. **原 Skill 只读（历史提议，已禁止）**：曾计划复制到 `fixtures/skills/docx/`；许可复核后确认不得复制，且未执行该计划。
 
-**Proprietary fixture 约束**：`docx` 为 Proprietary 许可。fixture 复制**仅限 project-local**；默认不得提交到 git、不得再分发；复制时须遵守 `LICENSE.txt` 条款。
+**Proprietary fixture 约束（已否决）**：project-local 与 gitignore 都不能消除许可限制；不得复制该 Skill，也不得从中派生 procedure。
 
 ### 4.2 首版 procedure 边界（收窄）
 
@@ -361,6 +363,6 @@ Downstream work now unblocked:
   - Phase 1（Registry + 静态 FTS/BM25 discovery 的 project-local fixture 实现）可启动
   - Workstream A：按 §2.2/§3 建立 src/core/contracts 与 src/core/registry，落地完整 SHA-256 的 ID/revision/hash/manifest
   - Phase 1：创建 package.json（typescript@5.9.3 + npm scripts），首次运行 npm install / npm test / npm run typecheck 并回写 §12
-  - Phase 3 前：复制 docx 到 fixtures/skills/docx（遵守 LICENSE.txt），固化 validate.py + unpack + text-readback verifier
+  - Phase 3 前（已由 ADR-0010 替换）：不得复制 docx；改为冻结 pagination pilot 的来源哈希、原创评测案例与 deterministic verifier
   - Phase 4 前：实测 tool_call 阻断是否可作鉴权 gate、pi.exec 沙箱语义
 ```

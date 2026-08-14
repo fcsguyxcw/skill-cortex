@@ -66,7 +66,7 @@ Phase 0 已冻结：
 - `SkillRecord`、`ActivationProfile`、`PracticeEvent`、`CompiledProcedure` 和 `ExecutionDecision` 的最小合同；
 - prompt 外、自动、无额外 LLM 的本地 discovery 边界；
 - 版本失效、权限继承、独立验证和安全回退规则；
-- 首个实验使用 project-local 的 `docx` fixture，首版只覆盖只读验证/分析与项目临时目录内的幂等 unpack；外部 verifier 使用确定性 OOXML 校验与文本回读。
+- Phase 3 pilot 已由 ADR-0010 改为 `supabase-postgres-best-practices` 的只读 SQL pagination 静态检测；installed Skill 保持只读，仓库只保存 provenance、完整哈希和项目原创评测案例。Phase 2 的 synthetic `docx` replay 仅保留为历史 Practice Store 证据。
 
 Phase 2 只建立 append-only、脱敏、隔离且可删除的 Practice Store；没有可信 Practice Store 之前，不允许自动编译、调权或进入程序快路径。
 

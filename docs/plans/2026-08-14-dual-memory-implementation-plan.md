@@ -257,9 +257,11 @@ Gate P2：证据治理与删除测试通过，且至少一个 pilot Skill 有可
 - 输入、环境和工具依赖可枚举；
 - 有外部可观测 postcondition/verifier；
 - 存在多个真实任务变体与边界反例；
-- 用户安装 Skill 保持只读，实验使用项目内复制 fixture。
+- 用户安装 Skill 保持只读；仅在许可证允许且实验确有需要时使用项目内复制 fixture，否则保存不可变来源哈希、provenance 与项目原创评测案例。
 
 证据次数和 held-out 大小由 Evaluation Owner 在查看候选 procedure 结果前冻结，不在本计划臆定统一数字。
+
+**当前 pilot：** ADR-0010 已用 `supabase-postgres-best-practices` 的只读 SQL pagination 静态检测替换 Phase 0 的 proprietary `docx` 选择。不得复制 `docx` Skill 或从中派生 procedure；Phase 2 synthetic replay 不受此替换影响。
 
 ### 实施任务
 
