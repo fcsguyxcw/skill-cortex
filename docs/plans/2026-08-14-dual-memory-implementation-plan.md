@@ -303,6 +303,8 @@ N_break-even = 编译与验证总成本
 
 Gate P3：一个 procedure 达到 `validated`，完整证据、回放报告和上一稳定回退点存在。
 
+**实施状态：BLOCKED — 2026-08-14。** Phase 3 detector、draft、独立 verifier 与 held-out replay 已完成，但 Gate P3 因真实 Practice evidence 为 0、且首个完整延迟样本 `N_break-even=10.129724 > 10` 未通过。procedure 保持 `draft`；不得启动 Phase 4。证据见 `docs/reports/2026-08-14-phase3-gate-report.md`。
+
 ## 9. Phase 4：Execution Resolver、Guard 与安全回退
 
 ### 目标

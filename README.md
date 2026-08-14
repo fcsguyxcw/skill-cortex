@@ -59,7 +59,7 @@ flowchart TD
 
 ## 当前阶段
 
-**Phase 2 已于 2026-08-14 通过 Gate P2；当前可启动 Phase 3：已有 Skill 的离线部分编译与晋升。** Practice Store、数据 policy、隔离、物理删除和 docx evaluation replay 已实现；真实宿主 observer、docx verifier 与用户环境写入仍未启用，证据见 Phase 2 Gate 报告。
+**Phase 3 离线实现与评测已于 2026-08-14 完成，但 Gate P3 未通过，procedure 保持 `draft`。** Held-out 质量门全部通过；真实 Practice evidence 为 0，且实测 `N_break-even=10.129724 > 10`。不得启动 canary/active 或 Phase 4，证据见 Phase 3 Gate 报告。
 
 Phase 0 已冻结：
 
