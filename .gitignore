@@ -1,0 +1,6 @@
+node_modules/
+.npm-cache/
+.skill-cortex/
+fixtures/skills/docx/
+__pycache__/
+.tmp-*/
