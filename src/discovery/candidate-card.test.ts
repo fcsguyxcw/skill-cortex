@@ -27,9 +27,9 @@ describe("formatCandidateCards", () => {
       candidate("b", "docx", "Create word documents"),
     ]);
     assert.match(text, /## Available skill candidates/);
-    assert.match(text, /1\. pdf \[skillId=a, scope=user, revision=rev:a\]/);
+    assert.match(text, /1\. pdf \[skill_id=a, scope=user, skill_revision=rev:a\]/);
     assert.match(text, /Read PDF documents/);
-    assert.match(text, /2\. docx \[skillId=b, scope=user, revision=rev:b\]/);
+    assert.match(text, /2\. docx \[skill_id=b, scope=user, skill_revision=rev:b\]/);
     assert.match(text, /Create word documents/);
   });
 

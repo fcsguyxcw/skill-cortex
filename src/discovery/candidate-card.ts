@@ -20,7 +20,7 @@ export function formatCandidateCards(
   const lines: string[] = [];
   candidates.forEach((candidate, index) => {
     lines.push(
-      `${index + 1}. ${candidate.name} [skillId=${candidate.skillId}, scope=${candidate.scope}, revision=${candidate.skillRevision}]`,
+      `${index + 1}. ${candidate.name} [skill_id=${candidate.skillId}, scope=${candidate.scope}, skill_revision=${candidate.skillRevision}]`,
     );
     lines.push(`   ${candidate.description}`);
   });
