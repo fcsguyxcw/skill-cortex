@@ -120,6 +120,8 @@ export interface PracticeObserverOptions {
   routeSnapshotSource?: RouteSnapshotSource;
   /** 落盘前的结果校验（默认放行；source_hash 的严格 sha256 校验由 selectAttributableSkills 强制）。 */
   verifyLoadResult?: (details: unknown, snapshot: RouteSnapshotSkill) => boolean;
+  /** 通用证据钩子（B4+）：注入 verifier/步骤证据；observer 不硬编码任何具体 verifier。 */
+  evidenceHook?: EvidenceHook;
   /** 观察/落盘错误回调（fail open，不阻断主 Agent）。 */
   onError?: (error: unknown, phase: ObserverPhase) => void;
   /** 每个成功落盘事件的观察回调（测试/审计）。 */
@@ -190,6 +192,41 @@ export interface ObservedStep {
 }
 
 /**
+ * 证据钩子注入的步骤（B4+：独立于宿主工具事件的步骤，如确定性 detector）。
+ * actor 由注入方声明（合同枚举：agent/procedure/tool/user）；默认 procedure。
+ */
+export interface HookEvidenceStep {
+  actor?: PracticeEvent["stepSummaries"][number]["actor"];
+  operationClass: string;
+  outcome: "ok" | "failed" | "unknown";
+}
+
+/**
+ * 证据钩子的输出：额外的步骤与 verifier 结果。observer 不信任其格式，
+ * 落盘前仍由 policy gate 校验（operationClass 受控文本、verifierId SAFE_ID 等）。
+ */
+export interface HookEvidence {
+  steps: readonly HookEvidenceStep[];
+  verifierResults: ReadonlyArray<{
+    verifierId: string;
+    result: "pass" | "fail" | "unknown";
+    observedEffect?: string;
+  }>;
+}
+
+/**
+ * 通用证据钩子（observer 保持通用：不硬编码任何 verifier/operationClass）。
+ * 注入方（如 B4 pagination harness）在 run 结束时对每个选中 Skill 收集额外
+ * 步骤与 verifier 结果；返回 undefined 表示本次不注入（事件保持无 verifier）。
+ */
+export interface EvidenceHook {
+  collect(
+    run: RunCollector,
+    selection: AttributableSelection,
+  ): Promise<HookEvidence | undefined>;
+}
+
+/**
  * 单次 agent run 的采集器（纯内存、可测）。
  * 不自行摄入/重算候选；只聚合宿主事件，settled 时交由快照校验合成。
  */
@@ -199,6 +236,8 @@ export class RunCollector {
   readonly startedAt: string;
   readonly tenantScope: string;
   readonly taskHash: string;
+  /** 原始用户 prompt（仅内存，用于 evidenceHook 输入；绝不落盘）。 */
+  readonly prompt: string;
   /** 本次 run 消费到的候选快照（cortex 成功 inject 后由 observer 在 before_agent_start 绑定）。 */
   readonly snapshot: RouteSnapshot | undefined;
   /** 快照未绑定时的稳定原因（finalize 时上报，不泄漏内部细节）。 */
@@ -214,6 +253,7 @@ export class RunCollector {
     startedAt: string;
     tenantScope: string;
     taskHash: string;
+    prompt: string;
     snapshot?: RouteSnapshot;
     snapshotRejectReason?: ObserverStatus["reason"];
   }) {
@@ -222,6 +262,7 @@ export class RunCollector {
     this.startedAt = options.startedAt;
     this.tenantScope = options.tenantScope;
     this.taskHash = options.taskHash;
+    this.prompt = options.prompt;
     this.snapshot = options.snapshot;
     this.snapshotRejectReason = options.snapshotRejectReason;
   }
@@ -348,17 +389,40 @@ export function buildPracticeEvent(
     candidateSkillIds: string[];
     candidateCount: number;
     selectedCount: number;
+    /** evidenceHook 注入的步骤/verifier（可选；无则保持无 verifier）。 */
+    hookEvidence?: HookEvidence;
   },
 ): PracticeEvent {
+  // 统一 stepId 编号：宿主工具步骤在前，hook 注入步骤续后（stepId 全局唯一）。
   const stepSummaries: PracticeEvent["stepSummaries"] = [];
   for (const step of run.steps) {
     const operationClass = sanitizeOperationClass(`tool:${step.toolName}`);
     if (operationClass === "") continue;
     stepSummaries.push({
-      stepId: step.stepId,
+      stepId: `step-${stepSummaries.length + 1}`,
       actor: "tool",
       operationClass,
       outcome: step.outcome,
+    });
+  }
+  for (const step of options.hookEvidence?.steps ?? []) {
+    const operationClass = sanitizeOperationClass(step.operationClass);
+    if (operationClass === "") continue;
+    stepSummaries.push({
+      stepId: `step-${stepSummaries.length + 1}`,
+      actor: step.actor ?? "procedure",
+      operationClass,
+      outcome: step.outcome,
+    });
+  }
+  const verifierResults: PracticeEvent["verifierResults"] = [];
+  for (const result of options.hookEvidence?.verifierResults ?? []) {
+    verifierResults.push({
+      verifierId: result.verifierId,
+      result: result.result,
+      ...(result.observedEffect !== undefined
+        ? { observedEffect: sanitizeOperationClass(result.observedEffect, 200) }
+        : {}),
     });
   }
 
@@ -387,7 +451,7 @@ export function buildPracticeEvent(
     stepSummaries,
     authorizationResults: [],
     guardResults: [],
-    verifierResults: [],
+    verifierResults,
     attribution: "unknown",
     sensitivity: "none",
     retentionClass: "project_manual",
@@ -447,6 +511,7 @@ export function registerPracticeObserver(
   const onEvent = options.onEvent;
   const onStatus = options.onStatus;
   const verifyLoadResult = options.verifyLoadResult ?? defaultVerifyLoadResult;
+  const evidenceHook = options.evidenceHook;
   const runSeqBySession = new Map<string, number>();
   const currentRunBySession = new Map<string, RunCollector>();
 
@@ -483,6 +548,8 @@ export function registerPracticeObserver(
         startedAt: now().toISOString(),
         tenantScope,
         taskHash: sha256HexOf(event.prompt).slice(0, 32),
+        // prompt 仅内存持有（evidenceHook 输入），落盘只写派生 hash 与结构化结果。
+        prompt: event.prompt,
         snapshot,
         snapshotRejectReason,
       });
@@ -541,12 +608,19 @@ export function registerPracticeObserver(
       const routeDecisionId = deriveRouteDecisionId(run.runKey);
       let appended = 0;
       for (const selection of selected) {
+        // 通用证据钩子：注入额外步骤/verifier（B4+）；返回 undefined 则不注入。
+        // 钩子抛错 ⇒ fail-closed：该事件不落盘，走 onError(finalize)。
+        let hookEvidence: HookEvidence | undefined;
+        if (evidenceHook !== undefined) {
+          hookEvidence = await evidenceHook.collect(run, selection);
+        }
         const event = buildPracticeEvent(run, selection, {
           now,
           routeDecisionId,
           candidateSkillIds: snapshot.candidateSkills.map((s) => s.skillId),
           candidateCount: snapshot.candidateSkills.length,
           selectedCount: selected.length,
+          hookEvidence,
         });
         await options.store.append(event);
         appended += 1;

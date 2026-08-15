@@ -145,3 +145,83 @@ PracticeStore.invalidate("project:bcf863bcbed32e5513c21e03a7fbebab", ["obs-84586
 **0.84.2 重跑验证**：以相同 `--no-session` 命令重跑，新事件 `obs-3bf8d613531604c011be6897bffcf1bf2f50fa7c`：`hasEnvironmentFingerprint=false`，`dependencyFingerprint={sourceHash:"sha256:e07f…"}`（无 environmentClass），`provenance=real`、`attribution=unknown`、policy 通过 —— 不谎报 0.84.1。
 
 **结论**：仓库依赖/测试基线保持 0.84.1 不变；真实宿主可能是 0.84.2 等其它版本，observer 对无法验证的 host version 采取省略而非猜测。
+
+## 9. B4：真实 pagination PracticeEvent（带 verifier）（2026-08-15）
+
+**目标**：≥2 条真实、可归因、policy-valid、带 verifier 的 pagination PracticeEvent，使
+`resolvePracticeEvidence` 验收门（Phase 3 Gate 失败项 `practice_evidence`）可过。
+
+**机制设计**（observer 保持通用，不硬编码任何 verifier/operationClass）：
+
+```text
+真实 0.84.2 --no-session 会话（harness -e 加载，生产 .pi 入口未改）
+  → 主 Agent 真实 discovery → 选中 supabase-postgres-best-practices → load_skill
+  → observer 采集（B3 机制不变）
+  → agent_settled 时调用 evidenceHook.collect(run, selection)
+  → pagination hook：从 run.prompt（内存，不落盘）提取 SQL → detectPagination 复算
+    → 结构化验证（class 受控 + evidence.matchText 真实存在于输入 + uses_offset 含 OFFSET）
+  → 注入 step detect-offset-pagination(ok) + verifier phase3-pagination-structured-finding(pass)
+  → policy 计算 attribution=verified_skill_effect → append
+```
+
+- 证据来源是真实宿主会话（任务由验收方提供项目原创 SQL），detector 与结构化验证均为
+  确定性复算，不是 LLM 自评，也不把 evaluation/synthetic 案例改标 real。
+- 无 SQL 的会话（hook 返回 undefined）事件保持 attribution=unknown；hook 验证失败 ⇒
+  fail verifier + failed step（attribution=mixed）；hook 抛错 ⇒ fail-closed 不落盘。
+
+**新增/修改文件**（全部本 Agent 所有）：
+
+| 文件 | 内容 |
+|---|---|
+| `src/adapters/pi/practice-observer.ts` | 新增通用 `EvidenceHook`（steps/verifierResults 注入）；`RunCollector.prompt` 仅内存；`buildPracticeEvent` 合并 hook 证据并统一 stepId |
+| `src/adapters/pi/practice-pagination-hook.ts` | `createPaginationEvidenceHook()`：SQL 提取、`detectPagination` 复算、结构化验证 |
+| `src/evaluation/phase2/practice-evidence-b4.test.ts` | 7 个测试：hook 单元 + observer 集成 + `resolvePracticeEvidence` 门 + fail 路径 |
+| `src/evaluation/phase2/b4-e2e-entry.ts` | E2E harness 入口（`-e` 加载，注入 evidenceHook；生产 `.pi` 入口未改） |
+
+**验证**：
+
+```text
+node --test src/evaluation/phase2/practice-evidence-b4.test.ts
+  PASS；7 tests；7 pass；0 fail
+npm run typecheck（本 Agent 范围） PASS（非 phase12 induction WIP 错误为 0）
+```
+
+**真实 0.84.2 会话（两轮）**：
+
+```text
+pi --no-session -ne -e ./src/evaluation/phase2/b4-e2e-entry.ts --print <只读任务含项目原创 SQL>
+```
+
+| 字段 | 事件 1（obs-9ee1fe77…） | 事件 2（obs-79b95a72…） |
+|---|---|---|
+| provenance | real | real |
+| parentSkillId | skill:670b8f65dca2ceda3de0d70e92ccd8b5cb832e7c4fd2e5d845b58b19e230cbe2 | 同左 |
+| parentSkillRevision | rev:ce271d3393e3f1ee836ab48419f33e4337098ecf809e936b969a8ea8af2a8dec | 同左 |
+| sourceHash | sha256:8e5a86aa92990a706512a6454e3a6a6345a950b454e75a11d048210d0a2ca830 | 同左 |
+| candidateSkillIds | 5（含父 Skill） | 5（含父 Skill） |
+| selectedSkillIds | [父 Skill] | [父 Skill] |
+| step | detect-offset-pagination:ok | detect-offset-pagination:ok |
+| verifier | phase3-pagination-structured-finding=pass | 同左 |
+| attribution | verified_skill_effect | verified_skill_effect |
+| policy | ok | ok |
+
+真实绑定与 Phase 3 Gate 报告的冻结绑定逐字段一致（skill id/revision/source hash）。
+
+**resolvePracticeEvidence 验收门（真实绑定）**：
+
+```text
+resolvePracticeEvidence({ tenantScope, eventIds: [obs-79b95a72…, obs-9ee1fe77…],
+  expectedParentSkillId/Revision/SourceHash=真实绑定,
+  requiredOperationClass="detect-offset-pagination",
+  requiredVerifierId="phase3-pagination-structured-finding" })
+→ { ok: true, distinctRealCount: 2, reason: "ok" }
+```
+
+**未解决风险**：
+1. hook 的 verifier 语义是"结构化 finding 独立验证"（class 受控 + 证据真实存在于输入），
+   不验证 label 正确性（真实使用无 oracle）；detector/verifier 的 label 质量由 Phase 3
+   held-out 已证明，B4 只补真实宿主证据链。
+2. `run.prompt` 现由 observer 内存持有供 hook 使用；落盘仍只写派生 hash 与结构化结果，
+   但内存生命周期内存在原始文本（harness 仅限验收，生产入口未启用 evidenceHook）。
+3. 生产 `.pi` 入口是否/何时启用 evidenceHook 由 leader 决定（B4 仅提供机制与验收 harness）。
+4. Phase 4 未启动；B4 不改变 procedure 状态（draft 保持），不触发 promotion。
