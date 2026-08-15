@@ -12,11 +12,12 @@
 ## 2. 开工前必读顺序
 
 1. `README.md`
-2. `docs/adr/0006-dual-memory-skill-architecture.md`
-3. `docs/adr/0007-prompt-external-skill-discovery.md`
-4. `docs/adr/0008-practice-evidence-and-procedure-promotion.md`
-5. `docs/design/dual-memory-data-contracts.md`
-6. `docs/plans/2026-08-14-dual-memory-implementation-plan.md`
+2. 最新的 `docs/reviews/*implementation-progress-audit.md`
+3. `docs/adr/0006-dual-memory-skill-architecture.md`
+4. `docs/adr/0007-prompt-external-skill-discovery.md`
+5. `docs/adr/0008-practice-evidence-and-procedure-promotion.md`
+6. `docs/design/dual-memory-data-contracts.md`
+7. `docs/plans/2026-08-14-dual-memory-implementation-plan.md`
 
 ADR-0001 至 ADR-0004 和带 historical/superseded 标记的研究、审查文档只用于理解决策历史，不得作为当前实现依据。ADR-0005 只约束其 applicability note 声明的评估证据。
 
@@ -49,6 +50,8 @@ ADR-0001 至 ADR-0004 和带 historical/superseded 标记的研究、审查文�
 - schema、权限、持久化、生命周期或执行路径的重大变化必须先新增或更新 ADR。
 - 测试数据、生产 trace 和 synthetic/evaluation 数据必须分区；当前 Agent 选择不能自动成为 gold label。
 - 每阶段按 implementation plan 的依赖、验收与 anti-pattern guard 执行；上游 gate 未通过不得启动下游 active path。
+- 开始新 Phase 前必须读取最新的 implementation progress audit；其中未关闭的 blocker 优先于 implementation plan 的下游任务。若状态冲突，以最新且有证据支持的 audit 为准，直到 blocker 被验证关闭。
+- 阶段状态必须分别报告 component implemented、host integration complete 与 end-to-end complete；仅凭 unit test、typecheck 或 code review 不得宣称整个 Phase complete。关闭 blocker 必须附对应测试、复现或真实端到端证据。
 
 ## 6. 验证与交付报告
 

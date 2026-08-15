@@ -10,20 +10,21 @@
 ## 权威阅读顺序
 
 1. [AGENTS.md](AGENTS.md)：所有 Agent 必须遵守的 project-local、安全和协作规则。
-2. [当前研究规范](docs/research/2026-08-14-experience-guided-installed-skill-proceduralization.md)：当前范围、研究问题和验收原则。
-3. [ADR-0006：双记忆架构](docs/adr/0006-dual-memory-skill-architecture.md)：当前总体架构决定。
-4. [ADR-0007：Prompt 外 Discovery](docs/adr/0007-prompt-external-skill-discovery.md)：当前发现机制决定。
-5. [ADR-0008：证据与 Procedure 晋升](docs/adr/0008-practice-evidence-and-procedure-promotion.md)：当前学习、验证、失效和回退契约。
-6. [双记忆数据合同](docs/design/dual-memory-data-contracts.md)：规范字段、不变量、状态机和数据所有权。
-7. [多 Agent 实施计划](docs/plans/2026-08-14-dual-memory-implementation-plan.md)：Phase 0～7、所有权、gate、验证和停止条件。
-8. [Phase 0：Pi 宿主 API 核验](docs/research/2026-08-14-phase0-pi-api-inventory.md)：当前安装版本允许与不可用的宿主接口。
-9. [Phase 0：Project-local 基线与 Pilot](docs/research/2026-08-14-phase0-project-baseline.md)：技术栈、身份算法、数据政策和首个 pilot 决策。
-10. [Phase 1 Gate P1 验收报告](docs/reports/2026-08-14-phase1-gate-report.md)：Registry、静态 discovery、shadow adapter、测试和限制。
-11. [ADR-0009：Practice Store 事件文件与显式删除](docs/adr/0009-practice-store-event-files-and-deletion.md)：以不可变事件文件、claim 与 tombstone 落实原子身份和物理删除。
-12. [Phase 2 Gate P2 验收报告](docs/reports/2026-08-14-phase2-gate-report.md)：Practice Store、policy、删除、回放、测试与风险边界。
-13. [ADR-0005：Benchmark 数据边界](docs/adr/0005-benchmark-data-boundary.md)：仍有效的评测数据完整性规则，适用范围由 ADR-0007/0008 澄清。
-14. [相关工作与新颖性边界](docs/research/2026-08-14-skill-cortex-related-work.md)：哪些机制已有先行工作，哪些仍只是待验证假设。
-15. [对抗性架构审查](docs/reviews/2026-08-14-skill-cortex-audit.md)：安全、归因、版本、回退和评测风险；其中 routing-only 阶段决定已经失效。
+2. [最新实施进度审计](docs/reviews/2026-08-14-implementation-progress-audit.md)：当前真实阶段状态、未关闭 blocker 和下一轮 Herdr 的修复顺序。
+3. [当前研究规范](docs/research/2026-08-14-experience-guided-installed-skill-proceduralization.md)：当前范围、研究问题和验收原则。
+4. [ADR-0006：双记忆架构](docs/adr/0006-dual-memory-skill-architecture.md)：当前总体架构决定。
+5. [ADR-0007：Prompt 外 Discovery](docs/adr/0007-prompt-external-skill-discovery.md)：当前发现机制决定。
+6. [ADR-0008：证据与 Procedure 晋升](docs/adr/0008-practice-evidence-and-procedure-promotion.md)：当前学习、验证、失效和回退契约。
+7. [双记忆数据合同](docs/design/dual-memory-data-contracts.md)：规范字段、不变量、状态机和数据所有权。
+8. [多 Agent 实施计划](docs/plans/2026-08-14-dual-memory-implementation-plan.md)：Phase 0～7、所有权、gate、验证和停止条件。
+9. [Phase 0：Pi 宿主 API 核验](docs/research/2026-08-14-phase0-pi-api-inventory.md)：当前安装版本允许与不可用的宿主接口。
+10. [Phase 0：Project-local 基线与 Pilot](docs/research/2026-08-14-phase0-project-baseline.md)：技术栈、身份算法、数据政策和首个 pilot 决策。
+11. [Phase 1 Gate P1 验收报告](docs/reports/2026-08-14-phase1-gate-report.md)：Registry、静态 discovery、shadow adapter、测试和限制。
+12. [ADR-0009：Practice Store 事件文件与显式删除](docs/adr/0009-practice-store-event-files-and-deletion.md)：以不可变事件文件、claim 与 tombstone 落实原子身份和物理删除。
+13. [Phase 2 Gate P2 验收报告](docs/reports/2026-08-14-phase2-gate-report.md)：Practice Store、policy、删除、回放、测试与风险边界。
+14. [ADR-0005：Benchmark 数据边界](docs/adr/0005-benchmark-data-boundary.md)：仍有效的评测数据完整性规则，适用范围由 ADR-0007/0008 澄清。
+15. [相关工作与新颖性边界](docs/research/2026-08-14-skill-cortex-related-work.md)：哪些机制已有先行工作，哪些仍只是待验证假设。
+16. [对抗性架构审查](docs/reviews/2026-08-14-skill-cortex-audit.md)：安全、归因、版本、回退和评测风险；其中 routing-only 阶段决定已经失效。
 
 [旧版“从轨迹学习新技能”讨论稿](docs/research/2026-08-14-learning-skills-into-programs.md)仅用于追溯项目纠偏过程，不再定义当前范围。
 
@@ -59,7 +60,9 @@ flowchart TD
 
 ## 当前阶段
 
-**Phase 3 离线实现与评测已于 2026-08-14 完成，但 Gate P3 未通过，procedure 保持 `draft`。** Held-out 质量门全部通过；真实 Practice evidence 为 0，且实测 `N_break-even=10.129724 > 10`。不得启动 canary/active 或 Phase 4，证据见 Phase 3 Gate 报告。
+当前状态以[最新实施进度审计](docs/reviews/2026-08-14-implementation-progress-audit.md)为准：Phase 0 complete；Phase 1 与 Phase 2 partial；Phase 3 仅完成 evaluation scaffold / offline pilot，Gate P3 未通过；Phase 4～7 未开始。component、host integration 与 end-to-end 必须分别验收。
+
+Phase 3 procedure 保持 `draft`。Held-out 质量门全部通过，但真实 Practice evidence 为 0，且首个点估计 `N_break-even=10.129724 > 10`。不得启动 canary/active 或 Phase 4，证据见 Phase 3 Gate 报告。
 
 Phase 0 已冻结：
 
