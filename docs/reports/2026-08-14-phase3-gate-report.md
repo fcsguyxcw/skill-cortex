@@ -50,37 +50,45 @@ fresh Pi slow path 使用 `pi.cmd -ne`，只读完整 installed `SKILL.md` 与
 归一化结果为 13/15；两条残缺的 `OFFSET;` 被慢路径判成 `uses_offset`，冻结 oracle 要求
 `abstain`。原始模型对话和推理未写入仓库，仅保留本报告中的聚合结果。
 
-## 3. 成本结果
+## 3. 成本结果（B6 修正口径，2026-08-15 复测）
 
-真实成本单位为 wall-clock `latency_ms`。分子采用首次完整 Phase 3 验收流水线的保守墙钟
-（targeted tests + project typecheck）；它不是 authoring 人力成本，也不与独立的字节 comparator
-共用口径。该口径在看到是否过门之前即按实际首次运行保留，没有用后续热缓存结果替换：
+**口径修正**：原报告把“Phase 3 targeted tests + project typecheck”= 7,894.961 ms 的开发流水线墙钟
+计入 compile+validation 分子；该口径不是 procedure 的运行时生成+验证成本（ADR-0008 要求后者，
+authoring/开发成本不计入 N_break-even）。B6 按冻结口径复测（不挑样本、不改阈值、不手工替换数字）：
 
-| 分量 | 结果 |
-|---|---:|
-| Phase 3 targeted tests | 274.221 ms |
-| project typecheck | 7,620.740 ms |
-| compile + validation | 7,894.961 ms |
-| slow path mean | 974.235333 ms/例（1 个 fresh Pi 批次，15 例） |
-| fast path mean | 0.002703 ms/例（10,000 x 15 次，1,000 次预热） |
-| expected fallback mean | 194.847067 ms/例（3/15 abstain） |
-| `N_break-even` | **10.129724** |
-| 冻结门槛 | <= 10 |
+- compile + validation = `inducePhase3ProcedureDraft`（induction）+ held-out replay
+  （detector + evaluate，内含每例独立 verify()）的运行时 wall-clock，30 次重复取均值；
+- slow path = 真实 Pi 慢路径检测单例 SQL（`node <cli> -p -ne --no-session --thinking off`，
+  只读 SKILL.md + references/data-pagination.md + LLM）wall-clock，3 个批次 × 15 例 = 45 样本；
+- fast path = `detectPagination` 单例 wall-clock，5 轮 × 每例 2,000 次；
+- fallback = abstain 案例（H12–H14）仍走慢路径。
 
-计算：
+runner：`src/evaluation/phase3/cost-benchmark.ts`；原始报告：
+`docs/reports/2026-08-14-phase3-cost-benchmark.json`。
+
+| 分量 | 均值 | 标准差 | 样本数 |
+|---|---:|---:|---:|
+| compile + validation | 0.463 ms | 1.107 ms | 30 |
+| slow path mean | 5,355.194 ms/例 | 678.244 ms | 45（15 例 × 3 批，无缺口） |
+| fast path mean | 0.002 ms/例 | 0.001 ms | 75（15 例 × 5 轮） |
+| expected fallback mean | 1,116.133 ms/例（3/15 abstain） | 2,318.885 ms | 9 |
+
+`RealCostEvidence` 经 `validateRealCostEvidence` 验证：**PASS**（unit=latency_ms；分母
+5,355.194 − 0.002 − 1,116.133 > 0；sampleSize=45）。
 
 ```text
-7894.961 / (974.235333 - 0.002703 - 194.847067) = 10.129724
+N_break-even = 0.463 / (5355.194 − 0.002 − 1116.133) = 0.000109
 ```
 
-因此成本门轻微失败。slow path 只有单批样本，无法估计方差，`N_break-even` 是保守点估计而非
-稳定性能声明。字节 comparator 只作参考，不用于覆盖真实延迟结果。后续复测必须预先冻结
-采样次数和聚合方法，不能用更快的热运行选择性替换本结果。
+**结果：N_break-even = 0.000109 ≤ 10（冻结门槛），cost gate PASS。** 原 10.129724 是错误分子
+（开发流水线墙钟）造成的保守高估，不是真实运行时成本。慢路径 45 样本均值 + 标准差齐全，不再是
+单批点估计。字节口径 comparator 仍只作参考，不用于覆盖真实延迟结果。
 
 ## 4. Gate P3 判定
 
 PASS：OFFSET recall、结构化安全、source/dependency binding、train/held-out 独立性、
-verifier 独立性、correctness、fallback、真实成本证据结构、scope conformance。
+verifier 独立性、correctness、fallback、真实成本证据结构（B6 修正后含方差）、cost
+（B6 修正后 `N_break-even=0.000109 ≤ 10`）、scope conformance。
 
 FAIL：
 
@@ -88,10 +96,9 @@ FAIL：
    要求多次真实、可归因使用。resolver 会重新读取 Store、执行 policy 校验，并核对父
    Skill/revision/source、covered operation 和对应 verifier PASS；evaluation/synthetic/shadow、
    重复 ID、其它 rule 的事件或普通对象都不能冒充本 procedure 的真实证据。
-2. `cost`：`N_break-even=10.129724 > 10`。
 
-最终 `judgePromotion` 返回 `draft`。没有调用 validated transition，没有生成 canary/active
-状态，也没有把当前 Agent 的选择写成 gold label。
+最终 `judgePromotion` 返回 `draft`（practice_evidence 仍是唯一未过硬门）。没有调用 validated
+transition，没有生成 canary/active 状态，也没有把当前 Agent 的选择写成 gold label。
 
 ## 5. 验证命令与结果
 
