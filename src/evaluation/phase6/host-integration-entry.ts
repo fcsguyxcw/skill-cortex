@@ -10,10 +10,10 @@
  *     → registerPracticeObserver({ store, routeSnapshotSource, evidenceHook: pagination, onEvent })
  *     → pi.on("agent_settled")             // 冲刷 verified 事件 → induction → shadow → 受控 promotion
  *
- * 受控 promotion（reviewer 要求）：promotion report 只能来自 evaluateProfileForPromotion
- * （包装 evaluateOverlay）对冻结 FINAL_HELDOUT 集重算；caller 无法注入手搓 report/verdict。
- * real-skill 评估集属 Phase 7 —— 父 Skill 不在冻结集内 ⇒ promotion 拒绝（parent_not_in_
- * evaluation_set），profile 保持 shadow（不 trivial 晋升）。
+ * 受控 promotion（Seam 3）：report 只能来自冻结 real-skill 评估 provider（buildFrozenEvaluation）
+ * + evaluateProfileForPromotion 重算；caller 无法注入手搓评估集/report/verdict。
+ * host lifecycle（Seam 2）：agent_settled 编排 = 父 revision 漂移回 shadow + induction + 受控
+ * promotion；evidence 删除级联经 runEvidenceDeletionCascade 单独接线（删除是外部触发）。
  *
  * 命令（项目根）：
  *   pi --no-session -ne -e ./src/evaluation/phase6/host-integration-entry.ts --print "<只读任务>"
@@ -32,11 +32,9 @@ import {
 import { createPaginationEvidenceHook } from "../../adapters/pi/practice-pagination-hook.ts";
 import {
   FROZEN_PROMOTION_OVERLAY,
-  induceAndStoreShadow,
-  promoteProfileIfEligible,
+  runActivationHostLifecycle,
 } from "../../activation/host.ts";
 import { ActivationProfileStore } from "../../activation/store.ts";
-import type { ShadowActivationProfile } from "../../activation/state.ts";
 import type {
   ActivationProfile,
   PracticeEvent,
@@ -99,27 +97,14 @@ export default function phase6HostIntegrationEntry(pi: ExtensionAPI): void {
   });
 
   pi.on("agent_settled", async () => {
-    for (const [skillId, events] of eventsByParent) {
-      const record = catalogRecords.find((r) => r.skillId === skillId);
-      if (record === undefined) continue;
-      const induced = await induceAndStoreShadow(
-        activationStore,
-        events,
-        record,
-        PHASE6_SHADOW_REPORT_ID,
-      );
-      if (!induced.ok || induced.status !== "shadow") continue;
-      const profile = await activationStore.getProfile(induced.profileId);
-      if (profile === undefined || profile.status !== "shadow") continue;
-      // 受控 promotion：report 只能来自冻结 real-skill 评估 provider（buildFrozenEvaluation）
-      // + evaluateProfileForPromotion 重算，caller 无法注入手搓评估集/report。
-      await promoteProfileIfEligible(
-        activationStore,
-        profile as ShadowActivationProfile,
-        catalogRecords,
-        PHASE6_PROMOTION_REPORT_ID,
-      );
-    }
+    // Phase 7 Seam 2：host lifecycle 编排（父 revision 漂移回 shadow + induction + 受控 promotion）。
+    await runActivationHostLifecycle({
+      store: activationStore,
+      eventsByParent,
+      catalogRecords,
+      shadowReportId: PHASE6_SHADOW_REPORT_ID,
+      promotionReportId: PHASE6_PROMOTION_REPORT_ID,
+    });
     eventsByParent.clear();
   });
 }
@@ -128,6 +113,14 @@ export default function phase6HostIntegrationEntry(pi: ExtensionAPI): void {
 export function phase6ActivationStore(root: string): ActivationProfileStore {
   return new ActivationProfileStore({
     rootDir: path.join(root, ".skill-cortex", "activation"),
+    projectRoot: root,
+  });
+}
+
+/** 供 E2E 测试在隔离 fixture 根构造同一 practice store 路径（evidence 删除级联断言）。 */
+export function phase6PracticeStore(root: string): PracticeStore {
+  return new PracticeStore({
+    rootDir: path.join(root, ".skill-cortex", "practice"),
     projectRoot: root,
   });
 }

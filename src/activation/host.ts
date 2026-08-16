@@ -38,7 +38,7 @@ import {
   type DraftActivationProfile,
   type ShadowActivationProfile,
 } from "./state.ts";
-import type { ActivationProfileStore, TriggerSource } from "./store.ts";
+import { applyEvidenceDeletionCascade, type ActivationProfileStore, type TriggerSource } from "./store.ts";
 
 // ---------------------------------------------------------------------------
 // 受控 evaluator（唯一 promotion report 来源）
@@ -265,4 +265,108 @@ export async function revertProfilesForParentRevisionChanges(
     reverted.push(profile.profileId);
   }
   return { reverted };
+}
+
+// ---------------------------------------------------------------------------
+// Phase 7 Seam 2 —— host lifecycle 编排 + evidence 删除级联接线
+// ---------------------------------------------------------------------------
+
+export interface ActivationHostLifecycleInput {
+  store: ActivationProfileStore;
+  /** verified_skill_effect 事件按 parentSkillId 分组（observer onEvent 累积）。 */
+  eventsByParent: ReadonlyMap<string, readonly PracticeEvent[]>;
+  /** 当次 discovery catalog（父 SkillRecord 作者字段 + revision 漂移判定）。 */
+  catalogRecords: readonly SkillRecord[];
+  shadowReportId: string;
+  promotionReportId: string;
+  trigger?: TriggerSource;
+}
+
+export interface ActivationHostLifecycleOutcome {
+  /** 父 revision 漂移回 shadow 的 profileId。 */
+  reverted: readonly string[];
+  /** 本轮新 induction 落盘（draft→shadow）的 profileId。 */
+  inducedProfileIds: readonly string[];
+  /** 本轮受控 promotion 晋升 active 的 profileId。 */
+  promotedProfileIds: readonly string[];
+}
+
+/**
+ * Phase 7 Seam 2 —— 每轮 host lifecycle 编排：先父 revision 漂移回 shadow，再 induction
+ * （verified 事件 → draft → shadow），最后受控 promotion（shadow → active）。evidence 删除
+ * 级联由 runEvidenceDeletionCascade 单独接线（删除是外部触发，不在正常 settle 流内）。
+ */
+export async function runActivationHostLifecycle(
+  input: ActivationHostLifecycleInput,
+): Promise<ActivationHostLifecycleOutcome> {
+  const trigger = input.trigger ?? "procedure";
+  // 1. 父 revision 漂移：active profile 的父 revision 与当次 catalog 不同 ⇒ 回 shadow。
+  const currentRevisionBySkillId = new Map(
+    input.catalogRecords.map((record) => [record.skillId, record.skillRevision] as const),
+  );
+  const { reverted } = await revertProfilesForParentRevisionChanges(
+    input.store,
+    currentRevisionBySkillId,
+    trigger,
+  );
+
+  // 2. induction → shadow；3. promotion → active（冻结 real-skill 评估 provider）。
+  const inducedProfileIds: string[] = [];
+  const promotedProfileIds: string[] = [];
+  for (const [skillId, events] of input.eventsByParent) {
+    const record = input.catalogRecords.find((r) => r.skillId === skillId);
+    if (record === undefined) continue;
+    const induced = await induceAndStoreShadow(
+      input.store,
+      events,
+      record,
+      input.shadowReportId,
+      trigger,
+    );
+    if (!induced.ok || induced.status !== "shadow") continue;
+    inducedProfileIds.push(induced.profileId);
+    const profile = await input.store.getProfile(induced.profileId);
+    if (profile === undefined || profile.status !== "shadow") continue;
+    const promoted = await promoteProfileIfEligible(
+      input.store,
+      profile as ShadowActivationProfile,
+      input.catalogRecords,
+      input.promotionReportId,
+      trigger,
+    );
+    if (promoted.ok) promotedProfileIds.push(induced.profileId);
+  }
+  return { reverted, inducedProfileIds, promotedProfileIds };
+}
+
+/** PracticeStore 的窄 invalidate 接口（结构类型，避免 host 耦合 practice/store）。 */
+export interface PracticeInvalidator {
+  invalidate(tenantScope: string, eventIds: readonly string[]): Promise<{ invalidatedEventIds: string[] }>;
+}
+
+export interface EvidenceDeletionLifecycleOutcome {
+  invalidatedEventIds: readonly string[];
+  /** evidence 级联 suspend 的 profileId。 */
+  suspended: readonly string[];
+}
+
+/**
+ * Phase 7 Seam 2 —— evidence 删除级联接线：PracticeStore.invalidate 的真实 invalidatedEventIds
+ * → applyEvidenceDeletionCascade → 命中 cue 的非终态 profile suspend。删除是外部触发，
+ * 此 seam 供 host lifecycle（如审计删除入口）调用；不在此处猜删除时机。
+ */
+export async function runEvidenceDeletionCascade(
+  activationStore: ActivationProfileStore,
+  practiceStore: PracticeInvalidator,
+  tenantScope: string,
+  eventIds: readonly string[],
+  trigger: TriggerSource = "user",
+): Promise<EvidenceDeletionLifecycleOutcome> {
+  const { invalidatedEventIds } = await practiceStore.invalidate(tenantScope, eventIds);
+  const { suspended } = await applyEvidenceDeletionCascade(
+    activationStore,
+    invalidatedEventIds,
+    trigger,
+  );
+  return { invalidatedEventIds, suspended };
 }

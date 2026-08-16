@@ -30,6 +30,8 @@ import {
   induceAndStoreShadow,
   promoteProfileIfEligible,
   revertProfilesForParentRevisionChanges,
+  runActivationHostLifecycle,
+  runEvidenceDeletionCascade,
 } from "./index.ts";
 import { transitionProfileToShadow, type ShadowActivationProfile } from "./index.ts";
 import { ActivationProfileStore } from "./index.ts";
@@ -149,6 +151,14 @@ function verifiedEvent(id: string, overrides: Partial<PracticeEvent> = {}): Prac
     retentionClass: "project_manual",
     ...overrides,
   };
+}
+
+/** verified 事件绑定到指定 catalog record（parentSkillId/revision 覆盖；sourceHash 保持合法 sha256）。 */
+function verifiedEventFor(record: SkillRecord, id: string): PracticeEvent {
+  return verifiedEvent(id, {
+    parentSkillId: record.skillId,
+    parentSkillRevision: record.skillRevision,
+  });
 }
 
 before(() => {
@@ -366,5 +376,81 @@ describe("revertProfilesForParentRevisionChanges：父 revision 漂移", () => {
     );
     assert.deepEqual(outcome.reverted, []);
     assert.equal((await store.getProfile("profile:host-test"))!.status, "active");
+  });
+});
+
+describe("runActivationHostLifecycle（Seam 2）：host lifecycle 编排", () => {
+  it("verified 事件 + catalog ⇒ induction → 受控 promotion → active", async () => {
+    const store = makeStore();
+    const events = [verifiedEventFor(GOLD, "obs-1"), verifiedEventFor(GOLD, "obs-2")];
+    const outcome = await runActivationHostLifecycle({
+      store,
+      eventsByParent: new Map([[GOLD.skillId, events]]),
+      catalogRecords: [GOLD, CONFUSER_DISTINCT],
+      shadowReportId: "shadow:host-001",
+      promotionReportId: "promotion:host-001",
+    });
+    assert.deepEqual(outcome.reverted, []);
+    assert.equal(outcome.inducedProfileIds.length, 1);
+    assert.equal(outcome.promotedProfileIds.length, 1);
+    const profile = await store.getProfile(outcome.inducedProfileIds[0]!);
+    assert.equal(profile!.status, "active");
+  });
+
+  it("父 revision 漂移：第二轮流当次 catalog revision 不同 ⇒ active 回 shadow", async () => {
+    const store = makeStore();
+    await runActivationHostLifecycle({
+      store,
+      eventsByParent: new Map([[GOLD.skillId, [verifiedEventFor(GOLD, "obs-1")]]]),
+      catalogRecords: [GOLD, CONFUSER_DISTINCT],
+      shadowReportId: "shadow:host-001",
+      promotionReportId: "promotion:host-001",
+    });
+    const before = await store.listCurrent();
+    assert.equal(before.length, 1);
+    assert.equal(before[0]!.status, "active");
+
+    // 第二轮：catalog 里 GOLD revision 变了（新 revision）。
+    const driftGold = { ...GOLD, skillRevision: "rev:" + "9".repeat(64) };
+    const outcome = await runActivationHostLifecycle({
+      store,
+      eventsByParent: new Map(),
+      catalogRecords: [driftGold, CONFUSER_DISTINCT],
+      shadowReportId: "shadow:host-001",
+      promotionReportId: "promotion:host-001",
+    });
+    assert.deepEqual(outcome.reverted, [before[0]!.profileId]);
+    assert.equal((await store.getProfile(before[0]!.profileId))!.status, "shadow");
+  });
+});
+
+describe("runEvidenceDeletionCascade（Seam 2）：evidence 删除级联接线", () => {
+  it("PracticeStore.invalidate 的真实 invalidatedEventIds → 命中 profile suspend", async () => {
+    const store = makeStore();
+    await induceAndStoreShadow(store, [verifiedEventFor(GOLD, "obs-1"), verifiedEventFor(GOLD, "obs-2")], GOLD, "shadow:host-001");
+
+    const practiceStore = {
+      async invalidate(_tenantScope: string, _ids: readonly string[]) {
+        return { invalidatedEventIds: ["obs-1"] };
+      },
+    };
+    const outcome = await runEvidenceDeletionCascade(store, practiceStore, "project:abc123", ["obs-1"]);
+    assert.deepEqual(outcome.invalidatedEventIds, ["obs-1"]);
+    assert.equal(outcome.suspended.length, 1, "命中 profile suspend");
+    const profile = await store.getProfile(outcome.suspended[0]!);
+    assert.equal(profile!.status, "suspended");
+  });
+
+  it("未命中 evidence ⇒ 不 suspend", async () => {
+    const store = makeStore();
+    await induceAndStoreShadow(store, [verifiedEventFor(GOLD, "obs-1")], GOLD, "shadow:host-001");
+    const practiceStore = {
+      async invalidate(_tenantScope: string, _ids: readonly string[]) {
+        return { invalidatedEventIds: [] };
+      },
+    };
+    const outcome = await runEvidenceDeletionCascade(store, practiceStore, "project:abc123", ["obs-99"]);
+    assert.deepEqual(outcome.suspended, []);
+    assert.equal((await store.listCurrent())[0]!.status, "shadow", "未命中不得 suspend");
   });
 });
