@@ -20,7 +20,8 @@
 import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "@earendil-works/pi-ai";
 
-import type { CompiledProcedure } from "../../core/contracts/index.ts";
+import type { CompiledProcedure, DependencyFingerprint } from "../../core/contracts/index.ts";
+import type { GuardObservation } from "../../runtime/guard.ts";
 import {
   buildCanaryValidatedProcedure,
   CANARY_EXECUTION_CONTEXT,
@@ -372,11 +373,33 @@ export interface ExecutePaginationDetectInput {
   params: PilotExecuteParams;
   store: ReceiptStore;
   procedure: CompiledProcedure;
+  /**
+   * 注入点：当次 discovery 快照的当前父 Skill revision（resolver e 分支验证来源，ADR-0012 §3）。
+   * 未提供 ⇒ 回退 procedure.parentSkillRevision（保持既有 canary/E2E self-match 行为）。
+   * 真实宿主应传 routeSnapshotSource 候选卡 / 宿主环境的当前值（见报告：current 来源设计）。
+   */
+  currentSkillRevision?: string;
+  /**
+   * 注入点：当次 discovery 快照的当前依赖指纹（resolver f 分支）。
+   * 未提供 ⇒ 回退 procedure.dependencyFingerprint（self-match）。
+   */
+  currentDependencyFingerprint?: DependencyFingerprint;
+  /**
+   * 注入点：快路径 runtime guard 观察数组（覆盖默认 self-match 观察）。
+   * 未提供 ⇒ 默认 [bounded-supported-sql, source-and-dependency-match=true]。
+   * 注意 checkGuards fail-closed：注入数组必须覆盖 procedure 声明的两个 runtime guard，
+   * 缺省会合成 unknown ⇒ guard_failure（不乐观通过）。
+   */
+  guardObservations?: ReadonlyArray<GuardObservation>;
 }
 
 /**
  * 工具主体：executor.execute（shadow_replay 硬编码、effects=[]）。
  * receipt 由 checkAuthorization 消费（无 receipt/重放 ⇒ denied）；finally 清 receipt。
+ *
+ * 注入点（cc HIGH 1 修复）：currentSkillRevision/currentDependencyFingerprint/guardObservations
+ * 可选传入；未提供时回退 procedure 自身值（self-match，保持 canary/E2E 行为），提供时
+ * 经 resolver e/f 分支与 runtime guard 真实生效（mismatch ⇒ slow_path + load_parent_skill）。
  */
 export async function executePaginationDetect(
   input: ExecutePaginationDetectInput,
@@ -386,6 +409,18 @@ export async function executePaginationDetect(
   const sql = sqlTypeOk ? params.sql : "";
   // precondition 只查类型；runtime guard 查完整有界（非空 + ≤ 上限）——guard 是独立运行期防线。
   const sqlOk = sqlTypeOk && sql.length > 0 && sql.length <= PILOT_SQL_MAX_LENGTH;
+  // 注入点默认回退（保持既有 canary/E2E self-match 行为不变）：
+  // - currentSkillRevision/currentDependencyFingerprint 未提供 ⇒ procedure 自身值
+  //   （resolver e/f 分支与 procedure 比较恒通过）；
+  // - guardObservations 未提供 ⇒ 默认 self-match 观察（source-and-dependency-match=true）。
+  // 提供注入值时 revision/dependency 校验真实生效（mismatch ⇒ slow_path/load_parent_skill）。
+  const currentSkillRevision = input.currentSkillRevision ?? procedure.parentSkillRevision;
+  const currentDependencyFingerprint =
+    input.currentDependencyFingerprint ?? procedure.dependencyFingerprint;
+  const guardObservations = input.guardObservations ?? [
+    { predicateId: "bounded-supported-sql", phase: "runtime", result: sqlOk },
+    { predicateId: "source-and-dependency-match", phase: "runtime", result: true },
+  ];
   // artifact 执行闭包记录：executor 的 fallback/safety_stop outcome 不透传 artifact steps，
   // 由 adapter 以固定 detect step 如实记录（guard 失败时保持空）。
   let executedSteps: PilotStepSummary[] = [];
@@ -453,8 +488,8 @@ export async function executePaginationDetect(
       procedure,
       environment: {
         executionContext: CANARY_EXECUTION_CONTEXT, // shadow_replay 硬编码
-        currentSkillRevision: procedure.parentSkillRevision,
-        currentDependencyFingerprint: procedure.dependencyFingerprint,
+        currentSkillRevision,
+        currentDependencyFingerprint,
         preconditions: [
           { predicateId: "bounded-sql-input", result: sqlTypeOk },
           { predicateId: "source-bindings-current", result: true },
@@ -463,10 +498,7 @@ export async function executePaginationDetect(
         authorizationRequired: false,
       },
       taskInput: { sql },
-      guardObservations: [
-        { predicateId: "bounded-supported-sql", phase: "runtime", result: sqlOk },
-        { predicateId: "source-and-dependency-match", phase: "runtime", result: true },
-      ],
+      guardObservations,
       services,
     });
     const details = buildDetails(outcome, procedure, executedSteps);
@@ -693,11 +725,19 @@ export function decodeExecutionToolDetails(value: unknown): DecodeResult {
 export interface ShadowAdapterOptions {
   store?: ReceiptStore;
   procedure?: CompiledProcedure;
+  /** 注入点：当前 revision（未提供回退 procedure 自身值，self-match）。 */
+  currentSkillRevision?: string;
+  /** 注入点：当前依赖指纹（未提供回退 procedure 自身值，self-match）。 */
+  currentDependencyFingerprint?: DependencyFingerprint;
+  /** 注入点：runtime guard 观察数组（未提供回退默认 self-match 观察）。 */
+  guardObservations?: ReadonlyArray<GuardObservation>;
 }
 
 /**
  * 注册 pilot 专用 shadow adapter：tool_call preflight（receipt）+ 工具注册。
  * 默认使用冻结构造 validated procedure（buildCanaryValidatedProcedure）。
+ * 注入点（cc HIGH 1）：options.currentSkillRevision/currentDependencyFingerprint/
+ * guardObservations 透传给 executePaginationDetect（未提供 ⇒ procedure 自身值回退）。
  */
 export function registerSkillCortexPaginationShadow(
   pi: ExtensionAPI,
@@ -748,6 +788,9 @@ export function registerSkillCortexPaginationShadow(
           },
           store,
           procedure,
+          currentSkillRevision: options.currentSkillRevision,
+          currentDependencyFingerprint: options.currentDependencyFingerprint,
+          guardObservations: options.guardObservations,
         });
       },
     }),

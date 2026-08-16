@@ -7,6 +7,9 @@
  *   finally 清 receipt；
  * - fast path（uses_offset）/ abstain（procedure_abstained 回退，仅指示 load_skill 不冒充已加载）；
  * - guard fail（非法输入）⇒ fallback；
+ * - 注入点（cc HIGH 1）：currentSkillRevision/currentDependencyFingerprint/guardObservations
+ *   注入时 resolver revision/dependency 双重校验真实生效（mismatch ⇒ slow_path/load_parent_skill，
+ *   不得 fast_path）；未注入回退 procedure 自身值（self-match）行为不变；
  * - details 严格有界：无原始 SQL/路径/error 原文；decodeExecutionToolDetails 严格 fail-closed；
  * - 注册冒烟：fake pi 上注册工具 + tool_call handler。
  */
@@ -230,6 +233,121 @@ describe("execution adapter：执行语义", () => {
     });
     assert.equal(result.details.outcome, "fallback");
     assert.equal(result.details.failure, "guard_failure");
+  });
+});
+
+describe("execution adapter：注入 current 值 ⇒ revision/dependency 校验真实生效（cc HIGH 1）", () => {
+  beforeEach(() => {
+    store = createReceiptStore();
+  });
+
+  it("注入 currentSkillRevision ≠ procedure revision ⇒ revision_mismatch ⇒ slow_path/load_parent_skill（不得 fast_path）", async () => {
+    preflight("tc-rev-drift", baseParams());
+    const result = await executePaginationDetect({
+      toolCallId: "tc-rev-drift",
+      params: baseParams(),
+      store,
+      procedure: PROCEDURE,
+      currentSkillRevision: "rev:" + "f".repeat(64),
+    });
+    assert.equal(result.details.outcome, "slow_path");
+    assert.equal(result.details.decision.mode, "skill_md");
+    assert.equal(result.details.decision.reason, "revision_mismatch");
+    assert.equal(result.details.fallback?.mode, "load_parent_skill");
+    assert.equal(result.details.fallback?.load_skill_indicated, true);
+    // 未走快路径：不调授权 gate、不评估 guard、不执行 artifact（无 step）。
+    assert.deepEqual(result.details.authorization_results, []);
+    assert.deepEqual(result.details.guard_results, []);
+    assert.deepEqual(result.details.step_summaries, []);
+    assert.equal(store.has("tc-rev-drift"), false, "finally 必须清 receipt");
+  });
+
+  it("注入 currentDependencyFingerprint ≠ procedure fingerprint ⇒ dependency_mismatch ⇒ slow_path/load_parent_skill（不得 fast_path）", async () => {
+    preflight("tc-dep-drift", baseParams());
+    const result = await executePaginationDetect({
+      toolCallId: "tc-dep-drift",
+      params: baseParams(),
+      store,
+      procedure: PROCEDURE,
+      currentDependencyFingerprint: { sourceHash: "0".repeat(64) },
+    });
+    assert.equal(result.details.outcome, "slow_path");
+    assert.equal(result.details.decision.mode, "skill_md");
+    assert.equal(result.details.decision.reason, "dependency_mismatch");
+    assert.equal(result.details.fallback?.mode, "load_parent_skill");
+    assert.equal(result.details.fallback?.load_skill_indicated, true);
+    assert.deepEqual(result.details.authorization_results, []);
+    assert.equal(store.has("tc-dep-drift"), false);
+  });
+
+  it("未注入时回退 procedure 自身值（self-match）：revision/dependency 恒通过 ⇒ fast_path 保持", async () => {
+    preflight("tc-selfmatch", baseParams());
+    const result = await executePaginationDetect({
+      toolCallId: "tc-selfmatch",
+      params: baseParams(),
+      store,
+      procedure: PROCEDURE,
+    });
+    assert.equal(result.details.outcome, "fast_path");
+    assert.equal(result.details.decision.reason, "eligible_procedure");
+  });
+
+  it("注入 guardObservations（source-and-dependency-match=false）⇒ guard_failure ⇒ fallback，不执行 artifact", async () => {
+    preflight("tc-guard-drift", baseParams());
+    const result = await executePaginationDetect({
+      toolCallId: "tc-guard-drift",
+      params: baseParams(),
+      store,
+      procedure: PROCEDURE,
+      guardObservations: [
+        { predicateId: "bounded-supported-sql", phase: "runtime", result: true },
+        { predicateId: "source-and-dependency-match", phase: "runtime", result: false },
+      ],
+    });
+    assert.equal(result.details.outcome, "fallback");
+    assert.equal(result.details.failure, "guard_failure");
+    assert.equal(result.details.fallback?.mode, "load_parent_skill");
+    assert.equal(result.details.step_summaries.length, 0, "guard 失败不执行 artifact");
+    assert.deepEqual(
+      result.details.guard_results.find((g) => g.predicate_id === "source-and-dependency-match"),
+      { predicate_id: "source-and-dependency-match", phase: "runtime", result: "fail" },
+    );
+  });
+
+  it("注册层注入点：registerSkillCortexPaginationShadow(options) 透传 current 值至工具执行", async () => {
+    const handlers = new Map<string, (event: unknown) => unknown>();
+    const tools: Array<{ name: string; execute?: (tc: string, params: unknown) => Promise<{ details: PilotToolDetails }> }> = [];
+    const fakePi = {
+      on: (event: string, handler: (event: unknown) => unknown) => {
+        handlers.set(event, handler);
+      },
+      registerTool: (tool: { name: string; execute?: (tc: string, params: unknown) => Promise<{ details: PilotToolDetails }> }) => {
+        tools.push(tool);
+      },
+    };
+    registerSkillCortexPaginationShadow(fakePi as never, {
+      currentSkillRevision: "rev:" + "f".repeat(64),
+      currentDependencyFingerprint: { sourceHash: "0".repeat(64) },
+      guardObservations: [
+        { predicateId: "bounded-supported-sql", phase: "runtime", result: true },
+        { predicateId: "source-and-dependency-match", phase: "runtime", result: true },
+      ],
+    });
+
+    const handler = handlers.get("tool_call")!;
+    const pass = await handler({
+      type: "tool_call",
+      toolCallId: "tc-reg-drift",
+      toolName: PILOT_TOOL_NAME,
+      input: baseParams(),
+    });
+    assert.equal(pass, undefined, "preflight 身份匹配放行（注入值只在 executor 层生效）");
+
+    const tool = tools.find((t) => t.name === PILOT_TOOL_NAME)!;
+    const result = await tool.execute!("tc-reg-drift", baseParams());
+    assert.equal(result.details.outcome, "slow_path");
+    assert.equal(result.details.decision.reason, "revision_mismatch");
+    assert.equal(result.details.decision.mode, "skill_md");
   });
 });
 
