@@ -62,7 +62,7 @@ function draftProfile(id = "profile:test1", overrides: Partial<ActivationProfile
   };
 }
 
-/** 通过 promotion gate 的 fixture 报告（至少一个已评估栏 + nonInferior）。 */
+/** 通过 promotion gate 的 fixture 报告（四栏全覆盖 + nonInferior）。 */
 function passingReport(): OverlayEvaluationReport {
   return {
     staticColumns: [],
@@ -76,20 +76,47 @@ function passingReport(): OverlayEvaluationReport {
         confuserNotRecalled: 1,
         goldPreservedInTopK: 1,
       },
+      {
+        column: "no_skill",
+        caseCount: 1,
+        recallAtK: "N/A",
+        setRecall: "N/A",
+        noSkillPrecision: 1,
+        confuserNotRecalled: "N/A",
+        goldPreservedInTopK: "N/A",
+      },
+      {
+        column: "multi_skill",
+        caseCount: 1,
+        recallAtK: 1,
+        setRecall: 1,
+        noSkillPrecision: "N/A",
+        confuserNotRecalled: "N/A",
+        goldPreservedInTopK: 1,
+      },
+      {
+        column: "cross_language",
+        caseCount: 1,
+        recallAtK: 1,
+        setRecall: 1,
+        noSkillPrecision: "N/A",
+        confuserNotRecalled: "N/A",
+        goldPreservedInTopK: 1,
+      },
     ],
     nonInferior: true,
     violations: [],
   };
 }
 
-/** 构造 promotion 边需要的结构化 verdict（BLOCKER 2 fixture）。 */
+/** 构造 promotion 边需要的结构化 evidence（BLOCKER 2 fixture：只带 report + reportId）。 */
 function promotionMeta(
   report: OverlayEvaluationReport = passingReport(),
   promotionReportId = "promotion:phase6-gate-001",
 ) {
   const verdict = evaluateProfilePromotion(report);
   if (verdict.ok !== true) throw new Error("fixture verdict must pass");
-  return { promotion: { verdict, report, promotionReportId } };
+  return { promotion: { report, promotionReportId } };
 }
 
 before(() => {
@@ -399,7 +426,7 @@ describe("BLOCKER 2：promotion trust boundary + save draft-only", () => {
     assert.equal((await store.listEvents("profile:test1")).length, 2, "拒绝后事件不变");
   });
 
-  it("shadow→active 的 verdict 未通过（ok:false / 非非劣 / 无已评估栏 / 报告 ID 非法）⇒ 全部拒绝", async () => {
+  it("shadow→active 的 report 未通过（非非劣 / 空报告 / 缺栏 / 低于门槛 / 报告 ID 非法）⇒ 全部拒绝（store 自行重算 verdict）", async () => {
     const store = makeStore();
     const draft = draftProfile();
     await store.save(draft, { trigger: "procedure" });
@@ -413,22 +440,31 @@ describe("BLOCKER 2：promotion trust boundary + save draft-only", () => {
       promotionReportId: "promotion:phase6-gate-001",
     });
 
-    const failingReport = {
+    const nonInferiorFail = {
       ...passingReport(),
       nonInferior: false,
       violations: ["hard_confuser.recallAtK: learned=0.5 < static=1"],
     };
-    const failingVerdict = evaluateProfilePromotion(failingReport);
-    assert.equal(failingVerdict.ok, false);
-
-    const noColumnReport = { ...passingReport(), learnedColumns: [] };
-    assert.equal(evaluateProfilePromotion(noColumnReport).ok, true, "空报告本身过 gate（N/A 跳过）");
+    const emptyColumns = { ...passingReport(), learnedColumns: [] };
+    const missingColumn = {
+      ...passingReport(),
+      learnedColumns: passingReport().learnedColumns.slice(0, 1),
+    };
+    const belowThreshold = {
+      ...passingReport(),
+      learnedColumns: passingReport().learnedColumns.map((column) =>
+        column.column === "hard_confuser"
+          ? { ...column, recallAtK: 0.5, setRecall: 0.5 }
+          : column,
+      ),
+    };
 
     const cases: Array<[string, Parameters<typeof store.transition>[2]]> = [
-      ["activation_store_promotion_verdict_not_passed", { trigger: "agent", promotion: { verdict: failingVerdict, report: failingReport, promotionReportId: "promotion:phase6-gate-001" } }],
-      ["activation_store_promotion_report_not_non_inferior", { trigger: "agent", promotion: { verdict: { ok: true as const }, report: failingReport, promotionReportId: "promotion:phase6-gate-001" } }],
-      ["activation_store_promotion_no_evaluated_column", { trigger: "agent", promotion: { verdict: { ok: true as const }, report: noColumnReport, promotionReportId: "promotion:phase6-gate-001" } }],
-      ["activation_store_promotion_report_id_invalid", { trigger: "agent", promotion: { verdict: { ok: true as const }, report: passingReport(), promotionReportId: "not-a-promotion-report" } }],
+      ["activation_store_promotion_verdict_not_passed", { trigger: "agent", promotion: { report: nonInferiorFail, promotionReportId: "promotion:phase6-gate-001" } }],
+      ["activation_store_promotion_verdict_not_passed", { trigger: "agent", promotion: { report: emptyColumns, promotionReportId: "promotion:phase6-gate-001" } }],
+      ["activation_store_promotion_verdict_not_passed", { trigger: "agent", promotion: { report: missingColumn, promotionReportId: "promotion:phase6-gate-001" } }],
+      ["activation_store_promotion_verdict_not_passed", { trigger: "agent", promotion: { report: belowThreshold, promotionReportId: "promotion:phase6-gate-001" } }],
+      ["activation_store_promotion_report_id_invalid", { trigger: "agent", promotion: { report: passingReport(), promotionReportId: "not-a-promotion-report" } }],
     ];
     for (const [expected, meta] of cases) {
       await assert.rejects(

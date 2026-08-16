@@ -6,4 +6,5 @@ export * from "./state.ts";
 export * from "./promotion.ts";
 export * from "./cascade.ts";
 export * from "./store.ts";
-export * from "./heldout.ts";
+export * from "./calibration.ts";
+export * from "./final-heldout.ts";

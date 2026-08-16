@@ -93,6 +93,33 @@ describe("promotion gate：达标/拒绝", () => {
     assert.deepEqual(verdict, { ok: true });
   });
 
+  it("四栏覆盖：缺任一栏 ⇒ 拒绝 column_not_covered（不虚判）", () => {
+    const missingNoSkill = reportOf({
+      learnedColumns: [
+        column({ column: "hard_confuser" }),
+        column({ column: "multi_skill" }),
+        column({ column: "cross_language" }),
+      ],
+    });
+    const verdict = evaluateProfilePromotion(missingNoSkill);
+    assert.equal(verdict.ok, false);
+    if (!verdict.ok) {
+      assert.ok(
+        verdict.reasons.includes("column_not_covered:no_skill"),
+        JSON.stringify(verdict.reasons),
+      );
+    }
+
+    const empty = reportOf({ learnedColumns: [] });
+    const emptyVerdict = evaluateProfilePromotion(empty);
+    assert.equal(emptyVerdict.ok, false);
+    if (!emptyVerdict.ok) {
+      for (const column of ["hard_confuser", "no_skill", "multi_skill", "cross_language"]) {
+        assert.ok(emptyVerdict.reasons.includes(`column_not_covered:${column}`));
+      }
+    }
+  });
+
   it("no-skill 误召 ⇒ 拒绝 noSkillPrecision 门槛", () => {
     const verdict = evaluateProfilePromotion(
       reportOf({

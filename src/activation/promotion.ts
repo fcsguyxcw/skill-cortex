@@ -10,16 +10,24 @@
  * 本模块只判门；draft→shadow 回放与 active 落地（store 持久化）不在本 slice；
  * 任何退化可关闭 overlay 无损回静态（rerankWithOverlay overlay-off 可复现，无需本模块动作）。
  */
-import type { OverlayEvaluationReport } from "./evaluate.ts";
+import type { EvaluationColumn, OverlayEvaluationReport } from "./evaluate.ts";
+
+/** Gate P6 promotion 必须覆盖的四栏（与 evaluate.ts 的 EvaluationColumn 全集一致）。 */
+const REQUIRED_COLUMNS: readonly EvaluationColumn[] = [
+  "hard_confuser",
+  "no_skill",
+  "multi_skill",
+  "cross_language",
+];
 
 /**
- * Gate P6 冻结门槛（held-out 校准定值，2026-08-16）：
- * 校准依据（src/activation/heldout.ts HELDOUT_CASES，12 例：四栏各 3，与 dev fixture
- * 不重复）：hard_confuser / multi_skill / cross_language 的 recallAtK=1.0、goldPreserved=1.0、
- * confuserNotRecalled=1.0；no_skill noSkillPrecision=1.0。门槛 = held-out 各栏指标下界减 0.1
- * 容差（recallAtK/confuserNotRecalled/goldPreservedInTopK → 0.9）；noSkillPrecision 是
- * 安全硬边界（no-skill 不误召），不放松（保持 1）。
- * 若后续 held-out 分布扩展后某栏掉到门槛下，须重新校准并如实报告，不得为过门调低。
+ * Gate P6 冻结门槛（2026-08-16 收口）：
+ * - recallAtK / setRecall 最低 0.9（calibration set 各栏下界 1.0 − 0.1 容差）；
+ * - confuserNotRecalled 最低 0.9（hard-confuser 不误召干扰项）；
+ * - noSkillPrecision = 1（安全硬边界：no-skill 不误召，不放松）；
+ * - goldPreservedInTopK = 1（退化检测硬边界：learned overlay 不得把 static Top-K 中的
+ *   gold 挤出，任何退化即拒）。
+ * 门槛冻结后不得为过门调低；final-heldout 未达标须如实报告。
  */
 export const PROMOTION_THRESHOLDS = {
   /** 每栏 Recall@K / set recall 最低值（gold 非空栏）。 */
@@ -28,8 +36,8 @@ export const PROMOTION_THRESHOLDS = {
   noSkillPrecision: 1,
   /** hard-confuser 栏 confuser 不误召率最低值。 */
   confuserNotRecalled: 0.9,
-  /** 退化检测：learned Top-K 保留 static gold 命中比例最低值。 */
-  goldPreservedInTopK: 0.9,
+  /** 退化检测：learned Top-K 保留 static gold 命中比例最低值（硬边界，任何退化即拒）。 */
+  goldPreservedInTopK: 1,
 } as const;
 
 export interface PromotionThresholds {
@@ -67,6 +75,18 @@ export function evaluateProfilePromotion(
     reasons.push("overlay_not_non_inferior");
     for (const violation of report.violations) {
       reasons.push(`violation:${violation}`);
+    }
+  }
+  // 四栏覆盖（Gate P6 收口）：promotion 必须覆盖 hard_confuser / no_skill / multi_skill /
+  // cross_language 全部四栏，缺任一栏（caseCount=0 或缺失）⇒ 拒绝，不虚判。
+  const covered = new Set(
+    report.learnedColumns
+      .filter((column) => column.caseCount > 0)
+      .map((column) => column.column),
+  );
+  for (const column of REQUIRED_COLUMNS) {
+    if (!covered.has(column)) {
+      reasons.push(`column_not_covered:${column}`);
     }
   }
   for (const column of report.learnedColumns) {

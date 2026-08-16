@@ -35,7 +35,7 @@ import {
   suspendProfilesForEvidenceDeletion,
 } from "./cascade.ts";
 import type { OverlayEvaluationReport } from "./evaluate.ts";
-import type { PromotionVerdict } from "./promotion.ts";
+import { evaluateProfilePromotion } from "./promotion.ts";
 import type { ActivationStatus, SuspendableProfile } from "./state.ts";
 
 export const PROFILE_SCHEMA_VERSION = 1;
@@ -99,20 +99,17 @@ export interface TransitionMeta {
   reason?: string;
   /**
    * BLOCKER 2（promotion trust boundary）：shadow→active 边必须携带结构化 promotion
-   * verdict（evaluateProfilePromotion 输出 + 支撑报告 + 报告 ID）；缺省 ⇒ 该边拒绝零写入。
-   * caller 无法只凭伪造 promotionReportId 通过（必须提供 ok:true verdict + 非劣报告 +
-   * 至少一个已评估栏）。
+   * evidence（支撑报告 + 受控报告 ID）；store 内部自行重算 verdict，不信任 caller 传入的
+   * ok。缺省 ⇒ 该边拒绝零写入；caller 无法只凭伪造 promotionReportId 通过。
    */
   promotion?: PromotionVerdictEvidence;
 }
 
-/** 结构化 promotion verdict（BLOCKER 2：不信任裸 reportId 字符串）。 */
+/** 结构化 promotion evidence（BLOCKER 2 收口：不信任 caller 的 verdict，store 自行重算）。 */
 export interface PromotionVerdictEvidence {
-  /** evaluateProfilePromotion 的判定结果（必须 ok:true）。 */
-  verdict: PromotionVerdict;
-  /** 支撑判定的评估报告（store 校验 nonInferior + 至少一个已评估栏）。 */
+  /** 支撑判定的评估报告（store 内部重新调用 evaluateProfilePromotion 判定）。 */
   report: OverlayEvaluationReport;
-  /** promotion 报告 ID（受控格式，与 verdict/report 一起绑定）。 */
+  /** promotion 报告 ID（受控格式，与 report 一起绑定）。 */
   promotionReportId: string;
 }
 
@@ -403,29 +400,23 @@ export class ActivationProfileStore {
   }
 
   /**
-   * BLOCKER 2：shadow→active 边必须携带结构化 promotion verdict（ok:true + 非劣报告 +
-   * 至少一个已评估栏 + 受控报告 ID）；缺省/不满足 ⇒ 拒绝零写入（caller 无法只凭伪造
-   * promotionReportId 通过）。
+   * BLOCKER 2（收口）：shadow→active 边必须携带结构化 promotion evidence（report +
+   * 受控报告 ID）；store 内部重新调用 evaluateProfilePromotion(report) 判定（四栏覆盖 +
+   * 冻结门槛 + nonInferior），不信任 caller 的 verdict.ok。缺省/不满足 ⇒ 拒绝零写入。
    */
   #assertPromotionVerdict(meta: TransitionMeta): void {
     const evidence = meta.promotion;
     if (evidence === undefined) {
       throw new Error("activation_store_promotion_verdict_required");
     }
-    if (evidence.verdict.ok !== true) {
-      throw new Error("activation_store_promotion_verdict_not_passed");
-    }
-    if (evidence.report.nonInferior !== true) {
-      throw new Error("activation_store_promotion_report_not_non_inferior");
-    }
-    const hasEvaluatedColumn = evidence.report.learnedColumns.some(
-      (column) => column.caseCount > 0 && column.recallAtK !== "N/A",
-    );
-    if (!hasEvaluatedColumn) {
-      throw new Error("activation_store_promotion_no_evaluated_column");
-    }
     if (!PROMOTION_REPORT_ID_PATTERN.test(evidence.promotionReportId)) {
       throw new Error("activation_store_promotion_report_id_invalid");
+    }
+    // 不信任 caller 的 verdict.ok：store 根据 report 自己重新调用 evaluateProfilePromotion
+    // （四栏覆盖 + 冻结门槛 + nonInferior 一并判定）。
+    const recomputed = evaluateProfilePromotion(evidence.report);
+    if (!recomputed.ok) {
+      throw new Error("activation_store_promotion_verdict_not_passed");
     }
   }
 
@@ -451,7 +442,7 @@ export class ActivationProfileStore {
       throw new Error("activation_store_transition_profile_id_mismatch");
     }
     this.#assertLegalTransition(prior.status, next.status);
-    // BLOCKER 2：promotion 边（shadow→active）的结构化 verdict 校验先于落盘。
+    // BLOCKER 2：promotion 边（shadow→active）的结构化 evidence 校验先于落盘。
     const isPromotionEdge = prior.status === "shadow" && next.status === "active";
     if (isPromotionEdge) {
       this.#assertPromotionVerdict(meta);
