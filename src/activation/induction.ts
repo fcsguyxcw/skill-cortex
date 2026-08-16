@@ -267,6 +267,9 @@ export function induceActivationProfile(
 
   // -------------------------------------------------------------------------
   // environmentCues：从 environmentFingerprint（若可靠取得）派生 valueClass；缺失省略。
+  // MED（tech debt，不扩 scope）：environmentFingerprint 是不透明字符串，valueClass 目前
+  // 只是受控规范化副本——key/valueClass 的语义分层（如 os/runtime/model 分类）与可靠来源
+  // 未冻结；shadow rerank 暂不消费 environmentCues（仅存储供后续环境敏感评估）。
   // -------------------------------------------------------------------------
   const envFingerprintToEvents = new Map<string, string[]>();
   for (const event of [...verified, ...nearMisses]) {

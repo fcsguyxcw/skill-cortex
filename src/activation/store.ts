@@ -34,6 +34,8 @@ import {
   PROFILE_SUSPEND_REASON_EVIDENCE_CASCADE,
   suspendProfilesForEvidenceDeletion,
 } from "./cascade.ts";
+import type { OverlayEvaluationReport } from "./evaluate.ts";
+import type { PromotionVerdict } from "./promotion.ts";
 import type { ActivationStatus, SuspendableProfile } from "./state.ts";
 
 export const PROFILE_SCHEMA_VERSION = 1;
@@ -92,10 +94,30 @@ export interface ActivationProfileStoreOptions {
 
 export interface TransitionMeta {
   trigger: TriggerSource;
-  /** 受控审计：报告 ID（shadow/promotion/revalidation）或 reason（suspended/retired）。 */
+  /** 受控审计：报告 ID（shadow/revalidation 边的报告引用）或 reason（suspended/retired）。 */
   reportId?: string;
   reason?: string;
+  /**
+   * BLOCKER 2（promotion trust boundary）：shadow→active 边必须携带结构化 promotion
+   * verdict（evaluateProfilePromotion 输出 + 支撑报告 + 报告 ID）；缺省 ⇒ 该边拒绝零写入。
+   * caller 无法只凭伪造 promotionReportId 通过（必须提供 ok:true verdict + 非劣报告 +
+   * 至少一个已评估栏）。
+   */
+  promotion?: PromotionVerdictEvidence;
 }
+
+/** 结构化 promotion verdict（BLOCKER 2：不信任裸 reportId 字符串）。 */
+export interface PromotionVerdictEvidence {
+  /** evaluateProfilePromotion 的判定结果（必须 ok:true）。 */
+  verdict: PromotionVerdict;
+  /** 支撑判定的评估报告（store 校验 nonInferior + 至少一个已评估栏）。 */
+  report: OverlayEvaluationReport;
+  /** promotion 报告 ID（受控格式，与 verdict/report 一起绑定）。 */
+  promotionReportId: string;
+}
+
+/** promotion 报告 ID 受控格式（审计可追溯）。 */
+const PROMOTION_REPORT_ID_PATTERN = /^promotion:[A-Za-z0-9._-]{1,95}$/u;
 
 function hash(value: string, length: number): string {
   return createHash("sha256").update(value, "utf8").digest("hex").slice(0, length);
@@ -361,11 +383,16 @@ export class ActivationProfileStore {
 
   /**
    * 首次写入（draft induction 落盘）。prior 已存在 ⇒ 拒绝（不覆盖；更新走 transition）。
+   * BLOCKER 2：save 只允许初始 status="draft"——非 draft（直接 save active/shadow 等）
+   * 拒绝零写入（发布状态必须经状态机 transition，不能绕过）。
    * 写 current（wx）+ 首条事件（fromStatus=undefined）。
    */
   async save(profile: ActivationProfile, meta: TransitionMeta): Promise<void> {
     await this.#ensureInit();
     assertValidStatus(profile.status);
+    if (profile.status !== "draft") {
+      throw new Error("activation_store_save_requires_draft");
+    }
     if (profile.profileId === "") throw new Error("activation_store_invalid_identity");
     const currentPath = this.#currentPath(profile.profileId);
     if (await this.#fileExists(currentPath)) {
@@ -376,11 +403,40 @@ export class ActivationProfileStore {
   }
 
   /**
+   * BLOCKER 2：shadow→active 边必须携带结构化 promotion verdict（ok:true + 非劣报告 +
+   * 至少一个已评估栏 + 受控报告 ID）；缺省/不满足 ⇒ 拒绝零写入（caller 无法只凭伪造
+   * promotionReportId 通过）。
+   */
+  #assertPromotionVerdict(meta: TransitionMeta): void {
+    const evidence = meta.promotion;
+    if (evidence === undefined) {
+      throw new Error("activation_store_promotion_verdict_required");
+    }
+    if (evidence.verdict.ok !== true) {
+      throw new Error("activation_store_promotion_verdict_not_passed");
+    }
+    if (evidence.report.nonInferior !== true) {
+      throw new Error("activation_store_promotion_report_not_non_inferior");
+    }
+    const hasEvaluatedColumn = evidence.report.learnedColumns.some(
+      (column) => column.caseCount > 0 && column.recallAtK !== "N/A",
+    );
+    if (!hasEvaluatedColumn) {
+      throw new Error("activation_store_promotion_no_evaluated_column");
+    }
+    if (!PROMOTION_REPORT_ID_PATTERN.test(evidence.promotionReportId)) {
+      throw new Error("activation_store_promotion_report_id_invalid");
+    }
+  }
+
+  /**
    * 状态机推进：prior → next。校验（fail-closed，HIGH 1 仿 ProcedureStore）：
    * - next.profileId === prior.profileId；prior.status → next.status ∈ 合法边；
    * - stale-prior 三要素：读取落盘 stored 的 profileId + parentSkillRevision + status
    *   必须与 prior 完全一致（旧/伪造 prior 拒绝，不落盘）；
    * - immutable 内容（cue 数据/父绑定）以落盘 stored 为权威，next 只允许改 status/updatedAt；
+   * - BLOCKER 2：shadow→active 边必须携带通过的结构化 promotion verdict（见
+   *   #assertPromotionVerdict）；事件 reportId 用 promotionReportId（受控）；
    * - 通过后写 current（覆盖）+ append 事件（不丢历史）。
    */
   async transition(
@@ -395,6 +451,11 @@ export class ActivationProfileStore {
       throw new Error("activation_store_transition_profile_id_mismatch");
     }
     this.#assertLegalTransition(prior.status, next.status);
+    // BLOCKER 2：promotion 边（shadow→active）的结构化 verdict 校验先于落盘。
+    const isPromotionEdge = prior.status === "shadow" && next.status === "active";
+    if (isPromotionEdge) {
+      this.#assertPromotionVerdict(meta);
+    }
     const stored = await this.getProfile(prior.profileId);
     if (stored === undefined) {
       throw new Error("activation_store_missing_prior");
@@ -411,7 +472,14 @@ export class ActivationProfileStore {
     assertImmutableContentUnchanged(stored, next);
     const currentPath = this.#currentPath(next.profileId);
     await this.#writeProfileFile(currentPath, next, false);
-    await this.#appendEvent(next.profileId, prior.status, next.status, meta);
+    // promotion 边的事件 reportId 绑定结构化 promotionReportId（不信任裸 reportId）。
+    const eventMeta: TransitionMeta = isPromotionEdge
+      ? {
+          trigger: meta.trigger,
+          reportId: meta.promotion!.promotionReportId,
+        }
+      : meta;
+    await this.#appendEvent(next.profileId, prior.status, next.status, eventMeta);
   }
 
   async #fileExists(filePath: string): Promise<boolean> {

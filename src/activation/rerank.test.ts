@@ -187,3 +187,27 @@ describe("shadow rerank：matchLearnedOverlay", () => {
     assert.deepEqual(hit.nearMissCueIds, []);
   });
 });
+
+describe("BLOCKER 1：rerank revision binding（stale revision 回归）", () => {
+  it("candidate.skillRevision ≠ profile.parentSkillRevision ⇒ overlay 不生效（分数/evidence 与静态一致）", () => {
+    const query = "check offset pagination";
+    const staticList = staticCandidates(query);
+    // 父 revision 与候选的 skillRevision（REV）不一致 ⇒ stale profile。
+    const staleProfile = profile({ parentSkillRevision: "rev:" + "2".repeat(64) });
+    const reranked = rerankWithOverlay(staticList, staleProfile, query, { aliasBoost: 100 });
+    assert.deepEqual(reranked, staticList, "stale revision 下 overlay 完全无效（与静态一致）");
+    const gold = reranked.find((c) => c.skillId === GOLD_ID)!;
+    assert.ok(!gold.evidence.some((e) => e.kind === "learned_cue"), "stale revision 不得追加 learned evidence");
+  });
+
+  it("skillId + skillRevision 都匹配 ⇒ overlay 生效（回归基线）", () => {
+    const query = "check offset pagination";
+    const staticList = staticCandidates(query);
+    const reranked = rerankWithOverlay(staticList, profile(), query, { aliasBoost: 5 });
+    const learnedGold = reranked.find((c) => c.skillId === GOLD_ID)!;
+    assert.ok(
+      learnedGold.evidence.some((e) => e.kind === "learned_cue" && e.cueId === "cue:alias-offset"),
+      "revision 匹配时 overlay 生效",
+    );
+  });
+});

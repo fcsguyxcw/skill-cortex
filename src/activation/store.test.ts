@@ -17,8 +17,15 @@ import path from "node:path";
 import { after, before, describe, it } from "node:test";
 
 import type { ActivationProfile } from "../core/contracts/index.ts";
-import { transitionProfileToActive, transitionProfileToShadow } from "./index.ts";
-import { applyEvidenceDeletionCascade, ActivationProfileStore } from "./index.ts";
+import type { OverlayEvaluationReport } from "./evaluate.ts";
+import {
+  applyEvidenceDeletionCascade,
+  ActivationProfileStore,
+  evaluateProfilePromotion,
+  transitionProfileToActive,
+  transitionProfileToShadow,
+  transitionProfileToSuspended,
+} from "./index.ts";
 
 const PROJECT_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
 const SKILL_ID = "skill:670b8f65dca2ceda3de0d70e92ccd8b5cb832e7c4fd2e5d845b58b19e230cbe2";
@@ -53,6 +60,36 @@ function draftProfile(id = "profile:test1", overrides: Partial<ActivationProfile
     updatedAt: "2026-08-15T00:00:00.000Z",
     ...overrides,
   };
+}
+
+/** 通过 promotion gate 的 fixture 报告（至少一个已评估栏 + nonInferior）。 */
+function passingReport(): OverlayEvaluationReport {
+  return {
+    staticColumns: [],
+    learnedColumns: [
+      {
+        column: "hard_confuser",
+        caseCount: 1,
+        recallAtK: 1,
+        setRecall: 1,
+        noSkillPrecision: "N/A",
+        confuserNotRecalled: 1,
+        goldPreservedInTopK: 1,
+      },
+    ],
+    nonInferior: true,
+    violations: [],
+  };
+}
+
+/** 构造 promotion 边需要的结构化 verdict（BLOCKER 2 fixture）。 */
+function promotionMeta(
+  report: OverlayEvaluationReport = passingReport(),
+  promotionReportId = "promotion:phase6-gate-001",
+) {
+  const verdict = evaluateProfilePromotion(report);
+  if (verdict.ok !== true) throw new Error("fixture verdict must pass");
+  return { promotion: { verdict, report, promotionReportId } };
 }
 
 before(() => {
@@ -127,7 +164,7 @@ describe("ActivationProfileStore：transition 落盘 + 事件", () => {
     });
     await store.transition(shadow, active, {
       trigger: "agent",
-      reportId: "promotion:phase6-gate-001",
+      ...promotionMeta(),
     });
 
     const current = await store.getProfile("profile:test1");
@@ -171,12 +208,17 @@ describe("ActivationProfileStore：transition 落盘 + 事件", () => {
       store.transition(draft, shadow, { trigger: "agent" }),
       /activation_store_stale_prior/,
     );
-    // 伪造 parentSkillRevision 的 prior ⇒ stale。
+    // 伪造 parentSkillRevision 的 prior + 合法 next（shadow→suspended 无需 promotion verdict）
+    // ⇒ stale-prior 三要素失配拒绝。
+    const suspended = transitionProfileToSuspended(shadow as never, {
+      decision: "suspended",
+      reason: "overlay degraded",
+    });
     await assert.rejects(
       store.transition(
         { ...shadow, parentSkillRevision: "rev:" + "9".repeat(64) },
-        { ...shadow, status: "active" } as ActivationProfile,
-        { trigger: "agent" },
+        suspended,
+        { trigger: "agent", reason: "overlay degraded" },
       ),
       /activation_store_stale_prior/,
     );
@@ -322,5 +364,102 @@ describe("ActivationProfileStore：读取 fail-closed", () => {
     void files;
     // 目录结构存在（不抛错即已创建哈希分区）；getProfile round-trip 成功即证明分区可用。
     assert.ok(await store.getProfile("profile:test1"), "哈希分区可读写");
+  });
+});
+
+describe("BLOCKER 2：promotion trust boundary + save draft-only", () => {
+  it("save 只允许初始 draft：直接 save active/shadow ⇒ 拒绝零写入", async () => {
+    const store = makeStore();
+    const shadow = { ...draftProfile("profile:x"), status: "shadow" as const };
+    await assert.rejects(store.save(shadow, { trigger: "agent" }), /activation_store_save_requires_draft/);
+    const active = { ...draftProfile("profile:y"), status: "active" as const };
+    await assert.rejects(store.save(active, { trigger: "agent" }), /activation_store_save_requires_draft/);
+    assert.equal((await store.listCurrent()).length, 0, "非 draft 拒绝后零写入");
+  });
+
+  it("shadow→active 缺结构化 promotion verdict（即使带裸 reportId）⇒ 拒绝零写入", async () => {
+    const store = makeStore();
+    const draft = draftProfile();
+    await store.save(draft, { trigger: "procedure" });
+    const shadow = transitionProfileToShadow(draft as never, {
+      decision: "shadow",
+      shadowReportId: "shadow:phase6-replay-001",
+    });
+    await store.transition(draft, shadow, { trigger: "agent", reportId: "shadow:phase6-replay-001" });
+    const active = transitionProfileToActive(shadow, {
+      decision: "active",
+      promotionReportId: "promotion:phase6-gate-001",
+    });
+    // 只有裸 reportId（无结构化 verdict）⇒ 拒绝。
+    await assert.rejects(
+      store.transition(shadow, active, { trigger: "agent", reportId: "promotion:phase6-gate-001" }),
+      /activation_store_promotion_verdict_required/,
+    );
+    assert.equal((await store.getProfile("profile:test1"))!.status, "shadow", "拒绝后 current 不变");
+    assert.equal((await store.listEvents("profile:test1")).length, 2, "拒绝后事件不变");
+  });
+
+  it("shadow→active 的 verdict 未通过（ok:false / 非非劣 / 无已评估栏 / 报告 ID 非法）⇒ 全部拒绝", async () => {
+    const store = makeStore();
+    const draft = draftProfile();
+    await store.save(draft, { trigger: "procedure" });
+    const shadow = transitionProfileToShadow(draft as never, {
+      decision: "shadow",
+      shadowReportId: "shadow:phase6-replay-001",
+    });
+    await store.transition(draft, shadow, { trigger: "agent", reportId: "shadow:phase6-replay-001" });
+    const active = transitionProfileToActive(shadow, {
+      decision: "active",
+      promotionReportId: "promotion:phase6-gate-001",
+    });
+
+    const failingReport = {
+      ...passingReport(),
+      nonInferior: false,
+      violations: ["hard_confuser.recallAtK: learned=0.5 < static=1"],
+    };
+    const failingVerdict = evaluateProfilePromotion(failingReport);
+    assert.equal(failingVerdict.ok, false);
+
+    const noColumnReport = { ...passingReport(), learnedColumns: [] };
+    assert.equal(evaluateProfilePromotion(noColumnReport).ok, true, "空报告本身过 gate（N/A 跳过）");
+
+    const cases: Array<[string, Parameters<typeof store.transition>[2]]> = [
+      ["activation_store_promotion_verdict_not_passed", { trigger: "agent", promotion: { verdict: failingVerdict, report: failingReport, promotionReportId: "promotion:phase6-gate-001" } }],
+      ["activation_store_promotion_report_not_non_inferior", { trigger: "agent", promotion: { verdict: { ok: true as const }, report: failingReport, promotionReportId: "promotion:phase6-gate-001" } }],
+      ["activation_store_promotion_no_evaluated_column", { trigger: "agent", promotion: { verdict: { ok: true as const }, report: noColumnReport, promotionReportId: "promotion:phase6-gate-001" } }],
+      ["activation_store_promotion_report_id_invalid", { trigger: "agent", promotion: { verdict: { ok: true as const }, report: passingReport(), promotionReportId: "not-a-promotion-report" } }],
+    ];
+    for (const [expected, meta] of cases) {
+      await assert.rejects(
+        store.transition(shadow, active, meta),
+        new RegExp(expected),
+        `必须拒绝：${expected}`,
+      );
+    }
+    assert.equal((await store.getProfile("profile:test1"))!.status, "shadow", "全部拒绝后 current 不变");
+  });
+
+  it("通过的结构化 verdict ⇒ shadow→active 落盘成功，事件 reportId=promotionReportId", async () => {
+    const store = makeStore();
+    const draft = draftProfile();
+    await store.save(draft, { trigger: "procedure" });
+    const shadow = transitionProfileToShadow(draft as never, {
+      decision: "shadow",
+      shadowReportId: "shadow:phase6-replay-001",
+    });
+    await store.transition(draft, shadow, { trigger: "agent", reportId: "shadow:phase6-replay-001" });
+    const active = transitionProfileToActive(shadow, {
+      decision: "active",
+      promotionReportId: "promotion:phase6-gate-001",
+    });
+    await store.transition(shadow, active, {
+      trigger: "agent",
+      ...promotionMeta(),
+    });
+    assert.equal((await store.getProfile("profile:test1"))!.status, "active");
+    const events = await store.listEvents("profile:test1");
+    assert.equal(events[2]!.toStatus, "active");
+    assert.equal(events[2]!.reportId, "promotion:phase6-gate-001");
   });
 });

@@ -99,7 +99,14 @@ export function rerankWithOverlay(
   for (const candidate of staticCandidates) {
     let score = candidate.retrievalScore;
     const learnedCueIds: string[] = [];
-    if (profile !== undefined && candidate.skillId === profile.parentSkillId) {
+    if (
+      profile !== undefined &&
+      candidate.skillId === profile.parentSkillId &&
+      candidate.skillRevision === profile.parentSkillRevision
+    ) {
+      // BLOCKER 1（revision binding）：overlay 只对父 skill 身份 + 父 revision 都匹配的候选生效。
+      // 候选的 skillRevision ≠ profile.parentSkillRevision ⇒ 不 boost、不追加 learned evidence
+      // （stale revision 的 profile 不得影响当次 discovery）。
       const match = matchLearnedOverlay(query, profile);
       score += opts.aliasBoost * match.aliasCueIds.length;
       score += opts.positiveBoost * match.positiveCueIds.length;
