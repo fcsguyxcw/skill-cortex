@@ -24,6 +24,7 @@ import {
   type AdapterState,
   type LoadableSkill,
 } from "./core.ts";
+import type { ActivationProfile } from "../../core/contracts/index.ts";
 import type { HostSkillLike, HostToolResultLike } from "./host.ts";
 
 /** 断言辅助：把窄接口的 details: unknown 具象化为 search_skills 返回形状。 */
@@ -263,6 +264,59 @@ describe("runSearchTool（search_skills 执行逻辑）", () => {
     const details = detailsOf(result);
     assert.equal(details.count, 0);
     assert.deepEqual(details.matches, []);
+  });
+
+  it("overlayProfiles 生效：revision 匹配的 active profile 追加 learned_cue evidence", async () => {
+    // 先摄入拿到真实 skillId/revision，再把 profile 挂到 createDiscoveryServices options
+    // （state 初始化时写入 overlayProfiles/overlayOptions，runSearchTool 从 state 读取）。
+    let profile: ActivationProfile | undefined;
+    const services = createDiscoveryServices({
+      topK: 5,
+      overlayOptions: { aliasBoost: 1 },
+      overlayProfiles: () => (profile ? [profile] : []),
+    });
+    await services.run("docx", makeDocxFamily(3));
+    const entry = [...services.state.catalog!.values()].find((e) => e.record.name === "docx-a")!;
+    profile = {
+      schemaVersion: 1,
+      profileId: "profile-docx-a",
+      parentSkillId: entry.record.skillId,
+      parentSkillRevision: entry.record.skillRevision,
+      status: "active",
+      learnedAliases: [{ cueId: "cue-docx", text: "docx", evidenceIds: [] }],
+      positiveExamples: [],
+      nearMissExamples: [],
+      environmentCues: [],
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    };
+    const result = runSearchTool(services.state, { query: "docx" });
+    const details = detailsOf(result);
+    const target = details.matches.find(
+      (candidate) => (candidate as { skillId: string }).skillId === entry.record.skillId,
+    ) as { evidence: Array<{ kind: string; cueId?: string }> } | undefined;
+    assert.ok(target, "docx-a 候选必须在 matches 中");
+    assert.ok(
+      target.evidence.some(
+        (evidence) => evidence.kind === "learned_cue" && evidence.cueId === "cue-docx",
+      ),
+      "active profile 命中应追加 learned_cue evidence",
+    );
+  });
+
+  it("无 overlayProfiles：结果与静态一致（无 learned_cue evidence）", async () => {
+    const services = createDiscoveryServices({ topK: 5 });
+    await services.run("docx", makeDocxFamily(3));
+    const result = runSearchTool(services.state, { query: "docx" });
+    const details = detailsOf(result);
+    assert.ok(details.matches.length > 0, "静态 BM25 应有候选");
+    for (const match of details.matches) {
+      const evidence = (match as { evidence: Array<{ kind: string }> }).evidence;
+      assert.ok(
+        !evidence.some((e) => e.kind === "learned_cue"),
+        "无 overlay 时不得含 learned_cue evidence",
+      );
+    }
   });
 });
 

@@ -158,6 +158,10 @@ export interface AdapterState {
   /** 成功摄入的 catalog（skillId → record + baseDir）；load_skill 只接受此集合中的条目。 */
   catalog?: ReadonlyMap<string, LoadableSkill>;
   recordCount: number;
+  /** active discovery overlay 提供者（与 createDiscoveryServices options 同源；runSearchTool 复用）。 */
+  overlayProfiles?: () => readonly ActivationProfile[];
+  /** overlay 重排参数（与 before_agent_start 路径一致；未提供用默认关闭）。 */
+  overlayOptions?: RerankOptions;
 }
 
 export interface DiscoveryOutcome {
@@ -211,7 +215,12 @@ export function createDiscoveryServices(options: {
   overlayProfiles?: () => readonly ActivationProfile[];
   overlayOptions?: RerankOptions;
 }): DiscoveryServices {
-  const state: AdapterState = { ready: false, recordCount: 0 };
+  const state: AdapterState = {
+    ready: false,
+    recordCount: 0,
+    overlayProfiles: options.overlayProfiles,
+    overlayOptions: options.overlayOptions,
+  };
   return {
     topK: options.topK,
     state,
@@ -301,13 +310,18 @@ export function runSearchTool(state: AdapterState, params: SearchParams): HostTo
 
   const limit = clampTopK(params.limit);
   const matches = state.index.search(query, { limit });
+  // active discovery overlay：与 before_agent_start 路径同源（revision 匹配才生效；
+  // 未注入 overlayProfiles ⇒ 纯静态，无损回静态）。
+  const candidates = state.overlayProfiles
+    ? applyActiveProfiles(matches, state.overlayProfiles(), query, state.overlayOptions)
+    : matches;
   const text =
-    matches.length === 0
+    candidates.length === 0
       ? `未找到匹配 "${query}" 的 Skill。可尝试英文同义词，或换用更具体的能力关键词。`
       : [
-          `找到 ${matches.length} 个匹配 Skill（有界 Top-K，≤ ${limit}）：`,
+          `找到 ${candidates.length} 个匹配 Skill（有界 Top-K，≤ ${limit}）：`,
           "",
-          ...matches.map(
+          ...candidates.map(
             (candidate, index) =>
               `${index + 1}. ${candidate.name} [skill_id=${candidate.skillId}, scope=${candidate.scope}, skill_revision=${candidate.skillRevision}]`,
           ),
@@ -316,7 +330,7 @@ export function runSearchTool(state: AdapterState, params: SearchParams): HostTo
         ].join("\n");
   return {
     content: [{ type: "text", text }],
-    details: { ready: true, query, count: matches.length, matches },
+    details: { ready: true, query, count: candidates.length, matches: candidates },
   };
 }
 
