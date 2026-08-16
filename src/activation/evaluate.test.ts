@@ -41,7 +41,7 @@ function record(id: string, name: string, description: string, aliases: string[]
 
 const RECORDS: readonly SkillRecord[] = [
   record(GOLD_ID, "offset-pagination-helper", "Detect offset pagination in SQL queries and return structured findings", ["sql-pagination"]),
-  record(CONFUSER_ID, "cursor-pagination-tool", "Implement cursor pagination for SQL queries with keyset pagination support"),
+  record(CONFUSER_ID, "cursor-keyset-helper", "Implement cursor pagination for SQL queries with keyset pagination support"),
   record(OTHER_ID, "pdf-document-reader", "Read and merge PDF documents"),
 ];
 
@@ -67,7 +67,7 @@ function profile(overrides: Partial<ActivationProfile> = {}): ActivationProfile 
 }
 
 const CASES: readonly EvaluationCase[] = [
-  { id: "hc-1", column: "hard_confuser", query: "check pagination sql", expectedSkillIds: [GOLD_ID], confuserSkillIds: [CONFUSER_ID] },
+  { id: "hc-1", column: "hard_confuser", query: "check offset pagination", expectedSkillIds: [GOLD_ID], confuserSkillIds: [CONFUSER_ID] },
   { id: "ns-1", column: "no_skill", query: "how to cook pasta", expectedSkillIds: [] },
   { id: "ms-1", column: "multi_skill", query: "pagination sql", expectedSkillIds: [GOLD_ID, CONFUSER_ID] },
   { id: "cl-1", column: "cross_language", query: "检查分页 offset 用法", expectedSkillIds: [GOLD_ID] },

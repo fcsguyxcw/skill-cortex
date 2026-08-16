@@ -41,7 +41,7 @@ function record(id: string, name: string, description: string, aliases: string[]
 
 const RECORDS: readonly SkillRecord[] = [
   record(GOLD_ID, "offset-pagination-helper", "Detect offset pagination in SQL queries and return structured findings", ["sql-pagination"]),
-  record(CONFUSER_ID, "cursor-pagination-tool", "Implement cursor pagination for SQL queries with keyset pagination support"),
+  record(CONFUSER_ID, "cursor-keyset-helper", "Implement cursor pagination for SQL queries with keyset pagination support"),
   record(OTHER_ID, "pdf-document-reader", "Read and merge PDF documents"),
 ];
 
