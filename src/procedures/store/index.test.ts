@@ -11,7 +11,7 @@
  * - 级联删除入口（remove：current/history/events 随同清理，幂等）。
  */
 import assert from "node:assert/strict";
-import { mkdtempSync, readdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { mkdirSync, rmSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
@@ -101,6 +101,97 @@ function makeStore(overrides: { tenantScope?: string } = {}) {
     now: () => new Date("2026-08-20T00:00:00.000Z"),
   });
 }
+
+/** BLOCKER 1：手工损坏 release record（模拟缺 evidence 的历史/损坏数据）。 */
+async function damageReleaseEvidence(
+  store: ProcedureStore,
+  procedureId: string,
+  procedureRevision: string,
+  dropFields: string[],
+): Promise<void> {
+  const releaseRoot = path.join(store.tenantDir, "release");
+  for (const pidDir of readdirSync(releaseRoot)) {
+    const dir = path.join(releaseRoot, pidDir);
+    for (const file of readdirSync(dir)) {
+      const filePath = path.join(dir, file);
+      const raw = JSON.parse(readFileSync(filePath, "utf8")) as Record<string, unknown>;
+      if (raw.procedureId === procedureId && raw.procedureRevision === procedureRevision) {
+        for (const field of dropFields) delete raw[field];
+        writeFileSync(filePath, JSON.stringify(raw), "utf8");
+        return;
+      }
+    }
+  }
+  assert.fail("release record not found for damage");
+}
+
+describe("ProcedureStore：BLOCKER 1 — rollback stable candidate 保留完整 promotion evidence", () => {
+  it("v1 draft→validated→canary→active 后 stable candidate 三段 report 都正确", async () => {
+    const store = makeStore();
+    const { draft: v1 } = await persistActiveV1(store);
+    const stable = await store.getStableByRevision(v1.procedureRevision);
+    assert.ok(stable !== undefined);
+    assert.equal(stable!.status, "active");
+    assert.equal(stable!.validationReportId, VALIDATION_REPORT, "validated 报告保留");
+    assert.equal(stable!.canaryReportId, CANARY_REPORT, "canary 报告保留");
+    assert.equal(stable!.activeReportId, ACTIVE_REPORT, "active 报告保留");
+  });
+
+  it("v1 active→suspended(dependency_drift) 后 stable candidate 仍保留完整 evidence", async () => {
+    const store = makeStore();
+    const { draft: v1 } = await persistActiveV1(store);
+    const current = await store.getProcedure(v1.procedureId);
+    assert.equal(current!.status, "active");
+    const driftSuspended = transitionPhase3ProcedureSuspend(current as never, {
+      decision: "suspended",
+      reason: `${SUSPEND_REASON_DEPENDENCY_DRIFT_PREFIX}source`,
+      suspendKind: "dependency_drift",
+    });
+    await store.transition(current!, driftSuspended, { trigger: "tool" });
+
+    const stable = await store.getStableByRevision(v1.procedureRevision);
+    assert.ok(stable !== undefined, "suspended-from-active 仍是 stable 候选");
+    assert.equal(stable!.status, "suspended");
+    assert.equal(stable!.suspendedFrom, "active");
+    assert.equal(stable!.validationReportId, VALIDATION_REPORT);
+    assert.equal(stable!.canaryReportId, CANARY_REPORT);
+    assert.equal(stable!.activeReportId, ACTIVE_REPORT, "suspended 后三段报告继续保留");
+  });
+
+  it("rollback 后 status=active 的 procedure 仍带完整 promotion evidence", async () => {
+    const store = makeStore();
+    const { draft: v1 } = await persistActiveV1(store);
+    const stable = await store.getStableByRevision(v1.procedureRevision);
+    assert.ok(stable !== undefined);
+    const v2 = activeWithReference(REFERENCE_V2, v1.procedureRevision);
+    const result = rollbackProcedure({
+      current: v2,
+      stableLookup: (revision) => (revision === v1.procedureRevision ? stable : undefined),
+    });
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.equal(result.rollbackTo.status, "active");
+      assert.equal(result.rollbackTo.validationReportId, VALIDATION_REPORT);
+      assert.equal(result.rollbackTo.canaryReportId, CANARY_REPORT);
+      assert.equal(result.rollbackTo.activeReportId, ACTIVE_REPORT);
+    }
+  });
+
+  it("手工损坏 release record（删 active/canary evidence）⇒ fail-closed（getStableByRevision undefined）", async () => {
+    const store = makeStore();
+    const { draft: v1 } = await persistActiveV1(store);
+    assert.ok((await store.getStableByRevision(v1.procedureRevision)) !== undefined, "损坏前正常");
+    await damageReleaseEvidence(store, v1.procedureId, v1.procedureRevision, [
+      "canaryReportId",
+      "activeReportId",
+    ]);
+    assert.equal(
+      await store.getStableByRevision(v1.procedureRevision),
+      undefined,
+      "缺必要 canary/active evidence ⇒ 不得返回 rollback target",
+    );
+  });
+});
 
 /** HIGH 2：按 referenceHash 构建同 procedureId 不同 revision 的 active（可带 previousStableRevision）。 */
 function activeWithReference(
@@ -243,20 +334,67 @@ describe("ProcedureStore：修订历史", () => {
     assert.equal(await store.getByRevision("rev:" + "f".repeat(64)), undefined);
   });
 
-  it("revision 变化 ⇒ 追加新 history 条目（版本化）", async () => {
+  it("BLOCKER 2：revision 变化不得经普通 lifecycle transition（需重新验证）", async () => {
     const store = makeStore();
     const draft = draftOf();
     await store.save(draft, { trigger: "agent" });
     const validated = validatedOf();
     await store.transition(draft, validated, { trigger: "procedure" });
-    // 修订产生新 revision 的 canary（procedureRevision 变化 ⇒ 追加 history）。
-    const revised = { ...canaryOf(), procedureRevision: "rev:" + "a".repeat(64) } as CompiledProcedure;
-    await store.transition(validated, revised, { trigger: "tool" });
 
-    const back = await store.getByRevision(revised.procedureRevision);
-    assert.ok(back !== undefined);
-    assert.equal(back!.procedureRevision, revised.procedureRevision);
-    assert.equal(back!.status, "canary");
+    // validated(v1)→canary(v2)：revision 变化 ⇒ 拒绝。
+    const revisedCanary = { ...canaryOf(), procedureRevision: "rev:" + "a".repeat(64) } as CompiledProcedure;
+    await assert.rejects(
+      store.transition(validated, revisedCanary, { trigger: "tool" }),
+      /procedure_store_revision_change_requires_revalidation/,
+    );
+    // 拒绝后 current/history/release/events 全部不变。
+    const after = await store.getProcedure(draft.procedureId);
+    assert.equal(after!.status, "validated", "current 不被破坏");
+    assert.equal(after!.procedureRevision, draft.procedureRevision);
+    assert.equal(await store.getByRevision(revisedCanary.procedureRevision), undefined, "无新 history 条目");
+    const events = await store.listEvents(draft.procedureId);
+    assert.deepEqual(
+      events.map((e) => [e.fromStatus, e.toStatus]),
+      [
+        [undefined, "draft"],
+        ["draft", "validated"],
+      ],
+      "事件不被追加",
+    );
+    assert.equal(await store.getStableByRevision(revisedCanary.procedureRevision), undefined, "无 release 记录");
+  });
+
+  it("BLOCKER 2：canary(v1)→active(v2) 与 active(v1)→suspended(v2) 同样拒绝；同 revision 生命周期不受影响", async () => {
+    const store = makeStore();
+    const draft = draftOf();
+    await store.save(draft, { trigger: "agent" });
+    const validated = validatedOf();
+    await store.transition(draft, validated, { trigger: "procedure" });
+    const canary = canaryOf();
+    await store.transition(validated, canary, { trigger: "procedure" });
+
+    // canary(v1)→active(v2)：revision 变化 ⇒ 拒绝。
+    const revisedActive = { ...activeOf(), procedureRevision: "rev:" + "b".repeat(64) } as CompiledProcedure;
+    await assert.rejects(
+      store.transition(canary, revisedActive, { trigger: "tool" }),
+      /procedure_store_revision_change_requires_revalidation/,
+    );
+
+    // active(v1)→suspended(v2)：revision 变化 ⇒ 拒绝。
+    const active = activeOf();
+    await store.transition(canary, active, { trigger: "tool" });
+    const revisedSuspended = { ...suspendedOf(), procedureRevision: "rev:" + "d".repeat(64) } as CompiledProcedure;
+    await assert.rejects(
+      store.transition(active, revisedSuspended, { trigger: "tool" }),
+      /procedure_store_revision_change_requires_revalidation/,
+    );
+
+    // 同 revision 正常 lifecycle transition 不受影响。
+    const suspended = suspendedOf();
+    await store.transition(active, suspended, { trigger: "user" });
+    assert.equal((await store.getProcedure(draft.procedureId))!.status, "suspended");
+    const events = await store.listEvents(draft.procedureId);
+    assert.equal(events.length, 5, "save + 4 次同 revision transition 各一条事件");
   });
 });
 

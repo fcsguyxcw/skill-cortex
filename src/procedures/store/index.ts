@@ -64,9 +64,11 @@ const PROCEDURE_STATUSES: readonly CompiledProcedure["status"][] = [
 export type EventToStatus = CompiledProcedure["status"] | "deleted";
 
 /**
- * revision 的 release/lifecycle state（HIGH 2）：记录某 procedureRevision 实际到达过的
+ * revision 的 release/lifecycle state（HIGH 2/BLOCKER 1）：记录某 procedureRevision 实际到达过的
  * 发布状态（非 immutable artifact 内容）。rollback 的 stable lookup 只认此记录。
  * - 与 immutable artifact snapshot（history）分离：history 不覆盖，release 可更新；
+ * - BLOCKER 1：累计保存完整 promotion evidence（validation/canary/active 三个独立字段，
+ *   非仅当前状态对应那一个）——active→suspended 后三段报告引用必须继续保留；
  * - suspended 时带 suspendedFrom（自动派生，曾发布为 active 才可作 stable 目标）与
  *   suspendKind（drift/cascade 需重验，rollback 的 requires_revalidation 门依赖）。
  */
@@ -75,8 +77,10 @@ export interface ReleaseStateRecord {
   procedureId: string;
   procedureRevision: string;
   status: CompiledProcedure["status"];
-  /** 到达该 release 状态时的报告引用（validated→validationReportId；canary→canaryReportId；active→activeReportId）。 */
-  reportId?: string;
+  /** 完整 promotion evidence（累计保存；active/suspended-from-active 目标三段必须齐全）。 */
+  validationReportId?: string;
+  canaryReportId?: string;
+  activeReportId?: string;
   suspendedFrom?: "validated" | "canary" | "active";
   suspendKind?: "manual" | "dependency_drift" | "evidence_cascade";
   lifecycleReason?: string;
@@ -184,8 +188,6 @@ function toStoredProcedure(procedure: CompiledProcedure): CompiledProcedure {
     ...(procedure.previousStableRevision !== undefined
       ? { previousStableRevision: procedure.previousStableRevision }
       : {}),
-    ...(procedure.suspendedFrom !== undefined ? { suspendedFrom: procedure.suspendedFrom } : {}),
-    ...(procedure.suspendKind !== undefined ? { suspendKind: procedure.suspendKind } : {}),
   };
 }
 
@@ -364,15 +366,21 @@ export class ProcedureStore {
     }
   }
 
-  /** 从 transition/save 后的 procedure 提取 release 状态记录（覆盖写：该 revision 的当前 release 状态）。 */
+  /** 从 transition/save 后的 procedure 提取 release 状态记录（覆盖写：该 revision 的当前 release 状态）。
+   * BLOCKER 1：累计复制三个 promotion evidence 字段（procedure 对象经状态机 spread 恒保留
+   * 全部已到达阶段的报告引用；pending 占位不是 evidence，跳过）。 */
   async #writeReleaseState(procedure: CompiledProcedure): Promise<void> {
-    const reportId = auditMetaOf(procedure).reportId;
     const record: ReleaseStateRecord = {
       schemaVersion: PROCEDURE_SCHEMA_VERSION,
       procedureId: procedure.procedureId,
       procedureRevision: procedure.procedureRevision,
       status: procedure.status,
-      ...(reportId !== undefined ? { reportId } : {}),
+      ...(procedure.validationReportId !== undefined &&
+      procedure.validationReportId !== "pending:phase3-pagination-validation"
+        ? { validationReportId: procedure.validationReportId }
+        : {}),
+      ...(procedure.canaryReportId !== undefined ? { canaryReportId: procedure.canaryReportId } : {}),
+      ...(procedure.activeReportId !== undefined ? { activeReportId: procedure.activeReportId } : {}),
       ...(procedure.suspendedFrom !== undefined ? { suspendedFrom: procedure.suspendedFrom } : {}),
       ...(procedure.suspendKind !== undefined ? { suspendKind: procedure.suspendKind } : {}),
       ...(procedure.lifecycleReason !== undefined ? { lifecycleReason: procedure.lifecycleReason } : {}),
@@ -433,22 +441,19 @@ export class ProcedureStore {
     return parseStoredProcedure(parsed, procedureIdFileHash(procedureId));
   }
 
-  /** 从 immutable artifact 快照 + release 记录合成 stable 候选（content 取 history，状态取 release）。 */
+  /** 从 immutable artifact 快照 + release 记录合成 stable 候选（content 取 history，状态取 release）。
+   * BLOCKER 1：恢复完整 promotion evidence（validation/canary/active 三段）。 */
   async #composeStableCandidate(release: ReleaseStateRecord): Promise<CompiledProcedure | undefined> {
     const snapshot = await this.#findHistorySnapshot(release.procedureId, release.procedureRevision);
     if (snapshot === undefined) return undefined; // release 存在但 artifact 快照缺失 ⇒ fail-closed
     return {
       ...snapshot,
       status: release.status,
-      ...(release.status === "validated" && release.reportId !== undefined
-        ? { validationReportId: release.reportId }
+      ...(release.validationReportId !== undefined
+        ? { validationReportId: release.validationReportId }
         : {}),
-      ...(release.status === "canary" && release.reportId !== undefined
-        ? { canaryReportId: release.reportId }
-        : {}),
-      ...(release.status === "active" && release.reportId !== undefined
-        ? { activeReportId: release.reportId }
-        : {}),
+      ...(release.canaryReportId !== undefined ? { canaryReportId: release.canaryReportId } : {}),
+      ...(release.activeReportId !== undefined ? { activeReportId: release.activeReportId } : {}),
       ...(release.suspendedFrom !== undefined ? { suspendedFrom: release.suspendedFrom } : {}),
       ...(release.suspendKind !== undefined ? { suspendKind: release.suspendKind } : {}),
       ...(release.lifecycleReason !== undefined ? { lifecycleReason: release.lifecycleReason } : {}),
@@ -515,13 +520,16 @@ export class ProcedureStore {
   }
 
   /**
-   * 状态机推进：prior → next。校验（fail-closed，HIGH 1：不信任调用者传入的 prior）：
+   * 状态机推进：prior → next。校验（fail-closed，HIGH 1：不信任调用者传入的 prior；
+   * BLOCKER 2：禁止跨 procedureRevision 沿旧 lifecycle 晋升）：
    * - next.procedureId 必须与 prior 一致；
    * - prior.status → next.status 必须 ∈ 合法边（非法转换拒绝落盘）；
+   * - next.procedureRevision 必须 === prior.procedureRevision——revision 变化不得经普通
+   *   lifecycle transition（修订必须重新验证；新 revision 经独立 revision/save seam 进入）；
    * - 读取 store 当前落盘 stored：stored.procedureId / procedureRevision / status 必须
    *   与 prior 完全一致——stale/伪造 prior（旧 status、错 revision）一律拒绝，且
    *   不得修改 current/history/release/events；
-   * - next 写 current（覆盖当前状态）；procedureRevision 变化 ⇒ 追加 history + release；
+   * - next 写 current（覆盖当前状态）+ release（该 revision 的 release 状态）；
    *   events append-only（不丢历史）。
    */
   async transition(
@@ -548,15 +556,12 @@ export class ProcedureStore {
     ) {
       throw new Error("procedure_store_stale_prior");
     }
+    // BLOCKER 2：revision 变化不得经普通 lifecycle transition（修订必须重新验证）。
+    if (prior.procedureRevision !== next.procedureRevision) {
+      throw new Error("procedure_store_revision_change_requires_revalidation");
+    }
     const currentPath = this.#currentPath(next.procedureId);
     await this.#writeProcedureFile(currentPath, next, { exclusive: false });
-    if (next.procedureRevision !== prior.procedureRevision) {
-      await this.#writeProcedureFile(
-        this.#historyPath(next.procedureId, next.procedureRevision),
-        next,
-        { exclusive: true },
-      );
-    }
     await this.#writeReleaseState(next);
     const meta_ = auditMetaOf(next);
     await this.#appendEvent(
@@ -653,12 +658,15 @@ export class ProcedureStore {
   }
 
   /**
-   * rollback stable lookup seam（HIGH 2）：只返回该 procedureRevision 已真实到达合法
+   * rollback stable lookup seam（HIGH 2/BLOCKER 1）：只返回该 procedureRevision 已真实到达合法
    * stable 发布状态的记录——active，或 suspended 且 suspendedFrom="active"（曾发布为
    * active；drift/cascade 的 revalidation 资格由 rollbackProcedure 的 suspendKind 门另判）。
    * 从未 active 的 draft/validated/canary（含 suspendedFrom≠active）与 retired revision
    * ⇒ undefined（不可作 stable 目标）。
-   * 返回对象 = immutable artifact 快照（history 内容）+ release 状态（status/reportId/
+   * BLOCKER 1 fail-closed：声称曾 active 的 stable candidate 必须携带完整 promotion evidence
+   * （canaryReportId + activeReportId）；缺任一 ⇒ undefined（不返回缺证据的 rollback target，
+   * 防止恢复出缺发布证据链的 active procedure）。
+   * 返回对象 = immutable artifact 快照（history 内容）+ release 状态（status/三段 report/
    * suspendedFrom/suspendKind/lifecycleReason），供 rollbackProcedure 的既有
    * revision/procedureId/parentSkillId lineage 校验与稳定状态判定直接消费。
    */
@@ -666,8 +674,19 @@ export class ProcedureStore {
     await this.#ensureInit();
     const release = await this.#findReleaseByRevision(procedureRevision);
     if (release === undefined) return undefined;
-    if (release.status === "active") return this.#composeStableCandidate(release);
+    // BLOCKER 1 fail-closed：声称曾 active（active 或 suspended-from-active）的 stable
+    // candidate 必须携带完整 promotion evidence（canaryReportId + activeReportId）；
+    // 缺任一 ⇒ undefined（不返回缺证据的 rollback target）。
+    if (release.status === "active") {
+      if (release.canaryReportId === undefined || release.activeReportId === undefined) {
+        return undefined;
+      }
+      return this.#composeStableCandidate(release);
+    }
     if (release.status === "suspended" && release.suspendedFrom === "active") {
+      if (release.canaryReportId === undefined || release.activeReportId === undefined) {
+        return undefined;
+      }
       return this.#composeStableCandidate(release);
     }
     return undefined;
