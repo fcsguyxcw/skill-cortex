@@ -477,26 +477,43 @@ export function transitionPhase3ProcedureActive(
   };
 }
 
+/** 非终态 procedure（validated/canary/active）：可被 dependency drift 失效 suspend。 */
+export type Phase3InvalidatableProcedure =
+  | Phase3ValidatedProcedure
+  | Phase3CanaryProcedure
+  | Phase3ActiveProcedure;
+
 export interface SuspendTransition {
   decision: "suspended";
   /** 失效/降级原因（必填，可审计）。 */
   reason: string;
 }
 
-/** Pure transition: active → suspended（失效/降级；reason 必填）。不可变。 */
+/**
+ * Pure transition: validated | canary | active → suspended（失效/降级；reason 必填）。不可变。
+ *
+ * Phase 5 slice 2 扩展：dependency diff 命中相关维度时，非终态 procedure 均可被 suspend
+ * （不限于 active）。draft 不经状态机路径（必须先 validated）；终态 suspended/retired
+ * 不重复 suspend（fail-closed）。审计字段（validation/canary/active 报告与证据链）随
+ * spread 原样保留，可追溯降级原因。
+ */
 export function transitionPhase3ProcedureSuspend(
-  active: Phase3ActiveProcedure,
+  procedure: Phase3InvalidatableProcedure,
   transition: SuspendTransition,
 ): Phase3SuspendedProcedure {
-  if (active.status !== "active") {
-    throw new Error("suspend_transition_requires_active_procedure");
+  if (
+    procedure.status !== "validated" &&
+    procedure.status !== "canary" &&
+    procedure.status !== "active"
+  ) {
+    throw new Error("suspend_transition_requires_non_terminal_procedure");
   }
   if (transition.decision !== "suspended") {
     throw new Error("suspend_transition_requires_suspended_decision");
   }
   requireLifecycleReason(transition.reason);
   return {
-    ...active,
+    ...procedure,
     status: "suspended",
     lifecycleReason: transition.reason,
   };

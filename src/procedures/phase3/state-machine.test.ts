@@ -3,6 +3,8 @@
  *
  * 合法边（显式发布/降级动作，纯函数不可变）：
  *   draft → validated → canary → active ⇄ suspended；active/suspended → retired（终态）。
+ * Phase 5 slice 2：dependency drift 失效边扩展——validated → suspended、canary → suspended
+ * （非终态均可被失效 suspend；终态 suspended/retired 不重复 suspend）。
  *
  * 覆盖：
  * - 完整生命周期链逐步走通（审计字段随转换写入/清除）；
@@ -145,11 +147,13 @@ const STATUSES: readonly Status[] = [
   "retired",
 ];
 
-/** 合法边（7 条）；其余 36-7=29 条全部非法。 */
+/** 合法边（9 条）；其余 36-9=27 条全部非法。 */
 const LEGAL_EDGES = new Set<string>([
   "draft->validated",
   "validated->canary",
+  "validated->suspended",
   "canary->active",
+  "canary->suspended",
   "active->suspended",
   "suspended->active",
   "active->retired",
@@ -266,18 +270,29 @@ describe("Phase 5 状态机：单转换 fail-closed", () => {
     }
   });
 
-  it("active→suspended：非 active 输入 / decision 错 / reason 空或超长 ⇒ 拒绝", () => {
-    for (const from of ["draft", "validated", "canary", "suspended", "retired"] as const) {
+  it("→suspended（slice 2 扩展）：validated/canary/active 合法；draft/终态/decision 错/reason 空或超长 ⇒ 拒绝", () => {
+    // 非终态三态均可被 dependency drift 失效 suspend。
+    for (const from of ["validated", "canary", "active"] as const) {
+      const result = transitionPhase3ProcedureSuspend(instanceOf(from) as never, {
+        decision: "suspended",
+        reason: REASON,
+      });
+      assert.equal(result.status, "suspended", `from=${from} 必须可 suspend`);
+      assert.equal(result.lifecycleReason, REASON);
+    }
+    // draft（不经状态机路径）+ 终态（suspended/retired 不重复 suspend）拒绝。
+    for (const from of ["draft", "suspended", "retired"] as const) {
       assert.throws(
         () =>
           transitionPhase3ProcedureSuspend(instanceOf(from) as never, {
             decision: "suspended",
             reason: REASON,
           }),
-        /suspend_transition_requires_active_procedure/,
+        /suspend_transition_requires_non_terminal_procedure/,
         `from=${from} 必须拒绝`,
       );
     }
+    // 决策/reason 校验（fail-closed）。
     const active = activeOf();
     assert.throws(
       () => transitionPhase3ProcedureSuspend(active, { decision: "retired", reason: REASON } as never),
