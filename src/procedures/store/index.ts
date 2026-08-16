@@ -217,6 +217,50 @@ function assertImmutableContentUnchanged(prior: CompiledProcedure, next: Compile
   }
 }
 
+/** 晋升锁定字段（仅其特定 promotion 边可设置；其余边必须与落盘 stored 一致）。 */
+const PROMOTION_LOCKED_FIELDS = [
+  "validationReportId",
+  "canaryReportId",
+  "activeReportId",
+  "previousStableRevision",
+] as const;
+
+/** 各 promotion 边允许设置的报告字段。 */
+const PROMOTION_SETTABLE: Readonly<Record<string, ReadonlyArray<string>>> = {
+  "draft→validated": ["validationReportId"],
+  "validated→canary": ["canaryReportId"],
+  "canary→active": ["activeReportId", "previousStableRevision"],
+};
+
+/**
+ * 断言 stored → next 的允许 delta（fail-closed）：
+ * - immutable 内容（artifact/依赖/权限/guard 等）逐字段比较，以 store 落盘 stored 为权威
+ *   （不信任调用方 prior——即使 prior+next 同时伪造也因与 stored 不一致而拒绝）；
+ * - 晋升锁定字段（reportId / previousStableRevision）仅在其特定 promotion 边可设置，其余边
+ *   必须与 stored 一致（防 active→suspended 偷改 activeReportId / previousStableRevision）；
+ * - evidenceIds 仅在 validated→canary 可追加（replay evidence），且不得删除既有；其余边冻结。
+ */
+function assertAllowedDelta(stored: CompiledProcedure, next: CompiledProcedure): void {
+  assertImmutableContentUnchanged(stored, next);
+  const edge = `${stored.status}→${next.status}`;
+  const settable = PROMOTION_SETTABLE[edge] ?? [];
+  for (const field of PROMOTION_LOCKED_FIELDS) {
+    if (settable.includes(field)) continue;
+    if (next[field] !== stored[field]) {
+      throw new Error(`procedure_store_field_change_not_allowed: ${String(field)}`);
+    }
+  }
+  if (edge === "validated→canary") {
+    for (const id of stored.evidenceIds) {
+      if (!next.evidenceIds.includes(id)) {
+        throw new Error("procedure_store_evidence_ids_deleted");
+      }
+    }
+  } else if (!deepEqual(stored.evidenceIds, next.evidenceIds)) {
+    throw new Error("procedure_store_evidence_ids_changed");
+  }
+}
+
 /** 持久化白名单复制（CompiledProcedure 合同字段全集；不 spread 未知键，防类型外字段落盘）。 */
 function toStoredProcedure(procedure: CompiledProcedure): CompiledProcedure {
   return {
@@ -623,8 +667,8 @@ export class ProcedureStore {
     if (prior.procedureRevision !== next.procedureRevision) {
       throw new Error("procedure_store_revision_change_requires_revalidation");
     }
-    // HIGH 2：同 revision 不得偷改 immutable 内容（artifact/依赖/权限/guard 等逐字段比较）。
-    assertImmutableContentUnchanged(prior, next);
+    // HIGH 2：同 revision 不得偷改 immutable 内容 + 晋升锁定字段（以落盘 stored 为权威，不信任 prior）。
+    assertAllowedDelta(stored, next);
     const currentPath = this.#currentPath(next.procedureId);
     await this.#writeProcedureFile(currentPath, next, { exclusive: false });
     await this.#writeReleaseState(next);
@@ -672,20 +716,12 @@ export class ProcedureStore {
   ): Promise<void> {
     await this.#ensureInit();
     assertValidStatus(failed.status);
-    const previous = failed.previousStableRevision;
-    if (previous === undefined) {
-      throw new Error("procedure_store_rollback_no_stable_version");
-    }
-    // 目标 revision 严格锁定 previousStableRevision（不猜任意历史 revision）。
-    if (stableRevision !== previous) {
-      throw new Error("procedure_store_rollback_target_revision_mismatch");
-    }
-    // idempotency（先于 stale-prior）：current 已回滚（stable revision + active）⇒ 拒绝重复。
     const stored = await this.getProcedure(failed.procedureId);
     if (stored === undefined) {
       throw new Error("procedure_store_missing_prior");
     }
-    if (stored.procedureRevision === previous && stored.status === "active") {
+    // idempotency（先于 stale-prior）：current 已回滚到 stable（active + revision === stableRevision）。
+    if (stored.status === "active" && stored.procedureRevision === stableRevision) {
       throw new Error("procedure_store_rollback_already_applied");
     }
     // HIGH 1 stale-prior：真实落盘 current 三要素与 failed 完全一致（不信任调用者传入身份）。
@@ -695,6 +731,14 @@ export class ProcedureStore {
       stored.status !== failed.status
     ) {
       throw new Error("procedure_store_rollback_stale_prior");
+    }
+    // 目标 revision 权威来源 = stored.previousStableRevision（不信任 failed.previousStableRevision）。
+    const previous = stored.previousStableRevision;
+    if (previous === undefined) {
+      throw new Error("procedure_store_rollback_no_stable_version");
+    }
+    if (stableRevision !== previous) {
+      throw new Error("procedure_store_rollback_target_revision_mismatch");
     }
     // HIGH 3：stable 恢复来源只认 store 自身重读（不接受 caller 内容）。
     const stableNow = await this.getStableByRevision(previous);

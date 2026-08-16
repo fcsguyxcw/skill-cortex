@@ -701,6 +701,63 @@ describe("ProcedureStore：HIGH 2 — transition 禁止同 revision 偷改 immut
     assert.equal(stored!.validationReportId, VALIDATION_REPORT);
     assert.equal(stored!.artifactHash, draft.artifactHash, "immutable 内容保持不变");
   });
+
+  it("同时伪造 prior+next 的 immutable 内容（以 stored 为权威）⇒ 拒绝零写入", async () => {
+    const store = makeStore();
+    const draft = draftOf();
+    await store.save(draft, { trigger: "agent" });
+    const validated = validatedOf();
+    await store.transition(draft, validated, { trigger: "procedure" });
+    const eventsBefore = await store.listEvents(draft.procedureId);
+
+    const forgedHash = "sha256:" + "9".repeat(64);
+    const forgedPrior = { ...validated, artifactHash: forgedHash } as CompiledProcedure;
+    const forgedNext = { ...canaryOf(), artifactHash: forgedHash } as CompiledProcedure;
+    await assert.rejects(
+      store.transition(forgedPrior, forgedNext, { trigger: "tool" }),
+      /procedure_store_immutable_content_mutation: artifactHash/,
+    );
+    assert.equal((await store.getProcedure(draft.procedureId))!.artifactHash, validated.artifactHash, "stored 权威内容不被篡改");
+    assert.deepEqual(await store.listEvents(draft.procedureId), eventsBefore, "事件不被追加");
+  });
+
+  it("active→suspended 偷改 previousStableRevision / activeReportId ⇒ 拒绝", async () => {
+    const store = makeStore();
+    const draft = draftOf();
+    await store.save(draft, { trigger: "agent" });
+    const validated = validatedOf();
+    await store.transition(draft, validated, { trigger: "procedure" });
+    const canary = canaryOf();
+    await store.transition(validated, canary, { trigger: "procedure" });
+    const active = activeOf();
+    await store.transition(canary, active, { trigger: "tool" });
+
+    const forgedPrev = { ...suspendedOf(), previousStableRevision: "rev:" + "a".repeat(64) } as CompiledProcedure;
+    await assert.rejects(
+      store.transition(active, forgedPrev, { trigger: "tool" }),
+      /procedure_store_field_change_not_allowed: previousStableRevision/,
+    );
+    const forgedReport = { ...suspendedOf(), activeReportId: "active:forged" } as CompiledProcedure;
+    await assert.rejects(
+      store.transition(active, forgedReport, { trigger: "tool" }),
+      /procedure_store_field_change_not_allowed: activeReportId/,
+    );
+    assert.equal((await store.getProcedure(draft.procedureId))!.status, "active", "current 不被破坏");
+  });
+
+  it("validated→canary 删除旧 evidenceIds ⇒ 拒绝", async () => {
+    const store = makeStore();
+    const draft = draftOf();
+    await store.save(draft, { trigger: "agent" });
+    const validated = validatedOf();
+    await store.transition(draft, validated, { trigger: "procedure" });
+    const forgedCanary = { ...canaryOf(), evidenceIds: [] } as CompiledProcedure;
+    await assert.rejects(
+      store.transition(validated, forgedCanary, { trigger: "tool" }),
+      /procedure_store_evidence_ids_deleted/,
+    );
+    assert.equal((await store.getProcedure(draft.procedureId))!.status, "validated", "current 不被破坏");
+  });
 });
 
 describe("ProcedureStore：HIGH 2 — rollback stable lookup（release state 语义）", () => {
@@ -923,6 +980,21 @@ describe("ProcedureStore：rollback 落盘 seam（闭环）", () => {
     // 拒绝后 current 仍为 failed（v2 suspended），非 stable。
     const current = await store.getProcedure(v1.procedureId);
     assert.equal(current!.procedureRevision, v2Failed.procedureRevision);
+    assert.equal(current!.status, "suspended");
+  });
+
+  it("rollbackTo fail-closed：伪造 failed.previousStableRevision（指向另一 revision）⇒ 拒绝", async () => {
+    const store = makeStore();
+    const { draft: v1 } = await persistActiveV1(store);
+    const v2Failed = await persistFailedV2(store, v1);
+    // 伪造 failed：previousStableRevision 被改成另一 revision；store 以 stored.previousStableRevision 为权威。
+    const forgedFailed = { ...v2Failed, previousStableRevision: "rev:" + "f".repeat(64) } as CompiledProcedure;
+    await assert.rejects(
+      store.rollbackTo(forgedFailed, "rev:" + "f".repeat(64), { trigger: "tool" }),
+      /procedure_store_rollback_target_revision_mismatch/,
+    );
+    const current = await store.getProcedure(v1.procedureId);
+    assert.equal(current!.procedureRevision, v2Failed.procedureRevision, "current 不变");
     assert.equal(current!.status, "suspended");
   });
 
