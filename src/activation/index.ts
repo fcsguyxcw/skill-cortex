@@ -8,3 +8,5 @@ export * from "./cascade.ts";
 export * from "./store.ts";
 export * from "./calibration.ts";
 export * from "./final-heldout.ts";
+export * from "./overlay.ts";
+export * from "./host.ts";

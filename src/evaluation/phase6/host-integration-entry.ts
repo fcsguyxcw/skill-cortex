@@ -1,0 +1,138 @@
+/**
+ * Phase 6 host integration —— 隔离 E2E 入口（仅验收用，非生产入口；经真实 ExtensionRunner /
+ * `pi -e` 显式加载）。
+ *
+ * 接线真实链路（observer → induction → ActivationProfileStore → shadow → 受控 promotion →
+ * active discovery + cascade）：
+ *
+ *   pi.on("before_agent_start")            // 先刷新 active profiles（注册顺序先于 cortex）
+ *     → registerSkillCortex({ inject, onDiscovery: push, onCatalog, overlayProfiles, overlayOptions })
+ *     → registerPracticeObserver({ store, routeSnapshotSource, evidenceHook: pagination, onEvent })
+ *     → pi.on("agent_settled")             // 冲刷 verified 事件 → induction → shadow → 受控 promotion
+ *
+ * 受控 promotion（reviewer 要求）：promotion report 只能来自 evaluateProfileForPromotion
+ * （包装 evaluateOverlay）对冻结 FINAL_HELDOUT 集重算；caller 无法注入手搓 report/verdict。
+ * real-skill 评估集属 Phase 7 —— 父 Skill 不在冻结集内 ⇒ promotion 拒绝（parent_not_in_
+ * evaluation_set），profile 保持 shadow（不 trivial 晋升）。
+ *
+ * 命令（项目根）：
+ *   pi --no-session -ne -e ./src/evaluation/phase6/host-integration-entry.ts --print "<只读任务>"
+ *
+ * 不写用户环境、不写工作区外路径；store 落在 <cwd>/.skill-cortex/{practice,activation}。
+ */
+import path from "node:path";
+
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+import { registerSkillCortex } from "../../adapters/pi/index.ts";
+import {
+  createDiscoverySnapshotSource,
+  registerPracticeObserver,
+} from "../../adapters/pi/practice-observer.ts";
+import { createPaginationEvidenceHook } from "../../adapters/pi/practice-pagination-hook.ts";
+import {
+  FINAL_HELDOUT_CASES,
+  FINAL_HELDOUT_OVERLAY_OPTIONS,
+  FINAL_HELDOUT_RECORDS,
+} from "../../activation/final-heldout.ts";
+import {
+  induceAndStoreShadow,
+  promoteProfileIfEligible,
+} from "../../activation/host.ts";
+import { ActivationProfileStore } from "../../activation/store.ts";
+import type { ShadowActivationProfile } from "../../activation/state.ts";
+import type {
+  ActivationProfile,
+  PracticeEvent,
+  SkillRecord,
+} from "../../core/contracts/index.ts";
+import { resolveAttribution } from "../../practice/policy/index.ts";
+import { PracticeStore } from "../../practice/store/index.ts";
+
+export const PHASE6_SHADOW_REPORT_ID = "shadow:phase6-host-001" as const;
+export const PHASE6_PROMOTION_REPORT_ID = "promotion:phase6-host-001" as const;
+
+export default function phase6HostIntegrationEntry(pi: ExtensionAPI): void {
+  const projectRoot = process.cwd();
+  const source = createDiscoverySnapshotSource();
+  const practiceStore = new PracticeStore({
+    rootDir: path.join(projectRoot, ".skill-cortex", "practice"),
+    projectRoot,
+  });
+  const activationStore = new ActivationProfileStore({
+    rootDir: path.join(projectRoot, ".skill-cortex", "activation"),
+    projectRoot,
+  });
+
+  // 内存管线状态（store 为唯一持久化真源；activeProfiles 每次 run 前从 store 刷新）。
+  let catalogRecords: readonly SkillRecord[] = [];
+  let activeProfiles: ActivationProfile[] = [];
+  const eventsByParent = new Map<string, PracticeEvent[]>();
+
+  // 先于 cortex 刷新 active profiles（注册顺序：本 handler 先执行，cortex 的 discovery
+  // 后执行，故当次 discovery 能拿到最新 active overlay）。
+  pi.on("before_agent_start", async () => {
+    activeProfiles = await activationStore.listByStatus("active");
+  });
+
+  registerSkillCortex(pi, {
+    mode: "inject",
+    onDiscovery: (result) => source.push(result),
+    onCatalog: (records) => {
+      catalogRecords = records;
+    },
+    overlayProfiles: () => activeProfiles,
+    overlayOptions: { ...FINAL_HELDOUT_OVERLAY_OPTIONS },
+  });
+
+  registerPracticeObserver(pi, {
+    store: practiceStore,
+    projectRoot,
+    routeSnapshotSource: source,
+    evidenceHook: createPaginationEvidenceHook(),
+    onEvent: (event) => {
+      if (event.provenance !== "real") return;
+      // observer 落盘时 store 用 policy 正规化 attribution（onEvent 收到的是 append 前原始值，
+      // attribution 恒 unknown）；此处用同一 policy resolveAttribution 重算归一化后进 induction。
+      if (resolveAttribution(event) !== "verified_skill_effect") return;
+      const normalized: PracticeEvent = { ...event, attribution: "verified_skill_effect" };
+      const list = eventsByParent.get(normalized.parentSkillId) ?? [];
+      list.push(normalized);
+      eventsByParent.set(normalized.parentSkillId, list);
+    },
+  });
+
+  pi.on("agent_settled", async () => {
+    for (const [skillId, events] of eventsByParent) {
+      const record = catalogRecords.find((r) => r.skillId === skillId);
+      if (record === undefined) continue;
+      const induced = await induceAndStoreShadow(
+        activationStore,
+        events,
+        record,
+        PHASE6_SHADOW_REPORT_ID,
+      );
+      if (!induced.ok || induced.status !== "shadow") continue;
+      const profile = await activationStore.getProfile(induced.profileId);
+      if (profile === undefined || profile.status !== "shadow") continue;
+      // 受控 promotion：report 只能来自 evaluateProfileForPromotion（evaluateOverlay）对冻结集重算。
+      await promoteProfileIfEligible(
+        activationStore,
+        profile as ShadowActivationProfile,
+        FINAL_HELDOUT_CASES,
+        FINAL_HELDOUT_RECORDS,
+        FINAL_HELDOUT_OVERLAY_OPTIONS,
+        PHASE6_PROMOTION_REPORT_ID,
+      );
+    }
+    eventsByParent.clear();
+  });
+}
+
+/** 供 E2E 测试在隔离 fixture 根构造同一 store 路径（单真源断言/播种）。 */
+export function phase6ActivationStore(root: string): ActivationProfileStore {
+  return new ActivationProfileStore({
+    rootDir: path.join(root, ".skill-cortex", "activation"),
+    projectRoot: root,
+  });
+}

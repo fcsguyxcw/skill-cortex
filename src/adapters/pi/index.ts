@@ -48,9 +48,14 @@ export type {
 export function registerSkillCortex(pi: ExtensionAPI, options: RegisterOptions = {}): void {
   const mode = options.mode ?? DEFAULT_MODE;
   const topK = clampTopK(options.topK);
-  const services = createDiscoveryServices({ topK });
+  const services = createDiscoveryServices({
+    topK,
+    overlayProfiles: options.overlayProfiles,
+    overlayOptions: options.overlayOptions,
+  });
   const onShadow = options.onShadow;
   const onDiscovery = options.onDiscovery;
+  const onCatalog = options.onCatalog;
   const onError = options.onError;
 
   pi.on("before_agent_start", async (event: BeforeAgentStartEvent) => {
@@ -63,6 +68,11 @@ export function registerSkillCortex(pi: ExtensionAPI, options: RegisterOptions =
       // fail open：原始 error 仅交给 onError 做本地处理；不注入、不持久化、不阻断主 Agent。
       onError?.(outcome.error, { phase: "ingest" });
       return undefined;
+    }
+
+    // 成功摄入后回调当次 catalog records（供 Phase 6 induction 取父 SkillRecord 作者字段）。
+    if (onCatalog !== undefined && services.state.catalog !== undefined) {
+      onCatalog([...services.state.catalog.values()].map((entry) => entry.record));
     }
 
     if (mode === "shadow") {

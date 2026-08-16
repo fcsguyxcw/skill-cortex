@@ -14,7 +14,7 @@ import { lstat, readFile, realpath } from "node:fs/promises";
 import type { Stats } from "node:fs";
 import path from "node:path";
 
-import type { SkillCandidate, SkillRecord } from "../../core/contracts/index.ts";
+import type { ActivationProfile, SkillCandidate, SkillRecord } from "../../core/contracts/index.ts";
 import type { DependencyEntry, SkillPackageInput } from "../../core/registry/index.ts";
 import {
   buildSkillRecord,
@@ -33,6 +33,8 @@ import {
   type DiscoveryIndex,
 } from "../../discovery/index.ts";
 import { formatCandidateCards } from "../../discovery/index.ts";
+import { applyActiveProfiles } from "../../activation/overlay.ts";
+import type { RerankOptions } from "../../activation/rerank.ts";
 import type { HostSkillLike, HostToolResultLike } from "./host.ts";
 
 export type AdapterMode = "shadow" | "inject";
@@ -49,6 +51,12 @@ export interface RegisterOptions {
   onShadow?: (result: ShadowResult) => void;
   /** 每次成功摄入+检索后触发的有界快照回调（inject 与 shadow 都触发；B3 observer 用当次候选快照）。 */
   onDiscovery?: (result: DiscoveryResult) => void;
+  /** 每次成功摄入后回调（当次 catalog SkillRecord；供 Phase 6 induction 取父 SkillRecord 作者字段）。 */
+  onCatalog?: (records: readonly SkillRecord[]) => void;
+  /** active discovery overlay：返回当次 active ActivationProfile（静态 BM25 候选后软重排）。 */
+  overlayProfiles?: () => readonly ActivationProfile[];
+  /** overlay 重排参数（与 rerank 一致；未提供用默认关闭）。 */
+  overlayOptions?: RerankOptions;
   /** 摄入/检索失败回调（fail open，不阻断主 Agent）。 */
   onError?: (error: unknown, context: { phase: "ingest" | "prompt_rewrite" }) => void;
 }
@@ -198,7 +206,11 @@ export function mapSkills(skills: readonly HostSkillLike[]): SkillPackageInput[]
  * state 只记录稳定错误类别（脱敏），原始 error 保留在 outcome.error 供 onError 本地处理，
  * 不进入模型可见诊断、不持久化、不注入。
  */
-export function createDiscoveryServices(options: { topK: number }): DiscoveryServices {
+export function createDiscoveryServices(options: {
+  topK: number;
+  overlayProfiles?: () => readonly ActivationProfile[];
+  overlayOptions?: RerankOptions;
+}): DiscoveryServices {
   const state: AdapterState = { ready: false, recordCount: 0 };
   return {
     topK: options.topK,
@@ -215,7 +227,12 @@ export function createDiscoveryServices(options: { topK: number }): DiscoverySer
         }
         const records = [...catalog.values()].map((entry) => entry.record);
         const index = buildIndex(records);
-        const candidates = index.search(prompt, { limit: options.topK });
+        const staticCandidates = index.search(prompt, { limit: options.topK });
+        // active discovery overlay：静态候选后软重排（仅 revision 匹配的 active profile 生效；
+        // 未提供 overlayProfiles ⇒ 纯静态，无损回静态）。
+        const candidates = options.overlayProfiles
+          ? applyActiveProfiles(staticCandidates, options.overlayProfiles(), prompt, options.overlayOptions)
+          : staticCandidates;
         state.ready = true;
         state.lastErrorCategory = undefined;
         state.index = index;
