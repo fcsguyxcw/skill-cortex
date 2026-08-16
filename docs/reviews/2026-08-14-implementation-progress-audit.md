@@ -74,6 +74,17 @@ evidenceIds，held-out 质量门全过，真实成本复测 `N_break-even=0.0001
   已 CLOSED。生产入口（`.pi/extensions/skill-cortex/index.ts`）接线与 canary/active 仍未启动。
   - 保留为非 blocker：current toolSchemaHash 独立真实来源；多 session/run 并发 current snapshot 隔离；
     safety_stop / procedure_error 的 compiled failure evidence 保留。
+- **Phase 5 核心 Gate 已收口（2026-08-16，commit d101d4a）**：状态机 + dependency diff + rollback +
+  evidence cascade + conditional fingerprint invariant + identity matrix + procedure store + host
+  lifecycle wiring + project-local host E2E 全部落地；Gate P5（失效矩阵 + rollback + host E2E）通过。
+  经 `ebc8d4b`（HIGH 1-3：rollback stale-prior / transition immutable / rollback stableNow）+
+  `d101d4a`（transition 以 stored 为权威 + rollback 目标权威来源 + allowed-delta 收紧）复审关闭。
+  - 后续 lifecycle hardening（非 blocker）：suspendedFrom / suspendKind / lifecycleReason 的
+    edge-specific allowed-delta 未做（当前仅 promotion 锁定字段 + evidenceIds 收紧）；
+  - real-host deployment 前 blocker（不阻塞 Phase 6）：crash consistency / WAL（transition/rollbackTo
+    的 current 覆盖与 event append 无原子性）、真实宿主当次 tool/permission/environment/model 指纹
+    来源、新 revision 的独立 revision/save seam、含 LLM hole 的 procedure 真实编译链、cue/profile
+    级联消费（ActivationProfile 挂起/回 shadow，属 Phase 6）。
 - **未改变**：Phase 1/2 判定；`.skill-cortex` 真实事件与 B1–B6 关闭证据；`validated ≠ active`。
 
 ## 3. Blocking findings（2026-08-16 更新：B1–B6 已全部关闭）
