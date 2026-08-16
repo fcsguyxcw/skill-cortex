@@ -28,8 +28,8 @@ ADR 的架构决定；当 implementation plan 的阶段状态与本文的更新�
 | Phase 3：离线部分编译与晋升 | detector、draft、verifier、induction seam、成本 benchmark、formal runner、envelope 已实现 | 默认 project-local Store 的真实 PracticeEvent 经 induction 产生 draft 并绑定 evidence | Gate P3 纠偏后重新 11/11 PASS，procedure `validated` | **Complete（validated，未 canary/active）** |
 | Phase 4：Execution Resolver 与安全回退 | resolveExecution/guard/fallback/executor 已按 ADR-0012 实现；project-local shadow replay 已通过 | 已接真实 Pi tool_call/tool_result/agent_settled（shadow entry + ExtensionRunner E2E）；per-call current 来源 + drift fail-closed | shadow_replay 链路 E2E + Gate P4 project-local canary（validated→canary 晋升 + canary 上下文三栏指标）通过 | **Complete（Gate P4 通过）；生产入口接线与真实宿主部署未启动** |
 | Phase 5：生命周期、失效与回滚 | 状态机 + dependency diff + rollback + evidence cascade + conditional fingerprint invariant + identity matrix 已实现 | host lifecycle wiring（runHostLifecycle）已接真实事件源（discovery/derive/invalidate） | project-local host E2E 9 场景通过 | **Complete（Gate P5 PASS）；真实宿主部署未启动** |
-| Phase 6：Activation Memory | cue induction + shadow rerank + 分栏评估 + profile 状态机 + promotion gate + cascade + store 已实现 | 未接真实宿主（observer→induction→rerank→store 全链未接线） | 未完成（held-out 门槛未校准） | **Component implemented；host integration / E2E incomplete** |
-| Phase 7：系统验证与交接 | 只有前序阶段的局部评测工具 | 未开始 | 未开始 | **Not started** |
+| Phase 6：Activation Memory | cue induction + shadow rerank + 分栏评估 + profile 状态机 + promotion gate + cascade + store + 受控 promotion 已实现 | 已接真实宿主（observer→induction→store→受控 promotion→active overlay，ExtensionRunner E2E） | Gate P6 held-out PASS（冻结门槛 + untouched final-heldout）+ host integration E2E | **Complete（Gate P6 收口）** |
+| Phase 7：系统验证与交接 | 三 seam 关闭（search_skills overlay / host lifecycle cascade / 冻结 real-skill 评估 provider）+ 六层分层验证 | search_skills overlay + host lifecycle cascade 已接真实链路 | 六层验证（Catalog/Discovery/Resolver/Execution/Lifecycle-Security PASS；Selection 模型侧未做） | **Complete（见 [Phase 7 报告](../reports/2026-08-16-phase7-validation.md)）** |
 
 Phase 3 procedure 已由 `draft` 晋升至 `validated`（Gate P3 正式闭环，`p3-gate-runner`）：
 2 条真实、可归因、policy-valid 的 pagination PracticeEvent 经 induction seam 绑定
@@ -86,6 +86,8 @@ evidenceIds，held-out 质量门全过，真实成本复测 `N_break-even=0.0001
     来源、新 revision 的独立 revision/save seam、含 LLM hole 的 procedure 真实编译链、cue/profile
     级联消费（ActivationProfile 挂起/回 shadow，属 Phase 6）。
 - **未改变**：Phase 1/2 判定；`.skill-cortex` 真实事件与 B1–B6 关闭证据；`validated ≠ active`。
+- **Phase 6/7 已关闭（2026-08-16，`4cef8c1`..`c2c27ec`）**：Phase 6 host integration（observer→induction→store→受控 promotion→active overlay）经真实 ExtensionRunner E2E 验收；Gate P6 held-out 冻结门槛收口。Phase 7 三 seam 关闭：search_skills 补搜走 active overlay（`ef880c6`）、parent revision reversion + evidence deletion cascade 接进 host lifecycle（`c2c27ec`）、冻结 real-skill 评估 provider（`buildFrozenEvaluation`，promotion 不接受 caller 自定义评估集，`14b90d0`）。六层分层验证见 [Phase 7 报告](../reports/2026-08-16-phase7-validation.md)。
+  - real-host 部署前 blocker（保留）：Selection 模型侧 exact-set 评测（需真实主模型）、crash consistency / WAL、真实宿主当次 tool/permission/environment/model 指纹来源、真实 canary/active 部署。
 
 ## 3. Blocking findings（2026-08-16 更新：B1–B6 已全部关闭）
 
