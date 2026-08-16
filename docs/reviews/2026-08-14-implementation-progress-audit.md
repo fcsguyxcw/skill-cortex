@@ -26,7 +26,7 @@ ADR 的架构决定；当 implementation plan 的阶段状态与本文的更新�
 | Phase 1：Registry 与 prompt 外 discovery | 已实现 | 真实 Pi runner 链注入 Top-K、移除原生 block 已验证 | 已通过 Gate P1 | **Complete** |
 | Phase 2：Practice Store 与证据治理 | Store、policy、分区、脱敏、删除已实现 | 已接真实 Practice observer（隔离 + --no-session 真实会话） | 已通过 Gate P2 | **Complete** |
 | Phase 3：离线部分编译与晋升 | detector、draft、verifier、induction seam、成本 benchmark、formal runner、envelope 已实现 | 默认 project-local Store 的真实 PracticeEvent 经 induction 产生 draft 并绑定 evidence | Gate P3 纠偏后重新 11/11 PASS，procedure `validated` | **Complete（validated，未 canary/active）** |
-| Phase 4：Execution Resolver 与安全回退 | resolveExecution/guard/fallback/executor 已按 ADR-0012 实现；project-local shadow replay 已通过 | 未接真实 Pi tool 事件（注入接口） | 未完成 | **Component implemented；host integration / E2E incomplete** |
+| Phase 4：Execution Resolver 与安全回退 | resolveExecution/guard/fallback/executor 已按 ADR-0012 实现；project-local shadow replay 已通过 | 已接真实 Pi tool_call/tool_result/agent_settled（shadow entry + ExtensionRunner E2E）；per-call current 来源 + drift fail-closed | shadow_replay 链路 E2E 通过（block / fast_path / 归因 / 漂移 fail-closed） | **Component + host integration（shadow）+ E2E complete；生产入口接线与 canary/active 未启动** |
 | Phase 5：生命周期、失效与回滚 | 未开始 | 未开始 | 未开始 | **Not started** |
 | Phase 6：Activation Memory | 未开始 | 未开始 | 未开始 | **Not started** |
 | Phase 7：系统验证与交接 | 只有前序阶段的局部评测工具 | 未开始 | 未开始 | **Not started** |
@@ -66,8 +66,14 @@ evidenceIds，held-out 质量门全过，真实成本复测 `N_break-even=0.0001
   状态矩阵、父 Skill 身份检查、精确 effect 集、两维 authorization claims、artifact 结构化
   disposition、零副作用 `safety_stop`、guard fail-closed 与 verifier binding；project-local
   shadow replay 和定向测试通过。该结论不证明真实宿主授权、guard 观察或 artifact I/O 已接线。
-- **Phase 4 host integration / end-to-end 仍 incomplete**：真实 Pi `tool_call` adapter、逐次授权
-  gate、guard 观察来源与 artifact 入口尚未验收；因此不得启动真实 canary/active。
+- **Phase 4 host integration（shadow）+ end-to-end 已关闭（2026-08-16，commit b7b8d42）**：真实 Pi
+  `tool_call`/`tool_result`/`agent_settled` 经 host-integration-entry + ExtensionRunner 隔离 E2E 验收——
+  preflight block 先于工具执行、被 block 调用不产生 tool_result 事件、身份匹配走 fast_path、observer
+  完整归因落 provenance=shadow 事件；per-call current 来源（候选卡 revision + derive sourceHash）使
+  revision/dependency 漂移真实可检测，current source 缺失 fail-closed（不再 self-match）。drift blocker
+  已 CLOSED。生产入口（`.pi/extensions/skill-cortex/index.ts`）接线与 canary/active 仍未启动。
+  - 保留为非 blocker：current toolSchemaHash 独立真实来源；多 session/run 并发 current snapshot 隔离；
+    safety_stop / procedure_error 的 compiled failure evidence 保留。
 - **未改变**：Phase 1/2 判定；`.skill-cortex` 真实事件与 B1–B6 关闭证据；`validated ≠ active`。
 
 ## 3. Blocking findings（2026-08-16 更新：B1–B6 已全部关闭）
