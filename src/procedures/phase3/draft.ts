@@ -439,6 +439,30 @@ function requireLifecycleReason(value: string): string {
   return value;
 }
 
+/**
+ * 失效暂停受控 reason（resume/rollback 的恢复语义判定依据）。
+ * dependency-diff 用 "dependency drift: <dims>"（前缀）；evidence cascade 用精确值。
+ * manual（可逆）暂停必须使用其他文本（不得伪装成失效暂停；反之亦然）。
+ */
+export const SUSPEND_REASON_DEPENDENCY_DRIFT_PREFIX = "dependency drift: " as const;
+export const SUSPEND_REASON_EVIDENCE_CASCADE = "evidence_cascade_deletion" as const;
+
+/** 暂停类别：可逆暂停（manual）vs 失效暂停（dependency drift / evidence cascade）。 */
+export type SuspendKind = "manual" | "dependency_drift" | "evidence_cascade";
+
+/**
+ * 暂停类别判定（HIGH 1 恢复语义依据）：
+ * - dependency_drift / evidence_cascade = 失效暂停 ⇒ 不得直接 resume，必须回退重验路径；
+ * - 其他（manual）= 可逆暂停 ⇒ 允许 resume。
+ */
+export function suspendKindOf(reason: string | undefined): SuspendKind {
+  if (reason === SUSPEND_REASON_EVIDENCE_CASCADE) return "evidence_cascade";
+  if (reason !== undefined && reason.startsWith(SUSPEND_REASON_DEPENDENCY_DRIFT_PREFIX)) {
+    return "dependency_drift";
+  }
+  return "manual";
+}
+
 export interface ActiveTransition {
   decision: "active";
   /** canary→active 发布报告 ID（must 绑定，审计可追溯）。 */
@@ -548,6 +572,13 @@ export function transitionPhase3ProcedureResume(
   if (transition.decision !== "active") {
     throw new Error("resume_transition_requires_active_decision");
   }
+  // HIGH 1：失效暂停（dependency drift / evidence cascade）不得直接 resume active——
+  // validated/canary→suspended→active 会绕过 canary/active promotion gate。
+  // 失效暂停必须回退到重验路径（新修订重新走 promotion gate），fail-closed。
+  // 仅可逆暂停（manual）允许 resume（恢复原发布级，不是晋升）。
+  if (suspendKindOf(suspended.lifecycleReason) !== "manual") {
+    throw new Error("resume_blocked_requires_revalidation");
+  }
   // resume 恢复原发布状态：清除失效原因（原 suspended 必已写 reason，防御性丢弃）；
   // 不产生新报告（resume 不是晋升）。
   const { lifecycleReason: _dropped, ...rest } = suspended;
@@ -595,12 +626,11 @@ export function transitionPhase3ProcedureRetire(
 /** procedureRevision 引用格式（"rev:" + 64 hex；与 buildPhase3ProcedureDraft 生成一致）。 */
 const STABLE_REVISION_PATTERN = /^rev:[0-9a-f]{64}$/u;
 
-/** 可作为 rollback 目标的稳定版本：仅已发布状态（active/suspended 视为可恢复的稳定版本）。 */
-const ROLLBACK_STABLE_STATUSES: readonly CompiledProcedure["status"][] = ["active", "suspended"];
-
 export type RollbackFailureReason =
   | "no_stable_version"
-  | "invalid_stable_version";
+  | "invalid_stable_version"
+  | "identity_mismatch"
+  | "requires_revalidation";
 
 export type RollbackResult =
   | { ok: true; rollbackTo: CompiledProcedure & { status: "active" } }
@@ -611,14 +641,23 @@ export interface RollbackInput {
   current: CompiledProcedure;
   /** 按 procedureRevision 查找稳定版本的注入查找（纯函数不持有 registry）。 */
   stableLookup: (procedureRevision: string) => CompiledProcedure | undefined;
+  /**
+   * 显式声明 current dependency revalidation（HIGH 2）：suspended 失效 target
+   * （dependency drift / evidence cascade）恢复 active 必须已重验；缺省 ⇒ fail-closed
+   * requires_revalidation（不复活 drift/evidence 失效版本）。manual suspended / active
+   * target 不受此门约束。
+   */
+  dependencyRevalidated?: boolean;
 }
 
 /**
  * 一键回滚（纯函数不可变）：
  * - current.previousStableRevision 缺失 ⇒ no_stable_version（调用方走父 Skill 慢路径）；
  * - stableLookup 找不到该 revision ⇒ no_stable_version（不猜测、不伪造）；
- * - 找到的版本不是已发布稳定状态（draft/validated/canary/retired）⇒ invalid_stable_version
- *   （不能回滚到未发布或已废弃版本）；
+ * - HIGH 2 identity（lineage）fail-closed：target.procedureRevision 必须精确等于引用、
+ *   procedureId/parentSkillId 必须与 current 同源（防注入任意稳定状态对象冒充）；
+ * - target 非稳定状态（draft/validated/canary/retired）⇒ invalid_stable_version；
+ * - suspended 失效 target（drift/cascade）未经 dependencyRevalidated ⇒ requires_revalidation；
  * - 命中 ⇒ 返回该稳定版本以 active 状态恢复的副本（rollbackTo），不改 current/stable 原对象。
  */
 export function rollbackProcedure(input: RollbackInput): RollbackResult {
@@ -634,8 +673,32 @@ export function rollbackProcedure(input: RollbackInput): RollbackResult {
   if (stable === undefined) {
     return { ok: false, reason: "no_stable_version" };
   }
-  if (!ROLLBACK_STABLE_STATUSES.includes(stable.status)) {
+  // HIGH 2：identity/lineage 精确校验（先于状态判定）。
+  if (stable.procedureRevision !== previous) {
+    return { ok: false, reason: "identity_mismatch" };
+  }
+  if (stable.procedureId !== input.current.procedureId) {
+    return { ok: false, reason: "identity_mismatch" };
+  }
+  if (stable.parentSkillId !== input.current.parentSkillId) {
+    return { ok: false, reason: "identity_mismatch" };
+  }
+  if (
+    stable.status === "draft" ||
+    stable.status === "validated" ||
+    stable.status === "canary" ||
+    stable.status === "retired"
+  ) {
     return { ok: false, reason: "invalid_stable_version" };
+  }
+  // HIGH 2：suspended 失效 target（drift/cascade）恢复 active 必须已重验；
+  // manual suspended / active target 不受门约束（superseded / 已发布语义）。
+  if (
+    stable.status === "suspended" &&
+    suspendKindOf(stable.lifecycleReason) !== "manual" &&
+    input.dependencyRevalidated !== true
+  ) {
+    return { ok: false, reason: "requires_revalidation" };
   }
   // 恢复为 active 发布状态（不可变：不改 stable 原对象，返回新副本）；
   // 清除 suspended 遗留的失效原因（rollback 是显式恢复动作，与 resume 语义一致）。

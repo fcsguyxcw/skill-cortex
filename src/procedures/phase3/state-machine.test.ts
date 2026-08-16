@@ -18,6 +18,8 @@ import { describe, it } from "node:test";
 
 import type { CompiledProcedure } from "../../core/contracts/index.ts";
 import {
+  SUSPEND_REASON_DEPENDENCY_DRIFT_PREFIX,
+  SUSPEND_REASON_EVIDENCE_CASCADE,
   buildPhase3ProcedureDraft,
   transitionPhase3ProcedureActive,
   transitionPhase3ProcedureCanary,
@@ -319,6 +321,49 @@ describe("Phase 5 状态机：单转换 fail-closed", () => {
       () => transitionPhase3ProcedureResume(suspendedOf(), { decision: "retired" } as never),
       /resume_transition_requires_active_decision/,
     );
+  });
+
+  it("HIGH 1：失效暂停（dependency drift / evidence cascade）不得直接 resume active（绕过 promotion gate）", () => {
+    // validated → suspended(drift) → active 绕过 canary/active promotion gate，必须拒绝。
+    const driftSuspended = transitionPhase3ProcedureSuspend(validatedOf(), {
+      decision: "suspended",
+      reason: `${SUSPEND_REASON_DEPENDENCY_DRIFT_PREFIX}source`,
+    });
+    assert.throws(
+      () => transitionPhase3ProcedureResume(driftSuspended, { decision: "active" }),
+      /resume_blocked_requires_revalidation/,
+      "validated→suspended(drift)→active 必须被拒",
+    );
+    // canary → suspended(cascade) → active 绕过 active promotion gate，必须拒绝。
+    const cascadeSuspended = transitionPhase3ProcedureSuspend(canaryOf(), {
+      decision: "suspended",
+      reason: SUSPEND_REASON_EVIDENCE_CASCADE,
+    });
+    assert.throws(
+      () => transitionPhase3ProcedureResume(cascadeSuspended, { decision: "active" }),
+      /resume_blocked_requires_revalidation/,
+      "canary→suspended(cascade)→active 必须被拒",
+    );
+    // active → suspended(drift) → active 同样拒绝（失效版本不得直接复活）。
+    const activeDrift = transitionPhase3ProcedureSuspend(activeOf(), {
+      decision: "suspended",
+      reason: `${SUSPEND_REASON_DEPENDENCY_DRIFT_PREFIX}tool`,
+    });
+    assert.throws(
+      () => transitionPhase3ProcedureResume(activeDrift, { decision: "active" }),
+      /resume_blocked_requires_revalidation/,
+      "active→suspended(drift)→active 必须被拒",
+    );
+  });
+
+  it("HIGH 1：manual（可逆）暂停仍可 resume active（既有合法路径不破坏）", () => {
+    const manual = transitionPhase3ProcedureSuspend(activeOf(), {
+      decision: "suspended",
+      reason: "operator maintenance pause",
+    });
+    const resumed = transitionPhase3ProcedureResume(manual, { decision: "active" });
+    assert.equal(resumed.status, "active");
+    assert.equal(resumed.lifecycleReason, undefined, "resume 清除可逆暂停原因");
   });
 
   it("active|suspended→retired：draft/validated/canary/retired 输入拒绝；reason 必填", () => {

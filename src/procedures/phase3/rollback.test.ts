@@ -20,6 +20,8 @@ import type { CompiledProcedure } from "../../core/contracts/index.ts";
 import { execute } from "../../runtime/executor.ts";
 import { P3_GATE_FROZEN } from "../../evaluation/phase3/p3-gate-runner.ts";
 import {
+  SUSPEND_REASON_DEPENDENCY_DRIFT_PREFIX,
+  SUSPEND_REASON_EVIDENCE_CASCADE,
   buildPhase3ProcedureDraft,
   rollbackProcedure,
   transitionPhase3ProcedureActive,
@@ -186,6 +188,100 @@ describe("Phase 5 slice 3：一键回滚（rollbackProcedure 纯函数）", () =
       assert.equal(result.rollbackTo.status, "active", "回滚恢复为 active");
       assert.equal(result.rollbackTo.procedureRevision, stable.procedureRevision);
       assert.equal(result.rollbackTo.lifecycleReason, undefined, "回滚副本不残留失效原因");
+    }
+  });
+
+  it("HIGH 2 identity：target.procedureRevision 必须精确等于引用（fail-closed）", () => {
+    const { current } = stableAndCurrent();
+    // lookup 返回 revision 不符的“冒充”target（status 合法但 revision 不同）。
+    const imposter = activeOf(REFERENCE_V2); // 与 current 同 revision 的另一个版本
+    const result = rollbackProcedure({
+      current,
+      stableLookup: () => imposter,
+    });
+    assert.equal(result.ok, false, "revision 不符必须拒绝");
+    if (!result.ok) assert.equal(result.reason, "identity_mismatch");
+  });
+
+  it("HIGH 2 identity：procedureId / parentSkillId 必须与 current 同 lineage（fail-closed）", () => {
+    const { current } = stableAndCurrent();
+    // 不同父 skill 的 procedure（procedureId/parentSkillId 均不同）。
+    const foreign = buildPhase3ProcedureDraft({
+      parentSkillId: "skill:" + "f".repeat(64),
+      parentSkillRevision: "rev:" + "e".repeat(64),
+      skillMdHash: SKILL_HASH,
+      selectedReferenceHash: REFERENCE_V1,
+      createdAt: "2026-08-15T00:00:00.000Z",
+      evidenceIds: [...P3_GATE_FROZEN.eventIds],
+    });
+    const foreignActive = transitionPhase3ProcedureActive(
+      transitionPhase3ProcedureCanary(
+        transitionPhase3ProcedureValidation(foreign, { decision: "validated", validationReportId: VALIDATION_REPORT }),
+        { decision: "canary", canaryReportId: CANARY_REPORT },
+      ),
+      { decision: "active", activeReportId: ACTIVE_REPORT },
+    );
+    const result = rollbackProcedure({
+      current,
+      // 强制 lookup 命中 foreign（用 foreign 的 revision 构造引用链：foreign 是独立 procedure）。
+      stableLookup: (revision) => (revision === foreignActive.procedureRevision ? foreignActive : undefined),
+    });
+    // current.previousStableRevision 指向 v1（不是 foreign 的 revision）⇒ lookup 找不到 ⇒ no_stable_version。
+    // 为验证 lineage 校验本身，构造 current 的引用指向 foreign revision：
+    const forged = {
+      ...current,
+      previousStableRevision: foreignActive.procedureRevision,
+    };
+    const forgedResult = rollbackProcedure({
+      current: forged,
+      stableLookup: (revision) => (revision === foreignActive.procedureRevision ? foreignActive : undefined),
+    });
+    assert.equal(forgedResult.ok, false, "跨 lineage 目标必须拒绝");
+    if (!forgedResult.ok) assert.equal(forgedResult.reason, "identity_mismatch");
+  });
+
+  it("HIGH 2：suspended 失效 target（drift/cascade）未经 current dependency revalidation ⇒ requires_revalidation", () => {
+    const { current } = stableAndCurrent();
+    const stable = activeOf(REFERENCE_V1);
+    const driftSuspended = transitionPhase3ProcedureSuspend(stable, {
+      decision: "suspended",
+      reason: `${SUSPEND_REASON_DEPENDENCY_DRIFT_PREFIX}source`,
+    });
+    const blocked = rollbackProcedure({
+      current,
+      stableLookup: (revision) => (revision === driftSuspended.procedureRevision ? driftSuspended : undefined),
+    });
+    assert.equal(blocked.ok, false, "drift 失效 suspended 未经重验不得恢复 active");
+    if (!blocked.ok) assert.equal(blocked.reason, "requires_revalidation");
+
+    const cascadeSuspended = transitionPhase3ProcedureSuspend(stable, {
+      decision: "suspended",
+      reason: SUSPEND_REASON_EVIDENCE_CASCADE,
+    });
+    const cascadeBlocked = rollbackProcedure({
+      current,
+      stableLookup: (revision) => (revision === cascadeSuspended.procedureRevision ? cascadeSuspended : undefined),
+    });
+    assert.equal(cascadeBlocked.ok, false);
+    if (!cascadeBlocked.ok) assert.equal(cascadeBlocked.reason, "requires_revalidation");
+  });
+
+  it("HIGH 2：显式 dependencyRevalidated=true 后，suspended 失效 target 可恢复 active（重验门通过）", () => {
+    const { current } = stableAndCurrent();
+    const stable = activeOf(REFERENCE_V1);
+    const driftSuspended = transitionPhase3ProcedureSuspend(stable, {
+      decision: "suspended",
+      reason: `${SUSPEND_REASON_DEPENDENCY_DRIFT_PREFIX}source`,
+    });
+    const result = rollbackProcedure({
+      current,
+      stableLookup: (revision) => (revision === driftSuspended.procedureRevision ? driftSuspended : undefined),
+      dependencyRevalidated: true,
+    });
+    assert.equal(result.ok, true, "显式重验后允许恢复");
+    if (result.ok) {
+      assert.equal(result.rollbackTo.status, "active");
+      assert.equal(result.rollbackTo.procedureRevision, stable.procedureRevision);
     }
   });
 

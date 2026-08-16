@@ -21,6 +21,7 @@
  */
 import type { CompiledProcedure } from "../../core/contracts/index.ts";
 import {
+  SUSPEND_REASON_EVIDENCE_CASCADE,
   transitionPhase3ProcedureSuspend,
   type Phase3InvalidatableProcedure,
   type Phase3SuspendedProcedure,
@@ -105,7 +106,7 @@ export function suspendProceduresForEvidenceDeletion(
     suspended.push(
       transitionPhase3ProcedureSuspend(procedure, {
         decision: "suspended",
-        reason: "evidence_cascade_deletion",
+        reason: SUSPEND_REASON_EVIDENCE_CASCADE,
       }),
     );
   }

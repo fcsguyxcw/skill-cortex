@@ -19,6 +19,7 @@
  */
 import type { CompiledProcedure, DependencyFingerprint } from "../../core/contracts/index.ts";
 import {
+  SUSPEND_REASON_DEPENDENCY_DRIFT_PREFIX,
   transitionPhase3ProcedureSuspend,
   type Phase3InvalidatableProcedure,
   type Phase3SuspendedProcedure,
@@ -101,7 +102,8 @@ export function invalidateOnDependencyDrift(
 ): InvalidationResult {
   const diff = diffProcedureDependencies(procedure, current);
   if (!diff.shouldInvalidate) return { diff };
-  const reason = `dependency drift: ${[...diff.impactedDimensions].join(",")}`;
+  // 受控 reason（draft.ts 常量）：resume/rollback 恢复语义据此区分失效暂停 vs manual。
+  const reason = `${SUSPEND_REASON_DEPENDENCY_DRIFT_PREFIX}${[...diff.impactedDimensions].join(",")}`;
   return {
     diff,
     suspended: transitionPhase3ProcedureSuspend(procedure, {
