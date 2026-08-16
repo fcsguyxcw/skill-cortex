@@ -342,6 +342,11 @@ export function transitionPhase3ProcedureValidation(
   draft: Phase3ProcedureDraft,
   transition: ValidationTransition,
 ): Phase3ValidatedProcedure {
+  // 运行期防御（状态机完整性）：draft 是唯一合法输入；validated/canary/active/suspended/
+  // retired 输入（如 retired 复活、active 降回 validated）一律拒绝。
+  if (draft.status !== "draft") {
+    throw new Error("validation_transition_requires_draft_procedure");
+  }
   if (transition.decision !== "validated") {
     throw new Error("phase3_validation_transition_requires_validated_decision");
   }
@@ -399,5 +404,151 @@ export function transitionPhase3ProcedureCanary(
     ...(transition.replayEvidenceIds !== undefined
       ? { evidenceIds: [...validated.evidenceIds, ...transition.replayEvidenceIds] }
       : {}),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5 状态机（slice 1）：canary→active / active↔suspended / active|suspended→retired
+// 合法边：draft→validated→canary→active⇄suspended；active/suspended→retired（终态）。
+// 其余一切转换（draft 直接 active、canary 直接 retired、retired 复活等）全部 fail-closed。
+// 状态转换是纯函数不可变；shadow_replay 是执行上下文（验证方法），不进入状态机。
+// ---------------------------------------------------------------------------
+
+export interface Phase3ActiveProcedure extends Omit<CompiledProcedure, "status"> {
+  status: "active";
+  sourceBindings: ProcedureSourceBindings;
+}
+
+export interface Phase3SuspendedProcedure extends Omit<CompiledProcedure, "status"> {
+  status: "suspended";
+  sourceBindings: ProcedureSourceBindings;
+}
+
+export interface Phase3RetiredProcedure extends Omit<CompiledProcedure, "status"> {
+  status: "retired";
+  sourceBindings: ProcedureSourceBindings;
+}
+
+/** active 晋升报告 ID："active:" + 受控字符（与 validation/canary 同风格，独立前缀防串用）。 */
+const ACTIVE_REPORT_ID_PATTERN = /^active:[A-Za-z0-9][A-Za-z0-9._-]{0,95}$/u;
+
+/** lifecycle reason（suspended/retired）校验：trim 后非空且 ≤ 200 字符。 */
+function requireLifecycleReason(value: string): string {
+  if (value.trim().length === 0) throw new TypeError("lifecycle_reason_must_not_be_empty");
+  if (value.length > 200) throw new TypeError("lifecycle_reason_too_long");
+  return value;
+}
+
+export interface ActiveTransition {
+  decision: "active";
+  /** canary→active 发布报告 ID（must 绑定，审计可追溯）。 */
+  activeReportId: string;
+}
+
+/**
+ * Pure transition: canary → active（正式发布；ADR-0012 §2：转换必须先发生，不可跳过）。
+ * 硬约束：输入必须已 canary（含 canary 晋升的 shadow replay 证据绑定），activeReportId 格式
+ * 合法；缺 canary 报告/证据 ⇒ 拒绝（不信任无 shadow 验证链的“直接 active”）。
+ */
+export function transitionPhase3ProcedureActive(
+  canary: Phase3CanaryProcedure,
+  transition: ActiveTransition,
+): Phase3ActiveProcedure {
+  // 运行期防御：类型层已约束 Phase3CanaryProcedure，防直接构造非法对象/cast。
+  if (canary.status !== "canary") {
+    throw new Error("active_transition_requires_canary_procedure");
+  }
+  if (transition.decision !== "active") {
+    throw new Error("active_transition_requires_active_decision");
+  }
+  if (!ACTIVE_REPORT_ID_PATTERN.test(transition.activeReportId)) {
+    throw new TypeError("active_report_id_invalid");
+  }
+  if (canary.canaryReportId === undefined) {
+    throw new Error("active_transition_requires_canary_evidence");
+  }
+  if (canary.evidenceIds.length === 0) {
+    throw new Error("active_transition_requires_evidence");
+  }
+  return {
+    ...canary,
+    status: "active",
+    activeReportId: transition.activeReportId,
+  };
+}
+
+export interface SuspendTransition {
+  decision: "suspended";
+  /** 失效/降级原因（必填，可审计）。 */
+  reason: string;
+}
+
+/** Pure transition: active → suspended（失效/降级；reason 必填）。不可变。 */
+export function transitionPhase3ProcedureSuspend(
+  active: Phase3ActiveProcedure,
+  transition: SuspendTransition,
+): Phase3SuspendedProcedure {
+  if (active.status !== "active") {
+    throw new Error("suspend_transition_requires_active_procedure");
+  }
+  if (transition.decision !== "suspended") {
+    throw new Error("suspend_transition_requires_suspended_decision");
+  }
+  requireLifecycleReason(transition.reason);
+  return {
+    ...active,
+    status: "suspended",
+    lifecycleReason: transition.reason,
+  };
+}
+
+export interface ResumeTransition {
+  decision: "active";
+}
+
+/** Pure transition: suspended → active（resume，仅原 suspended 允许；恢复发布级，非重新晋升）。 */
+export function transitionPhase3ProcedureResume(
+  suspended: Phase3SuspendedProcedure,
+  transition: ResumeTransition,
+): Phase3ActiveProcedure {
+  if (suspended.status !== "suspended") {
+    throw new Error("resume_transition_requires_suspended_procedure");
+  }
+  if (transition.decision !== "active") {
+    throw new Error("resume_transition_requires_active_decision");
+  }
+  // resume 恢复原发布状态：清除失效原因（原 suspended 必已写 reason，防御性丢弃）；
+  // 不产生新报告（resume 不是晋升）。
+  const { lifecycleReason: _dropped, ...rest } = suspended;
+  void _dropped;
+  return { ...rest, status: "active" };
+}
+
+export interface RetireTransition {
+  decision: "retired";
+  /** 卸载/废弃原因（必填，可审计）。 */
+  reason: string;
+}
+
+/**
+ * Pure transition: active | suspended → retired（卸载/废弃；reason 必填；终态）。
+ * draft/validated/canary/retired 输入一律拒绝（canary 不能直接废弃——必须经 active/suspended
+ * 的受控路径；retired 是终态，不得复活）。
+ */
+export function transitionPhase3ProcedureRetire(
+  procedure: Phase3ActiveProcedure | Phase3SuspendedProcedure,
+  transition: RetireTransition,
+): Phase3RetiredProcedure {
+  if (procedure.status !== "active" && procedure.status !== "suspended") {
+    throw new Error("retire_transition_requires_active_or_suspended_procedure");
+  }
+  if (transition.decision !== "retired") {
+    throw new Error("retire_transition_requires_retired_decision");
+  }
+  requireLifecycleReason(transition.reason);
+  return {
+    ...procedure,
+    status: "retired",
+    lifecycleReason: transition.reason,
   };
 }

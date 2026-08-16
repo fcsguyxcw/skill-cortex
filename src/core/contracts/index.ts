@@ -147,6 +147,10 @@ export interface CompiledProcedure {
   validationReportId: string;
   /** canary 晋升绑定的 shadow replay 报告 ID（仅 canary 及以上状态写入；validated 无此字段）。 */
   canaryReportId?: string;
+  /** active 晋升绑定的 canary→active 发布报告 ID（仅 active 及以上状态写入）。 */
+  activeReportId?: string;
+  /** suspended/retired 的失效/废弃原因（reason 必填转换时写入；resume 清除）。 */
+  lifecycleReason?: string;
   previousStableRevision?: string;
   createdAt: string;
 }
