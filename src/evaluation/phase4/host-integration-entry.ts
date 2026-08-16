@@ -42,6 +42,7 @@ import {
   decodeExecutionToolDetails,
   PILOT_TOOL_NAME,
   registerSkillCortexPaginationShadow,
+  type PilotCurrentProvider,
   type PilotToolDetails,
   type PilotStepSummary,
 } from "../../adapters/pi/execution-adapter.ts";
@@ -104,6 +105,39 @@ function firstFailedStepOf(details: PilotToolDetails): string | undefined {
 }
 
 /**
+ * pre-execution 拒绝判定（HIGH 2）：compiled procedure 未完成执行 ⇒ fail-closed
+ * 不产生 compiled 事件（observer 不得以 executionMode=compiled_procedure 落盘）。
+ *
+ * outcome 语义（executor/execution-adapter buildDetails）：
+ * - slow_path：resolver 在 artifact 前拒绝（no_procedure/parent_skill_mismatch/insufficient_evidence/
+ *   revision_mismatch/dependency_mismatch/precondition_failed/unsupported_effect）——未授权、未 guard、未执行；
+ * - denied：授权 gate 拒绝（无 receipt/重放）——未执行；
+ * - safety_stop：artifact 结果非法/意外副作用——executor 中止且不 loadParentSkill；
+ * - abstain：no_skill_selected / procedure_abstained（artifact abstained 回退）——无 compiled 结果；
+ * - fallback + guard_failure：guard 在 artifact 执行前失败——未执行；
+ * - fallback + procedure_error：artifact 执行中抛错——未产生 completed/abstained 结果。
+ *
+ * 仅以下情形产生 CompiledExecutionEvidence（compiled procedure 真正执行完成）：
+ * - fast_path：artifact 执行完成 + verifier pass；
+ * - fallback + verifier_failure：artifact 执行完成 + verifier 判失败（post-execution，明确 failure 证据）。
+ */
+function isPreExecutionRejection(details: PilotToolDetails): boolean {
+  switch (details.outcome) {
+    case "slow_path":
+    case "denied":
+    case "safety_stop":
+    case "abstain":
+      return true;
+    case "fallback":
+      return (
+        details.failure === "guard_failure" || details.failure === "procedure_error"
+      );
+    default:
+      return false;
+  }
+}
+
+/**
  * 严格解码 pilot 工具 details → CompiledExecutionEvidence（fail-closed）：
  * - decodeExecutionToolDetails 已做 key 白名单/敏感 key/类型/枚举校验（ok=false ⇒ undefined）；
  * - 此处再对 observer/policy 需要的枚举（actor/phase/result/outcome）窄化，任一非法 ⇒ undefined；
@@ -116,6 +150,10 @@ export function decodePilotDetailsToEvidence(
   const decoded = decodeExecutionToolDetails(value);
   if (!decoded.ok) return undefined;
   const d = decoded.details;
+
+  // HIGH 2：pre-execution 拒绝（compiled procedure 未完成执行）⇒ fail-closed 排除，
+  // 不产生 compiled 事件；仅 fast_path / fallback(verifier_failure) 进入后续解码。
+  if (isPreExecutionRejection(d)) return undefined;
 
   const authorizationResults: PracticeEvent["authorizationResults"] = [];
   for (const a of d.authorization_results) {
@@ -184,10 +222,21 @@ export function decodePilotDetailsToEvidence(
 export default function hostIntegrationEntry(pi: ExtensionAPI): void {
   const projectRoot = process.cwd();
   const source = createDiscoverySnapshotSource();
+  // 当次 discovery 候选表（skillId → 候选卡 revision）；per-call current 来源（MED）。
+  // 与 observer 的快照消费并行维护（observer takeRouteSnapshot 一次取走，这里保留
+  // 只读副本供工具 execute 时按 skillId 查询；settled 后由下一轮 before_agent_start 覆盖）。
+  let latestCandidates = new Map<string, string>();
 
   registerSkillCortex(pi, {
     mode: "inject",
-    onDiscovery: (result) => source.push(result),
+    onDiscovery: (result) => {
+      const map = new Map<string, string>();
+      for (const candidate of result.candidates) {
+        map.set(candidate.skillId, candidate.skillRevision);
+      }
+      latestCandidates = map;
+      source.push(result);
+    },
   });
 
   registerPracticeObserver(pi, {
@@ -203,5 +252,25 @@ export default function hostIntegrationEntry(pi: ExtensionAPI): void {
     },
   });
 
-  registerSkillCortexPaginationShadow(pi);
+  // per-call current 来源（HIGH 1 + MED）：真实 runner 不再 register-time self-match。
+  // - currentSkillRevision 严格来自当次 discovery 候选卡（候选含该 skill 时用候选 revision；
+  //   不含时回退 self-match，不臆造失配——归因/既有 E2E 行为保持不变）；
+  // - currentDependencyFingerprint 以 procedure 绑定为基准（sourceHash/toolSchemaHash 绑定）；
+  //   当次验证来源（load_skill details.source_hash / discovery 重算）当前无 seam 可用，
+  //   指纹 drift 验证由注入 provider 的测试层完成（见报告：未接线项）；
+  // - guard：source-and-dependency-match 由候选匹配状态派生（恒 true；bounded-supported-sql
+  //   恒由 adapter 注入）。
+  const currentProvider: PilotCurrentProvider = (lookup) => {
+    const candidateRevision = latestCandidates.get(lookup.skillId);
+    if (candidateRevision === undefined) return undefined;
+    return {
+      currentSkillRevision: candidateRevision,
+      currentDependencyFingerprint: { ...lookup.procedure.dependencyFingerprint },
+      guardObservations: [
+        { predicateId: "source-and-dependency-match", phase: "runtime", result: true },
+      ],
+    };
+  };
+
+  registerSkillCortexPaginationShadow(pi, { currentProvider });
 }

@@ -368,11 +368,54 @@ function contentOf(details: PilotToolDetails): string {
   }
 }
 
+// ---------------------------------------------------------------------------
+// per-call current 来源（cc HIGH 1 + MED：避免 register-time static 多轮 stale）
+// ---------------------------------------------------------------------------
+
+/**
+ * per-call current 值查找结果（来源：当次 discovery 快照候选卡 / 宿主验证来源）。
+ * 返回 undefined ⇒ 调用方回退 procedure 自身值（self-match，保持既有兼容）。
+ */
+export interface PilotCurrentContext {
+  /** 当次候选卡/验证来源的父 Skill revision（resolver e 分支）。 */
+  currentSkillRevision: string;
+  /** 当次依赖指纹（resolver f 分支）。 */
+  currentDependencyFingerprint: DependencyFingerprint;
+  /**
+   * 除 bounded-supported-sql 之外的 runtime guard 观察（bounded-supported-sql 恒由
+   * adapter 以当次 sqlOk 注入，注入方不可覆盖——独立运行期防线）。
+   */
+  guardObservations: ReadonlyArray<GuardObservation>;
+}
+
+export interface PilotCurrentLookup {
+  toolCallId: string;
+  /** 工具参数中的 skill_id（preflight 已核对 = procedure.parentSkillId）。 */
+  skillId: string;
+  skillRevision: string;
+  /** procedure 绑定值（fingerprint 派生基准：source/toolSchema 绑定）。 */
+  procedure: CompiledProcedure;
+}
+
+/**
+ * per-call 当次来源查找（MED：每次 execute 从当次 discovery 快照/验证来源取值，
+ * 避免 register-time 固定值在多轮 discovery 后 stale）。
+ * 候选不匹配/无可用来源 ⇒ 返回 undefined（回退 self-match，不臆造失配）。
+ */
+export type PilotCurrentProvider = (
+  lookup: PilotCurrentLookup,
+) => PilotCurrentContext | undefined;
+
 export interface ExecutePaginationDetectInput {
   toolCallId: string;
   params: PilotExecuteParams;
   store: ReceiptStore;
   procedure: CompiledProcedure;
+  /**
+   * per-call 当次来源查找（MED）：优先级高于下方 static 注入字段；返回 undefined
+   * 时继续按 static 字段 → procedure 自身值回退。真实宿主：当次 discovery 快照候选卡。
+   */
+  currentProvider?: PilotCurrentProvider;
   /**
    * 注入点：当次 discovery 快照的当前父 Skill revision（resolver e 分支验证来源，ADR-0012 §3）。
    * 未提供 ⇒ 回退 procedure.parentSkillRevision（保持既有 canary/E2E self-match 行为）。
@@ -385,10 +428,11 @@ export interface ExecutePaginationDetectInput {
    */
   currentDependencyFingerprint?: DependencyFingerprint;
   /**
-   * 注入点：快路径 runtime guard 观察数组（覆盖默认 self-match 观察）。
-   * 未提供 ⇒ 默认 [bounded-supported-sql, source-and-dependency-match=true]。
-   * 注意 checkGuards fail-closed：注入数组必须覆盖 procedure 声明的两个 runtime guard，
-   * 缺省会合成 unknown ⇒ guard_failure（不乐观通过）。
+   * 注入点：快路径 runtime guard 观察（bounded-supported-sql 恒由 adapter 注入，不可覆盖；
+   * 本字段提供其余观察，如 source-and-dependency-match）。
+   * 未提供 ⇒ 默认 source-and-dependency-match=true（self-match）。
+   * 注意 checkGuards fail-closed：adapter 恒注入 bounded-supported-sql，因此声明 guard
+   * 总会被覆盖，不会因缺失合成 unknown。
    */
   guardObservations?: ReadonlyArray<GuardObservation>;
 }
@@ -409,17 +453,34 @@ export async function executePaginationDetect(
   const sql = sqlTypeOk ? params.sql : "";
   // precondition 只查类型；runtime guard 查完整有界（非空 + ≤ 上限）——guard 是独立运行期防线。
   const sqlOk = sqlTypeOk && sql.length > 0 && sql.length <= PILOT_SQL_MAX_LENGTH;
-  // 注入点默认回退（保持既有 canary/E2E self-match 行为不变）：
-  // - currentSkillRevision/currentDependencyFingerprint 未提供 ⇒ procedure 自身值
-  //   （resolver e/f 分支与 procedure 比较恒通过）；
-  // - guardObservations 未提供 ⇒ 默认 self-match 观察（source-and-dependency-match=true）。
-  // 提供注入值时 revision/dependency 校验真实生效（mismatch ⇒ slow_path/load_parent_skill）。
-  const currentSkillRevision = input.currentSkillRevision ?? procedure.parentSkillRevision;
+  // per-call 当次来源（MED）：每次 execute 时查找，避免 register-time 值在多轮 discovery 后 stale。
+  // 优先级：provider（当次 discovery/验证来源）→ static 注入字段 → procedure 自身值（self-match 兼容）。
+  const provided = input.currentProvider?.({
+    toolCallId,
+    skillId: params.skill_id,
+    skillRevision: params.skill_revision,
+    procedure,
+  });
+  const currentSkillRevision =
+    provided?.currentSkillRevision ?? input.currentSkillRevision ?? procedure.parentSkillRevision;
   const currentDependencyFingerprint =
-    input.currentDependencyFingerprint ?? procedure.dependencyFingerprint;
-  const guardObservations = input.guardObservations ?? [
+    provided?.currentDependencyFingerprint ??
+    input.currentDependencyFingerprint ??
+    procedure.dependencyFingerprint;
+  // guard：bounded-supported-sql 恒由 adapter 注入（值=sqlOk，独立运行期防线，注入方不可覆盖）；
+  // 其余 guard 观察由 provider/注入字段提供；未注入 ⇒ 默认 source-and-dependency-match=true。
+  // checkGuards fail-closed：声明 guard 恒被覆盖，不会因缺失合成 unknown。
+  const injectedGuards = provided?.guardObservations ?? input.guardObservations;
+  const fallbackGuard: GuardObservation = {
+    predicateId: "source-and-dependency-match",
+    phase: "runtime",
+    result: true,
+  };
+  const guardObservations: ReadonlyArray<GuardObservation> = [
     { predicateId: "bounded-supported-sql", phase: "runtime", result: sqlOk },
-    { predicateId: "source-and-dependency-match", phase: "runtime", result: true },
+    ...(injectedGuards === undefined
+      ? [fallbackGuard]
+      : injectedGuards.filter((g) => g.predicateId !== "bounded-supported-sql")),
   ];
   // artifact 执行闭包记录：executor 的 fallback/safety_stop outcome 不透传 artifact steps，
   // 由 adapter 以固定 detect step 如实记录（guard 失败时保持空）。
@@ -725,11 +786,13 @@ export function decodeExecutionToolDetails(value: unknown): DecodeResult {
 export interface ShadowAdapterOptions {
   store?: ReceiptStore;
   procedure?: CompiledProcedure;
+  /** per-call 当次来源查找（MED；未提供或返回 undefined ⇒ 回退下方 static → procedure 自身值）。 */
+  currentProvider?: PilotCurrentProvider;
   /** 注入点：当前 revision（未提供回退 procedure 自身值，self-match）。 */
   currentSkillRevision?: string;
   /** 注入点：当前依赖指纹（未提供回退 procedure 自身值，self-match）。 */
   currentDependencyFingerprint?: DependencyFingerprint;
-  /** 注入点：runtime guard 观察数组（未提供回退默认 self-match 观察）。 */
+  /** 注入点：runtime guard 观察（bounded-supported-sql 恒由 adapter 注入；未提供回退默认 self-match 观察）。 */
   guardObservations?: ReadonlyArray<GuardObservation>;
 }
 
@@ -788,6 +851,7 @@ export function registerSkillCortexPaginationShadow(
           },
           store,
           procedure,
+          currentProvider: options.currentProvider,
           currentSkillRevision: options.currentSkillRevision,
           currentDependencyFingerprint: options.currentDependencyFingerprint,
           guardObservations: options.guardObservations,

@@ -351,6 +351,124 @@ describe("execution adapter：注入 current 值 ⇒ revision/dependency 校验�
   });
 });
 
+describe("execution adapter：per-call current provider（MED：避免 register-time static 多轮 stale）", () => {
+  beforeEach(() => {
+    store = createReceiptStore();
+  });
+
+  it("provider 注入失配 revision ⇒ slow_path（revision_mismatch），优先于 static/self-match", async () => {
+    preflight("tc-prov-rev", baseParams());
+    const result = await executePaginationDetect({
+      toolCallId: "tc-prov-rev",
+      params: baseParams(),
+      store,
+      procedure: PROCEDURE,
+      currentProvider: () => ({
+        currentSkillRevision: "rev:" + "f".repeat(64),
+        currentDependencyFingerprint: { ...PROCEDURE.dependencyFingerprint },
+        guardObservations: [
+          { predicateId: "source-and-dependency-match", phase: "runtime", result: true },
+        ],
+      }),
+    });
+    assert.equal(result.details.outcome, "slow_path");
+    assert.equal(result.details.decision.mode, "skill_md");
+    assert.equal(result.details.decision.reason, "revision_mismatch");
+  });
+
+  it("provider 注入失配 fingerprint ⇒ slow_path（dependency_mismatch）", async () => {
+    preflight("tc-prov-dep", baseParams());
+    const result = await executePaginationDetect({
+      toolCallId: "tc-prov-dep",
+      params: baseParams(),
+      store,
+      procedure: PROCEDURE,
+      currentProvider: () => ({
+        currentSkillRevision: PROCEDURE.parentSkillRevision,
+        currentDependencyFingerprint: { sourceHash: "0".repeat(64) },
+        guardObservations: [
+          { predicateId: "source-and-dependency-match", phase: "runtime", result: true },
+        ],
+      }),
+    });
+    assert.equal(result.details.outcome, "slow_path");
+    assert.equal(result.details.decision.reason, "dependency_mismatch");
+  });
+
+  it("provider 返回 undefined ⇒ 回退 self-match ⇒ fast_path（不臆造失配）", async () => {
+    preflight("tc-prov-none", baseParams());
+    const result = await executePaginationDetect({
+      toolCallId: "tc-prov-none",
+      params: baseParams(),
+      store,
+      procedure: PROCEDURE,
+      currentProvider: () => undefined,
+    });
+    assert.equal(result.details.outcome, "fast_path");
+    assert.equal(result.details.decision.reason, "eligible_procedure");
+  });
+
+  it("provider 匹配值 ⇒ fast_path（per-call 链路可用；lookup 携带当次身份与 procedure 绑定）", async () => {
+    preflight("tc-prov-ok", baseParams());
+    let seen: { toolCallId: string; skillId: string; skillRevision: string; procedureId: string } | undefined;
+    const result = await executePaginationDetect({
+      toolCallId: "tc-prov-ok",
+      params: baseParams(),
+      store,
+      procedure: PROCEDURE,
+      currentProvider: (lookup) => {
+        seen = {
+          toolCallId: lookup.toolCallId,
+          skillId: lookup.skillId,
+          skillRevision: lookup.skillRevision,
+          procedureId: lookup.procedure.procedureId,
+        };
+        return {
+          currentSkillRevision: lookup.procedure.parentSkillRevision,
+          currentDependencyFingerprint: { ...lookup.procedure.dependencyFingerprint },
+          guardObservations: [
+            { predicateId: "source-and-dependency-match", phase: "runtime", result: true },
+          ],
+        };
+      },
+    });
+    assert.equal(result.details.outcome, "fast_path");
+    assert.equal(result.details.decision.reason, "eligible_procedure");
+    assert.deepEqual(seen, {
+      toolCallId: "tc-prov-ok",
+      skillId: SKILL_ID,
+      skillRevision: SKILL_REVISION,
+      procedureId: PROCEDURE.procedureId,
+    });
+  });
+
+  it("guard 合并：bounded-supported-sql 恒由 adapter 注入（注入方传 false 被忽略）；source-and-dependency-match=false 仍生效", async () => {
+    preflight("tc-prov-guard", baseParams());
+    const result = await executePaginationDetect({
+      toolCallId: "tc-prov-guard",
+      params: baseParams(),
+      store,
+      procedure: PROCEDURE,
+      currentProvider: () => ({
+        currentSkillRevision: PROCEDURE.parentSkillRevision,
+        currentDependencyFingerprint: { ...PROCEDURE.dependencyFingerprint },
+        guardObservations: [
+          // 注入方试图覆盖 bounded-supported-sql ⇒ 应被忽略（adapter 恒注入 sqlOk）。
+          { predicateId: "bounded-supported-sql", phase: "runtime", result: false },
+          { predicateId: "source-and-dependency-match", phase: "runtime", result: false },
+        ],
+      }),
+    });
+    assert.equal(result.details.outcome, "fallback");
+    assert.equal(result.details.failure, "guard_failure");
+    assert.equal(result.details.fallback?.mode, "load_parent_skill");
+    const bounded = result.details.guard_results.find((g) => g.predicate_id === "bounded-supported-sql");
+    assert.equal(bounded?.result, "pass", "bounded-supported-sql 必须为 adapter 注入的 sqlOk 结果");
+    const sad = result.details.guard_results.find((g) => g.predicate_id === "source-and-dependency-match");
+    assert.equal(sad?.result, "fail", "source-and-dependency-match 由注入方控制");
+  });
+});
+
 describe("execution adapter：有界输出与严格解码", () => {
   beforeEach(() => {
     store = createReceiptStore();
