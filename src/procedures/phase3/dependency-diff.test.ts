@@ -79,11 +79,17 @@ function activeOf() {
 /** 绑定额外指纹维度（构造含 LLM hole / permission / environment 的 procedure）。 */
 function withExtraFingerprint(
   procedure: Phase3ValidatedProcedure,
-  extra: Partial<DependencyFingerprint> & { llmHoles?: Phase3ValidatedProcedure["llmHoles"] },
+  extra: Partial<DependencyFingerprint> & {
+    llmHoles?: Phase3ValidatedProcedure["llmHoles"];
+    declaredEffects?: string[];
+    requiredPermissions?: string[];
+  },
 ): Phase3ValidatedProcedure {
   return {
     ...procedure,
     ...(extra.llmHoles !== undefined ? { llmHoles: extra.llmHoles } : {}),
+    ...(extra.declaredEffects !== undefined ? { declaredEffects: extra.declaredEffects } : {}),
+    ...(extra.requiredPermissions !== undefined ? { requiredPermissions: extra.requiredPermissions } : {}),
     dependencyFingerprint: {
       ...procedure.dependencyFingerprint,
       ...extra,
@@ -140,8 +146,12 @@ describe("dependency diff：维度绑定与命中", () => {
     assert.equal(diff.shouldInvalidate, true);
   });
 
-  it("permission：procedure 绑定 ⇒ 变化命中；effectless（未绑定）⇒ 不失效", () => {
-    const bound = withExtraFingerprint(validatedOf(), { permissionPolicyHash: POLICY_HASH });
+  it("permission：声明权限并绑定 ⇒ 变化命中；effectless（未绑定）⇒ 不失效", () => {
+    // 合法构造（数据合同 §3.2 + ADR-0011）：声明 effects ⇒ permissionPolicyHash 必填绑定。
+    const bound = withExtraFingerprint(validatedOf(), {
+      declaredEffects: ["detect-pagination"],
+      permissionPolicyHash: POLICY_HASH,
+    });
     const hit = diffProcedureDependencies(
       bound,
       currentOverrides(bound, { permissionPolicyHash: `sha256:${"99".repeat(32)}` }),

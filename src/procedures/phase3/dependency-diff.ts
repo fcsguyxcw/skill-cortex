@@ -24,6 +24,7 @@ import {
   type Phase3InvalidatableProcedure,
   type Phase3SuspendedProcedure,
 } from "./draft.ts";
+import { assertFingerprintBindings } from "./fingerprint-bindings.ts";
 
 /** 依赖指纹维度（plan §10 task 1：source/tools/permissions/environment/model+prompt）。 */
 export type FingerprintDimension =
@@ -69,6 +70,9 @@ export function diffProcedureDependencies(
   procedure: CompiledProcedure,
   current: DependencyFingerprint,
 ): DependencyDiff {
+  // fail-closed invariant（数据合同 §3.2 + ADR-0011）：malformed/missing required binding
+  // 不得因“字段未绑定 ⇒ 不构成约束”的 diff 语义静默绕过失效。
+  assertFingerprintBindings(procedure);
   const boundDimensions: FingerprintDimension[] = [];
   const impactedDimensions: FingerprintDimension[] = [];
   for (const [dimension, field] of DIMENSION_FIELDS) {

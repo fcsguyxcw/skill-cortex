@@ -14,8 +14,7 @@
  * - store reload：lifecycle 状态与 stable lookup 保持。
  */
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
-import { rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
 
@@ -30,7 +29,7 @@ import {
   type Phase3ActiveProcedure,
   type Phase3InvalidatableProcedure,
 } from "../phase3/index.ts";
-import { ProcedureStore } from "../store/index.ts";
+import { ProcedureStore, ROLLBACK_REASON } from "../store/index.ts";
 import { execute } from "../../runtime/executor.ts";
 import { createCanaryServices } from "../../evaluation/phase4/canary.ts";
 import {
@@ -341,12 +340,23 @@ describe("lifecycle pipeline：Rollback（dependencyRevalidated 硬约束）", (
     });
   }
 
-  it("stable match ⇒ 恢复 previousStableRevision（判定 + 恢复对象可执行）", async () => {
+  /** 模拟「新 revision R2 晋升后失效」落盘：persistActive 后直写 current 为 v2 suspended。
+   * 本 slice 无 revision save seam，跨 revision 状态须直写 current 构造。 */
+  async function persistFailedV2(store: ProcedureStore, previousStableRevision: string): Promise<CompiledProcedure> {
+    const v2Suspended = failedV2(previousStableRevision);
+    const currentDir = path.join(store.tenantDir, "current");
+    const file = readdirSync(currentDir).find((f) => f.endsWith(".json"))!;
+    writeFileSync(path.join(currentDir, file), JSON.stringify(v2Suspended), "utf8");
+    return v2Suspended;
+  }
+
+  it("stable match ⇒ 落盘切回 previousStableRevision + reload 保持 active", async () => {
     const store = makeStore();
     const v1 = await persistActive(store); // release[v1]=active（stable 候选）
+    const v2Failed = await persistFailedV2(store, v1.procedureRevision);
     const result = await rollbackToPreviousStable({
       store,
-      failedProcedure: failedV2(v1.procedureRevision),
+      failedProcedure: v2Failed,
       current: matchingCurrent(v1),
       trigger: "tool",
     });
@@ -359,8 +369,25 @@ describe("lifecycle pipeline：Rollback（dependencyRevalidated 硬约束）", (
       assert.equal(result.rollbackTo.canaryReportId, CANARY_REPORT);
       assert.equal(await executeOutcome(result.rollbackTo), "fast_path", "恢复对象可执行");
     }
-    // 本 slice 无 revision save seam：不落盘，store 状态不变。
-    assert.equal((await store.getProcedure(v1.procedureId))!.status, "active");
+    // 闭环：current 真正切回 stable revision + active；reload 保持。
+    const current = await store.getProcedure(v1.procedureId);
+    assert.equal(current!.procedureRevision, v1.procedureRevision, "current 切回 stable revision");
+    assert.equal(current!.status, "active");
+    const reloaded = new ProcedureStore({
+      rootDir: store.rootDir,
+      projectRoot: tempRoot,
+      now: () => new Date("2026-08-20T00:00:00.000Z"),
+    });
+    const reloadedCurrent = await reloaded.getProcedure(v1.procedureId);
+    assert.equal(reloadedCurrent!.procedureRevision, v1.procedureRevision, "reload 后仍是 stable active");
+    assert.equal(reloadedCurrent!.status, "active");
+    // 可审计 rollback 事件。
+    const events = await reloaded.listEvents(v1.procedureId);
+    const rollback = events[events.length - 1]!;
+    assert.equal(rollback.fromStatus, "suspended");
+    assert.equal(rollback.toStatus, "active");
+    assert.equal(rollback.procedureRevision, v1.procedureRevision);
+    assert.equal(rollback.reason, ROLLBACK_REASON);
   });
 
   it("stable 仍 drift ⇒ requires_revalidation（slow path，不得恢复）", async () => {
@@ -450,41 +477,111 @@ describe("lifecycle pipeline：Rollback（dependencyRevalidated 硬约束）", (
   });
 });
 
-describe("lifecycle pipeline：Skill disappearance / identity change", () => {
-  it("旧 parent 消失 ⇒ procedure suspend；新 skillId（move-rename）不匹配旧 lineage", async () => {
+describe("lifecycle pipeline：uninstall / scope / move-rename 矩阵（完整 identity snapshot）", () => {
+  /** 落盘一个不同 parentSkillId 的 active procedure（模拟同名不同 scope/path 或 move-rename 后新实例）。 */
+  async function persistActiveFor(
+    store: ProcedureStore,
+    parentSkillId: string,
+  ): Promise<Phase3ActiveProcedure> {
+    const draft = buildDraft(REFERENCE_V1, [EVIDENCE_A], { parentSkillId });
+    await store.save(draft, { trigger: "agent" });
+    const validated = transitionPhase3ProcedureValidation(draft, {
+      decision: "validated",
+      validationReportId: VALIDATION_REPORT,
+    });
+    await store.transition(draft, validated, { trigger: "procedure" });
+    const canary = transitionPhase3ProcedureCanary(validated, {
+      decision: "canary",
+      canaryReportId: CANARY_REPORT,
+    });
+    await store.transition(validated, canary, { trigger: "procedure" });
+    const active = transitionPhase3ProcedureActive(canary, {
+      decision: "active",
+      activeReportId: ACTIVE_REPORT,
+    });
+    await store.transition(canary, active, { trigger: "tool" });
+    return active;
+  }
+
+  it("uninstall：旧 skillId 从完整 installed 快照消失 ⇒ 相关 procedure suspend；仍安装的 skill 不变", async () => {
     const store = makeStore();
-    const active = await persistActive(store);
-    // 当次 discovery 不含旧 parentSkillId（skill 已卸载 / move-rename 成新 id）。
+    const oldSkill = await persistActive(store); // parentSkillId=PARENT_SKILL_ID（将被 uninstall）
+    const keptSkill = await persistActiveFor(store, OTHER_SKILL_ID); // 仍在快照
     const outcomes = await suspendProceduresForMissingSkills({
       store,
-      currentSkillIds: new Set([OTHER_SKILL_ID]),
+      currentInstalledSkillIds: new Set([OTHER_SKILL_ID]),
+      trigger: "tool",
+    });
+    assert.equal(outcomes.length, 1, "只影响 uninstall 的旧 skill");
+    assert.equal(outcomes[0]!.procedureId, oldSkill.procedureId);
+    assert.equal((await store.getProcedure(oldSkill.procedureId))!.status, "suspended");
+    assert.equal((await store.getProcedure(keptSkill.procedureId))!.status, "active", "仍安装的 skill 不变");
+  });
+
+  it("scope 改变产生新 skillId ⇒ 旧 procedure 不继承（suspend）；新 scope 实例独立", async () => {
+    const store = makeStore();
+    // 旧 scope（PARENT_SKILL_ID）的 procedure；scope 改变 ⇒ 新 skillId（OTHER_SKILL_ID）。
+    const oldScope = await persistActive(store);
+    const newScope = await persistActiveFor(store, OTHER_SKILL_ID);
+    const outcomes = await suspendProceduresForMissingSkills({
+      store,
+      // 完整快照只含新 scope 的 skillId（旧 scope skillId 消失）。
+      currentInstalledSkillIds: new Set([OTHER_SKILL_ID]),
       trigger: "tool",
     });
     assert.equal(outcomes.length, 1);
-    assert.equal(outcomes[0]!.status, "suspended");
-    const suspended = await store.getProcedure(active.procedureId);
-    assert.equal(suspended!.status, "suspended");
-    assert.equal(suspended!.suspendKind, "dependency_drift");
-    assert.match(suspended!.lifecycleReason ?? "", /skill identity change/);
-    // 新安装实例（OTHER_SKILL_ID 的 procedure）不与旧 parent 混同：旧 procedure 仍绑定旧 parentSkillId。
-    assert.equal(suspended!.parentSkillId, PARENT_SKILL_ID);
+    assert.equal(outcomes[0]!.procedureId, oldScope.procedureId, "旧 scope 的 procedure 不继承");
+    assert.equal((await store.getProcedure(oldScope.procedureId))!.status, "suspended");
+    assert.equal((await store.getProcedure(newScope.procedureId))!.status, "active", "新 scope 实例不受影响");
+    // 身份不混同：旧 procedure 仍绑定旧 skillId。
+    assert.equal((await store.getProcedure(oldScope.procedureId))!.parentSkillId, PARENT_SKILL_ID);
   });
 
-  it("parent 在当次 discovery 中 ⇒ 不变；currentSkillIds 缺失 ⇒ throw（fail-closed）", async () => {
+  it("move/rename ⇒ 按新安装实例处理：旧 skillId 消失 ⇒ 旧 procedure suspend，新实例 active 保持", async () => {
     const store = makeStore();
-    const active = await persistActive(store);
+    // move/rename：baseDir 变化 ⇒ 新 skillId（OTHER_SKILL_ID）；旧 skillId（PARENT_SKILL_ID）消失。
+    const oldInstance = await persistActive(store);
+    const newInstance = await persistActiveFor(store, OTHER_SKILL_ID);
     const outcomes = await suspendProceduresForMissingSkills({
       store,
-      currentSkillIds: new Set([PARENT_SKILL_ID]),
+      currentInstalledSkillIds: new Set([OTHER_SKILL_ID]),
+      trigger: "tool",
+    });
+    assert.equal(outcomes.length, 1);
+    assert.equal(outcomes[0]!.procedureId, oldInstance.procedureId);
+    assert.equal((await store.getProcedure(oldInstance.procedureId))!.status, "suspended");
+    assert.equal((await store.getProcedure(newInstance.procedureId))!.status, "active", "新安装实例保持");
+  });
+
+  it("同名不同 scope/path 不互相误伤：各自的 skillId 独立判定", async () => {
+    const store = makeStore();
+    // 同名（同 referenceHash）但不同 scope/path ⇒ 不同 skillId 的两个 procedure。
+    const sameNameA = await persistActiveFor(store, PARENT_SKILL_ID);
+    const sameNameB = await persistActiveFor(store, OTHER_SKILL_ID);
+    // 完整快照：A 在、B 不在（B 被 uninstall/scope 变化）。
+    const outcomes = await suspendProceduresForMissingSkills({
+      store,
+      currentInstalledSkillIds: new Set([PARENT_SKILL_ID]),
+      trigger: "tool",
+    });
+    assert.equal(outcomes.length, 1);
+    assert.equal(outcomes[0]!.procedureId, sameNameB.procedureId, "只有 B 被 suspend");
+    assert.equal((await store.getProcedure(sameNameA.procedureId))!.status, "active", "A 不被误伤");
+    assert.equal((await store.getProcedure(sameNameB.procedureId))!.status, "suspended");
+  });
+
+  it("unrelated：完整快照包含全部 parent ⇒ 全部保持原状态（0 影响）", async () => {
+    const store = makeStore();
+    const procA = await persistActiveFor(store, PARENT_SKILL_ID);
+    const procB = await persistActiveFor(store, OTHER_SKILL_ID);
+    const outcomes = await suspendProceduresForMissingSkills({
+      store,
+      currentInstalledSkillIds: new Set([PARENT_SKILL_ID, OTHER_SKILL_ID]),
       trigger: "tool",
     });
     assert.deepEqual(outcomes, []);
-    assert.equal((await store.getProcedure(active.procedureId))!.status, "active");
-
-    await assert.rejects(
-      suspendProceduresForMissingSkills({ store, currentSkillIds: undefined as never, trigger: "tool" }),
-      /lifecycle_pipeline_current_skill_ids_required/,
-    );
+    assert.equal((await store.getProcedure(procA.procedureId))!.status, "active");
+    assert.equal((await store.getProcedure(procB.procedureId))!.status, "active");
   });
 });
 

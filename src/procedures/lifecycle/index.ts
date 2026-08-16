@@ -15,8 +15,9 @@
  *   candidate 做真实 current dependency diff，匹配才派生 dependencyRevalidated（硬约束：
  *   rollbackProcedure 的 dependencyRevalidated=true 只可能来自本模块内部的真实 diff，
  *   外部无任何 seam 可自行声明重验通过）→ rollbackProcedure → store.rollbackTo 落盘。
- * - suspendProceduresForMissingSkills：当次 discovery 的 skillId 集合 → 旧 parent 消失/
- *   move-rename 成新 skillId 的 procedure fail-closed suspend（不得把新安装实例当旧 parent）。
+ * - suspendProceduresForMissingSkills：完整 installed/discovered Skill identity snapshot
+ *   （非 Top-K 候选）→ 旧 parent uninstall/scope 改变/move-rename 的 procedure fail-closed
+ *   suspend（不得把新安装实例当旧 parent）。
  *
  * 边界：不做 WAL/crash consistency（real-host 前 blocker）；不启动 canary/active；
  * 不因测试全绿宣称 Gate P5 PASS；不接 resolver/executor/.pi 生产入口。
@@ -218,13 +219,16 @@ export interface RollbackPipelineOptions {
 }
 
 /**
- * 一键回滚 pipeline：
+ * 一键回滚 pipeline（闭环：判定 + 落盘）：
  * - previousStableRevision → store.getStableByRevision()（release 记录，不猜任意历史 revision）；
  * - 对 stable candidate 做真实 current dependency diff → 匹配才派生 dependencyRevalidated；
+ * - 硬约束：stable 在当次 current 下仍 dependency mismatch ⇒ 不落盘（requires_revalidation，
+ *   slow path）。覆盖 active 与 suspended-from-active 两种 stable 形态——rollbackProcedure
+ *   只对 suspended 目标强制 revalidation，active 目标此前被忽略，此处补齐 fail-closed；
  * - rollbackProcedure（既有 lineage/稳定状态/revalidation 校验）；
- * - ok ⇒ 返回 rollbackTo（恢复对象：stable revision + active 状态；落盘经未来 revision
- *   save seam，本 slice 不实现——见报告）；fail ⇒ 明确 reason + slowPath=true（调用方走
- *   父 Skill 慢路径）。
+ * - ok ⇒ store.rollbackTo() 真正切回 stable revision（current 覆盖 + release + 可审计
+ *   rollback 事件，store seam 内部再复核 stale-prior/lineage/stable 合法性）；
+ * - fail ⇒ 明确 reason + slowPath=true（调用方走父 Skill 慢路径）。
  */
 export async function rollbackToPreviousStable(
   options: RollbackPipelineOptions,
@@ -235,17 +239,27 @@ export async function rollbackToPreviousStable(
     previous === undefined ? undefined : await options.store.getStableByRevision(previous);
   const revalidated =
     stable !== undefined ? deriveRevalidationFromCurrent(stable, options.current) : false;
+  // 硬约束：stable 当前 dependency 仍 mismatch ⇒ 不落盘（慢路径）。active 稳定目标同样受此门
+  // 约束（此前 rollbackProcedure 只对 suspended 目标强制，active 目标被忽略）。
+  if (stable !== undefined && !revalidated) {
+    return { ok: false, reason: "requires_revalidation", slowPath: true };
+  }
   const result = rollbackProcedure({
     current: options.failedProcedure,
     stableLookup: (revision) => (stable !== undefined && revision === previous ? stable : undefined),
     dependencyRevalidated: revalidated,
   });
-  if (result.ok) return result;
-  return { ...result, slowPath: true };
+  if (!result.ok) {
+    return { ...result, slowPath: true };
+  }
+  await options.store.rollbackTo(options.failedProcedure, result.rollbackTo, {
+    trigger: options.trigger,
+  });
+  return result;
 }
 
 // ---------------------------------------------------------------------------
-// 4. Skill disappearance / identity change（最小路径）
+// 4. Skill uninstall / scope / move-rename（identity snapshot 语义）
 // ---------------------------------------------------------------------------
 
 export interface MissingSkillOutcome {
@@ -256,24 +270,37 @@ export interface MissingSkillOutcome {
 }
 
 /**
- * 当次 discovery 的 skillId 集合 → 旧 parent 消失 / move-rename 成新 skillId / scope
- * 变化的 procedure fail-closed suspend（suspendKind="dependency_drift"，reason 标注
- * skill identity change）。新安装实例（新 skillId）不会匹配旧 parent（lineage 由
- * rollback/diff 的 procedureId/parentSkillId/sourceHash 校验保证）。
- * currentSkillIds 必填（缺失 ⇒ throw：无法判定 identity 时不得当作无变化）。
+ * 完整 installed/discovered Skill identity snapshot 失效矩阵（最小路径）：
+ * currentInstalledSkillIds 是**完整 installed/discovered Skill identity snapshot**（当次摄入
+ * 的全部 skillId，按 scope + baseDir 派生，含所有 scope），**不是**当前任务 Top-K 候选——
+ * Top-K 只表达“与任务相关”，不能作为“skill 是否存在/是否同源”的判据。
+ *
+ * 身份语义（Phase 0 冻结，computeSkillId = sha256(scope + baseDir)）：
+ * - uninstall：旧 skillId 不在完整快照 ⇒ 相关 procedure suspend；
+ * - scope 改变（user→project 等）：产生新 skillId ⇒ 旧 procedure 不继承（suspend）；
+ * - move/rename：baseDir 变化 ⇒ 按新安装实例处理（新 skillId），旧 procedure suspend；
+ * - 同名不同 scope/path：skillId 不同 ⇒ 各自独立判定，互不误伤；
+ * - 快照仍含 parentSkillId 的 procedure 保持原状态（unrelated 不变）。
+ * 新安装实例（新 skillId）不会匹配旧 parent（lineage 由 rollback/diff 的
+ * procedureId/parentSkillId/sourceHash 校验保证）。
+ * currentInstalledSkillIds 必填（缺失 ⇒ throw：无法判定 identity 时不得当作无变化）。
  */
 export async function suspendProceduresForMissingSkills(options: {
   store: ProcedureStore;
-  currentSkillIds: ReadonlySet<string>;
+  /** 完整 installed/discovered Skill identity snapshot（全部 skillId，非 Top-K 候选）。 */
+  currentInstalledSkillIds: ReadonlySet<string>;
   trigger: TriggerSource;
 }): Promise<MissingSkillOutcome[]> {
-  if (options.currentSkillIds === undefined || options.currentSkillIds === null) {
+  if (
+    options.currentInstalledSkillIds === undefined ||
+    options.currentInstalledSkillIds === null
+  ) {
     throw new Error("lifecycle_pipeline_current_skill_ids_required");
   }
   const procedures = await options.store.listCurrent();
   const outcomes: MissingSkillOutcome[] = [];
   for (const procedure of procedures) {
-    if (options.currentSkillIds.has(procedure.parentSkillId)) continue;
+    if (options.currentInstalledSkillIds.has(procedure.parentSkillId)) continue;
     if (!isInvalidatable(procedure)) {
       outcomes.push({ procedureId: procedure.procedureId, parentSkillId: procedure.parentSkillId, status: "already_terminal" });
       continue;
