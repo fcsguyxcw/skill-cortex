@@ -19,9 +19,12 @@ import { after, before, describe, it } from "node:test";
 
 import type { CompiledProcedure } from "../../core/contracts/index.ts";
 import {
+  SUSPEND_REASON_DEPENDENCY_DRIFT_PREFIX,
   buildPhase3ProcedureDraft,
+  rollbackProcedure,
   transitionPhase3ProcedureActive,
   transitionPhase3ProcedureCanary,
+  transitionPhase3ProcedureRetire,
   transitionPhase3ProcedureSuspend,
   transitionPhase3ProcedureValidation,
 } from "../phase3/index.ts";
@@ -39,6 +42,9 @@ const VALIDATION_REPORT = "validation:phase3-pagination-p3-gate-2026-08-15";
 const CANARY_REPORT = "canary:phase3-pagination-p4-gate-2026-08-16";
 const ACTIVE_REPORT = "active:phase3-pagination-p4-canary-2026-08-16";
 const REASON = "source dependency drift";
+/** HIGH 2：v1/v2 同 parentSkill ⇒ 同 procedureId，不同 referenceHash ⇒ 不同 procedureRevision。 */
+const REFERENCE_V1 = "73c9fa10a3d439bedea0e11b640bd25bf30dd50f0d9006cf85baf7c3151543fa";
+const REFERENCE_V2 = "44c9fa10a3d439bedea0e11b640bd25bf30dd50f0d9006cf85baf7c3151543fa";
 
 let projectRoot = "";
 let storeDir = "";
@@ -94,6 +100,65 @@ function makeStore(overrides: { tenantScope?: string } = {}) {
     tenantScope: overrides.tenantScope,
     now: () => new Date("2026-08-20T00:00:00.000Z"),
   });
+}
+
+/** HIGH 2：按 referenceHash 构建同 procedureId 不同 revision 的 active（可带 previousStableRevision）。 */
+function activeWithReference(
+  referenceHash: string,
+  previousStableRevision?: string,
+): CompiledProcedure {
+  const draft = buildPhase3ProcedureDraft({
+    parentSkillId: PARENT_SKILL_ID,
+    parentSkillRevision: PARENT_SKILL_REVISION,
+    skillMdHash: SKILL_HASH,
+    selectedReferenceHash: referenceHash,
+    createdAt: "2026-08-14T00:00:00.000Z",
+    evidenceIds: ["practice:offset-1", "practice:keyset-1"],
+  });
+  const validated = transitionPhase3ProcedureValidation(draft, {
+    decision: "validated",
+    validationReportId: VALIDATION_REPORT,
+  });
+  const canary = transitionPhase3ProcedureCanary(validated, {
+    decision: "canary",
+    canaryReportId: CANARY_REPORT,
+  });
+  return transitionPhase3ProcedureActive(canary, {
+    decision: "active",
+    activeReportId: ACTIVE_REPORT,
+    ...(previousStableRevision !== undefined ? { previousStableRevision } : {}),
+  });
+}
+
+/** HIGH 2：v1 落盘并推进到 active（release = active）。 */
+async function persistActiveV1(
+  store: ProcedureStore,
+): Promise<{ draft: CompiledProcedure; active: CompiledProcedure }> {
+  const draft = buildPhase3ProcedureDraft({
+    parentSkillId: PARENT_SKILL_ID,
+    parentSkillRevision: PARENT_SKILL_REVISION,
+    skillMdHash: SKILL_HASH,
+    selectedReferenceHash: REFERENCE_V1,
+    createdAt: "2026-08-14T00:00:00.000Z",
+    evidenceIds: ["practice:offset-1", "practice:keyset-1"],
+  });
+  await store.save(draft, { trigger: "agent" });
+  const validated = transitionPhase3ProcedureValidation(draft, {
+    decision: "validated",
+    validationReportId: VALIDATION_REPORT,
+  });
+  await store.transition(draft, validated, { trigger: "procedure" });
+  const canary = transitionPhase3ProcedureCanary(validated, {
+    decision: "canary",
+    canaryReportId: CANARY_REPORT,
+  });
+  await store.transition(validated, canary, { trigger: "procedure" });
+  const active = transitionPhase3ProcedureActive(canary, {
+    decision: "active",
+    activeReportId: ACTIVE_REPORT,
+  });
+  await store.transition(canary, active, { trigger: "tool" });
+  return { draft, active };
 }
 
 before(() => {
@@ -376,5 +441,190 @@ describe("ProcedureStore：级联删除入口", () => {
     assert.ok((await store.getProcedure(draft.procedureId)) !== undefined);
     const events = await store.listEvents(draft.procedureId);
     assert.equal(events.length, 1, "重新 save 只写新事件（旧历史已清理）");
+  });
+});
+
+describe("ProcedureStore：HIGH 1 — transition 不信任调用者 prior（stale/伪造拒绝）", () => {
+  it("stale prior（current 已推进，调用者仍用旧状态对象）⇒ 拒绝且 current/events 不变", async () => {
+    const store = makeStore();
+    const draft = draftOf();
+    await store.save(draft, { trigger: "agent" });
+    const validated = validatedOf();
+    await store.transition(draft, validated, { trigger: "procedure" });
+    const canary = canaryOf();
+    await store.transition(validatedOf(), canary, { trigger: "procedure" });
+
+    const eventsBefore = await store.listEvents(draft.procedureId);
+    // current 已到 canary；stale prior（validated 对象）提交 validated→canary（合法边）⇒ 拒绝。
+    await assert.rejects(
+      store.transition(validatedOf(), canaryOf(), { trigger: "tool" }),
+      /procedure_store_stale_prior/,
+    );
+    const after = await store.getProcedure(draft.procedureId);
+    assert.equal(after!.status, "canary", "current 不被破坏");
+    assert.equal(after!.procedureRevision, canary.procedureRevision);
+    assert.deepEqual(await store.listEvents(draft.procedureId), eventsBefore, "事件不被追加（不丢审计一致性）");
+  });
+
+  it("错 status prior（伪造 prior.status ≠ stored）⇒ 拒绝，current/events 不变", async () => {
+    const store = makeStore();
+    const draft = draftOf();
+    await store.save(draft, { trigger: "agent" });
+    const eventsBefore = await store.listEvents(draft.procedureId);
+    // stored=draft；伪造 prior 声称 validated（validated→canary 是合法边，但 prior 与 stored 不符）。
+    const forged = { ...draft, status: "validated" } as CompiledProcedure;
+    await assert.rejects(
+      store.transition(forged, canaryOf(), { trigger: "tool" }),
+      /procedure_store_stale_prior/,
+    );
+    assert.equal((await store.getProcedure(draft.procedureId))!.status, "draft");
+    assert.deepEqual(await store.listEvents(draft.procedureId), eventsBefore);
+  });
+
+  it("错 revision prior（prior.procedureRevision ≠ stored）⇒ 拒绝，current/events 不变", async () => {
+    const store = makeStore();
+    const draft = draftOf();
+    await store.save(draft, { trigger: "agent" });
+    const eventsBefore = await store.listEvents(draft.procedureId);
+    const forged = { ...draft, procedureRevision: "rev:" + "c".repeat(64) } as CompiledProcedure;
+    await assert.rejects(
+      store.transition(forged, validatedOf(), { trigger: "tool" }),
+      /procedure_store_stale_prior/,
+    );
+    assert.equal(
+      (await store.getProcedure(draft.procedureId))!.procedureRevision,
+      draft.procedureRevision,
+      "revision 不被篡改",
+    );
+    assert.deepEqual(await store.listEvents(draft.procedureId), eventsBefore);
+  });
+});
+
+describe("ProcedureStore：HIGH 2 — rollback stable lookup（release state 语义）", () => {
+  it("v1 到达 active ⇒ getStableByRevision 返回 active（带发布报告）；v2 指向 v1 ⇒ rollback 成功", async () => {
+    const store = makeStore();
+    const { draft: v1, active } = await persistActiveV1(store);
+    assert.notEqual(v1.procedureRevision, "");
+
+    const stable = await store.getStableByRevision(v1.procedureRevision);
+    assert.ok(stable !== undefined, "曾 active 的 revision 必须是 stable 候选");
+    assert.equal(stable!.status, "active");
+    assert.equal(stable!.activeReportId, ACTIVE_REPORT, "release 记录携带发布报告引用");
+    assert.equal(stable!.procedureRevision, v1.procedureRevision);
+    assert.equal(stable!.procedureId, v1.procedureId);
+    void active;
+
+    // v2：同 procedureId 新 revision，previousStableRevision=v1。
+    const v2 = activeWithReference(REFERENCE_V2, v1.procedureRevision);
+    assert.equal(v2.procedureId, v1.procedureId, "v1/v2 同 procedureId（lineage）");
+    assert.notEqual(v2.procedureRevision, v1.procedureRevision);
+    const result = rollbackProcedure({
+      current: v2,
+      stableLookup: (revision) => (revision === v1.procedureRevision ? stable : undefined),
+    });
+    assert.equal(result.ok, true, "有曾 active 的稳定版本必须回滚成功");
+    if (result.ok) {
+      assert.equal(result.rollbackTo.status, "active");
+      assert.equal(result.rollbackTo.procedureRevision, v1.procedureRevision);
+      assert.equal(result.rollbackTo.parentSkillId, v1.parentSkillId, "lineage 校验通过");
+      assert.equal(result.rollbackTo.activeReportId, ACTIVE_REPORT);
+    }
+  });
+
+  it("v1 仅到达 validated/canary（从未 active）⇒ 不可作 stable（rollback 拒绝）", async () => {
+    const store = makeStore();
+    const draftV1 = buildPhase3ProcedureDraft({
+      parentSkillId: PARENT_SKILL_ID,
+      parentSkillRevision: PARENT_SKILL_REVISION,
+      skillMdHash: SKILL_HASH,
+      selectedReferenceHash: REFERENCE_V1,
+      createdAt: "2026-08-14T00:00:00.000Z",
+      evidenceIds: ["practice:offset-1", "practice:keyset-1"],
+    });
+    await store.save(draftV1, { trigger: "agent" });
+    const validated = transitionPhase3ProcedureValidation(draftV1, {
+      decision: "validated",
+      validationReportId: VALIDATION_REPORT,
+    });
+    await store.transition(draftV1, validated, { trigger: "procedure" });
+
+    // 仅 validated（release=validated）：getStableByRevision ⇒ undefined（从未 active）。
+    assert.equal(await store.getStableByRevision(draftV1.procedureRevision), undefined);
+
+    const v2 = activeWithReference(REFERENCE_V2, draftV1.procedureRevision);
+    const result = rollbackProcedure({
+      current: v2,
+      stableLookup: (revision) =>
+        revision === draftV1.procedureRevision ? undefined : undefined,
+    });
+    assert.deepEqual(result, { ok: false, reason: "no_stable_version" }, "从未 active ⇒ 无稳定版本可回滚");
+  });
+
+  it("v1 active → suspended(drift)：release 保留 suspended-from-active；rollback 需重验，重验后成功", async () => {
+    const store = makeStore();
+    const { draft: v1 } = await persistActiveV1(store);
+    const current = await store.getProcedure(v1.procedureId);
+    assert.equal(current!.status, "active");
+    // v1 被 dependency drift suspend（suspendedFrom=active, suspendKind=dependency_drift）。
+    const driftSuspended = transitionPhase3ProcedureSuspend(current as never, {
+      decision: "suspended",
+      reason: `${SUSPEND_REASON_DEPENDENCY_DRIFT_PREFIX}source`,
+      suspendKind: "dependency_drift",
+    });
+    await store.transition(current!, driftSuspended, { trigger: "tool" });
+
+    const stable = await store.getStableByRevision(v1.procedureRevision);
+    assert.ok(stable !== undefined, "suspended-from-active 仍是 stable 候选");
+    assert.equal(stable!.status, "suspended");
+    assert.equal(stable!.suspendedFrom, "active");
+    assert.equal(stable!.suspendKind, "dependency_drift");
+
+    const v2 = activeWithReference(REFERENCE_V2, v1.procedureRevision);
+    const blocked = rollbackProcedure({
+      current: v2,
+      stableLookup: (revision) => (revision === v1.procedureRevision ? stable : undefined),
+    });
+    assert.equal(blocked.ok, false, "drift 失效 suspended 未经重验不得恢复");
+    if (!blocked.ok) assert.equal(blocked.reason, "requires_revalidation");
+
+    const revalidated = rollbackProcedure({
+      current: v2,
+      stableLookup: (revision) => (revision === v1.procedureRevision ? stable : undefined),
+      dependencyRevalidated: true,
+    });
+    assert.equal(revalidated.ok, true, "显式重验后允许恢复");
+  });
+
+  it("retired revision 不可作 stable（getStableByRevision ⇒ undefined）", async () => {
+    const store = makeStore();
+    const { draft: v1, active } = await persistActiveV1(store);
+    const retired = transitionPhase3ProcedureRetire(active as never, {
+      decision: "retired",
+      reason: REASON,
+    });
+    await store.transition(active, retired, { trigger: "user" });
+
+    assert.equal(
+      await store.getStableByRevision(v1.procedureRevision),
+      undefined,
+      "retired 是终态，不得作为回滚目标",
+    );
+  });
+
+  it("release state 与 immutable artifact history 分离：getByRevision 返回历史快照，getStableByRevision 返回 release 状态", async () => {
+    const store = makeStore();
+    const { draft: v1 } = await persistActiveV1(store);
+    // history（immutable）：首次写入快照（draft 状态，artifact 内容不变）。
+    const history = await store.getByRevision(v1.procedureRevision);
+    assert.ok(history !== undefined);
+    assert.equal(history!.status, "draft", "immutable artifact 快照保持首次状态");
+    assert.equal(history!.procedureRevision, v1.procedureRevision);
+    // release（可更新）：该 revision 到达 active。
+    const stable = await store.getStableByRevision(v1.procedureRevision);
+    assert.ok(stable !== undefined);
+    assert.equal(stable!.status, "active", "release 状态反映实际到达的发布状态");
+    // 内容一致（transition 不改 artifact 字段）。
+    assert.equal(stable!.artifactHash, history!.artifactHash);
+    assert.equal(stable!.procedureRevision, history!.procedureRevision);
   });
 });

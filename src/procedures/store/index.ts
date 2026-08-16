@@ -22,6 +22,12 @@
  *   派生字段与条款引用，事件只含受控 reason/trigger）。
  *
  * 边界：不实现 transition 纯函数（draft.ts）；不接 host 事件（下一 slice）；不写用户环境。
+ *
+ * crash consistency（记录，real-host deployment 前 blocker / tech debt）：
+ * transition 的 current 覆盖写入与 event append 之间无原子性——进程中途崩溃可能留下
+ * “current 已更新但事件未追加”（或反之）的不一致状态。本 slice 不做 WAL/事务（最小修复
+ * 控制 scope）；真实宿主部署前必须引入原子提交（如事件先写、current 以 rename 替换，
+ * 或 WAL），届时再处理回放/修复。
  */
 import { createHash } from "node:crypto";
 import { lstat, mkdir, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
@@ -56,6 +62,26 @@ const PROCEDURE_STATUSES: readonly CompiledProcedure["status"][] = [
 
 /** 事件日志 toStatus 扩展：物理删除（终态之外的特殊审计值）。 */
 export type EventToStatus = CompiledProcedure["status"] | "deleted";
+
+/**
+ * revision 的 release/lifecycle state（HIGH 2）：记录某 procedureRevision 实际到达过的
+ * 发布状态（非 immutable artifact 内容）。rollback 的 stable lookup 只认此记录。
+ * - 与 immutable artifact snapshot（history）分离：history 不覆盖，release 可更新；
+ * - suspended 时带 suspendedFrom（自动派生，曾发布为 active 才可作 stable 目标）与
+ *   suspendKind（drift/cascade 需重验，rollback 的 requires_revalidation 门依赖）。
+ */
+export interface ReleaseStateRecord {
+  schemaVersion: typeof PROCEDURE_SCHEMA_VERSION;
+  procedureId: string;
+  procedureRevision: string;
+  status: CompiledProcedure["status"];
+  /** 到达该 release 状态时的报告引用（validated→validationReportId；canary→canaryReportId；active→activeReportId）。 */
+  reportId?: string;
+  suspendedFrom?: "validated" | "canary" | "active";
+  suspendKind?: "manual" | "dependency_drift" | "evidence_cascade";
+  lifecycleReason?: string;
+  updatedAt: string;
+}
 
 /** 可审计 transition 事件（append-only；不丢历史）。 */
 export interface ProcedureTransitionEvent {
@@ -153,6 +179,8 @@ function toStoredProcedure(procedure: CompiledProcedure): CompiledProcedure {
     ...(procedure.canaryReportId !== undefined ? { canaryReportId: procedure.canaryReportId } : {}),
     ...(procedure.activeReportId !== undefined ? { activeReportId: procedure.activeReportId } : {}),
     ...(procedure.lifecycleReason !== undefined ? { lifecycleReason: procedure.lifecycleReason } : {}),
+    ...(procedure.suspendedFrom !== undefined ? { suspendedFrom: procedure.suspendedFrom } : {}),
+    ...(procedure.suspendKind !== undefined ? { suspendKind: procedure.suspendKind } : {}),
     ...(procedure.previousStableRevision !== undefined
       ? { previousStableRevision: procedure.previousStableRevision }
       : {}),
@@ -276,6 +304,14 @@ export class ProcedureStore {
     return path.join(this.#tenantDir(), "events", procedureIdFileHash(procedureId));
   }
 
+  #releaseDir(procedureId: string): string {
+    return path.join(this.#tenantDir(), "release", procedureIdFileHash(procedureId));
+  }
+
+  #releasePath(procedureId: string, procedureRevision: string): string {
+    return path.join(this.#releaseDir(procedureId), `${revisionFileHash(procedureRevision)}.json`);
+  }
+
   #currentPath(procedureId: string): string {
     return path.join(this.#currentDir(), `${procedureIdFileHash(procedureId)}.json`);
   }
@@ -328,6 +364,97 @@ export class ProcedureStore {
     }
   }
 
+  /** 从 transition/save 后的 procedure 提取 release 状态记录（覆盖写：该 revision 的当前 release 状态）。 */
+  async #writeReleaseState(procedure: CompiledProcedure): Promise<void> {
+    const reportId = auditMetaOf(procedure).reportId;
+    const record: ReleaseStateRecord = {
+      schemaVersion: PROCEDURE_SCHEMA_VERSION,
+      procedureId: procedure.procedureId,
+      procedureRevision: procedure.procedureRevision,
+      status: procedure.status,
+      ...(reportId !== undefined ? { reportId } : {}),
+      ...(procedure.suspendedFrom !== undefined ? { suspendedFrom: procedure.suspendedFrom } : {}),
+      ...(procedure.suspendKind !== undefined ? { suspendKind: procedure.suspendKind } : {}),
+      ...(procedure.lifecycleReason !== undefined ? { lifecycleReason: procedure.lifecycleReason } : {}),
+      updatedAt: this.#now().toISOString(),
+    };
+    const filePath = this.#releasePath(procedure.procedureId, procedure.procedureRevision);
+    await mkdir(path.dirname(filePath), { recursive: true });
+    await writeFile(filePath, JSON.stringify(record), { encoding: "utf8", flag: "w" });
+  }
+
+  async #findReleaseByRevision(procedureRevision: string): Promise<ReleaseStateRecord | undefined> {
+    const revisionHash = revisionFileHash(procedureRevision);
+    const releaseRoot = path.join(this.#tenantDir(), "release");
+    let procedureDirs: string[] = [];
+    try {
+      procedureDirs = await readdir(releaseRoot);
+    } catch (error) {
+      if (isErrnoCode(error, "ENOENT")) return undefined;
+      throw error;
+    }
+    for (const dir of procedureDirs) {
+      const filePath = path.join(releaseRoot, dir, `${revisionHash}.json`);
+      const raw = await readFile(filePath, "utf8").catch((error: unknown) => {
+        if (isErrnoCode(error, "ENOENT")) return undefined;
+        throw error;
+      });
+      if (raw === undefined) continue;
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        corrupt("json_parse");
+      }
+      const record = parsed as Record<string, unknown>;
+      if (record.schemaVersion !== PROCEDURE_SCHEMA_VERSION) corrupt("release_schema_version");
+      if (typeof record.procedureRevision !== "string") corrupt("release_procedure_revision");
+      if (record.procedureRevision !== procedureRevision) continue;
+      assertValidStatus(record.status);
+      if (typeof record.procedureId !== "string") corrupt("release_procedure_id");
+      return record as unknown as ReleaseStateRecord;
+    }
+    return undefined;
+  }
+
+  async #findHistorySnapshot(procedureId: string, procedureRevision: string): Promise<CompiledProcedure | undefined> {
+    const filePath = this.#historyPath(procedureId, procedureRevision);
+    const raw = await readFile(filePath, "utf8").catch((error: unknown) => {
+      if (isErrnoCode(error, "ENOENT")) return undefined;
+      throw error;
+    });
+    if (raw === undefined) return undefined;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      corrupt("json_parse");
+    }
+    return parseStoredProcedure(parsed, procedureIdFileHash(procedureId));
+  }
+
+  /** 从 immutable artifact 快照 + release 记录合成 stable 候选（content 取 history，状态取 release）。 */
+  async #composeStableCandidate(release: ReleaseStateRecord): Promise<CompiledProcedure | undefined> {
+    const snapshot = await this.#findHistorySnapshot(release.procedureId, release.procedureRevision);
+    if (snapshot === undefined) return undefined; // release 存在但 artifact 快照缺失 ⇒ fail-closed
+    return {
+      ...snapshot,
+      status: release.status,
+      ...(release.status === "validated" && release.reportId !== undefined
+        ? { validationReportId: release.reportId }
+        : {}),
+      ...(release.status === "canary" && release.reportId !== undefined
+        ? { canaryReportId: release.reportId }
+        : {}),
+      ...(release.status === "active" && release.reportId !== undefined
+        ? { activeReportId: release.reportId }
+        : {}),
+      ...(release.suspendedFrom !== undefined ? { suspendedFrom: release.suspendedFrom } : {}),
+      ...(release.suspendKind !== undefined ? { suspendKind: release.suspendKind } : {}),
+      ...(release.lifecycleReason !== undefined ? { lifecycleReason: release.lifecycleReason } : {}),
+    } as CompiledProcedure;
+  }
+
   async #appendEvent(
     procedureId: string,
     procedureRevision: string,
@@ -357,7 +484,7 @@ export class ProcedureStore {
 
   /**
    * 首次写入（导入/构建落盘）。prior 已存在 ⇒ 拒绝（不覆盖当前状态；更新走 transition）。
-   * 写 current（wx）+ history（wx，按 procedureRevision）+ 首条事件（fromStatus=undefined）。
+   * 写 current（wx）+ history（wx，按 procedureRevision）+ release 状态 + 首条事件（fromStatus=undefined）。
    */
   async save(procedure: CompiledProcedure, meta: TransitionMeta): Promise<void> {
     await this.#ensureInit();
@@ -375,6 +502,7 @@ export class ProcedureStore {
       procedure,
       { exclusive: true },
     );
+    await this.#writeReleaseState(procedure);
     const meta_ = auditMetaOf(procedure);
     await this.#appendEvent(
       procedure.procedureId,
@@ -387,10 +515,13 @@ export class ProcedureStore {
   }
 
   /**
-   * 状态机推进：prior → next。校验（fail-closed）：
-   * - prior 必须存在且 procedureId 与 next 一致；
+   * 状态机推进：prior → next。校验（fail-closed，HIGH 1：不信任调用者传入的 prior）：
+   * - next.procedureId 必须与 prior 一致；
    * - prior.status → next.status 必须 ∈ 合法边（非法转换拒绝落盘）；
-   * - next 写 current（覆盖当前状态）；procedureRevision 变化 ⇒ 追加 history；
+   * - 读取 store 当前落盘 stored：stored.procedureId / procedureRevision / status 必须
+   *   与 prior 完全一致——stale/伪造 prior（旧 status、错 revision）一律拒绝，且
+   *   不得修改 current/history/release/events；
+   * - next 写 current（覆盖当前状态）；procedureRevision 变化 ⇒ 追加 history + release；
    *   events append-only（不丢历史）。
    */
   async transition(
@@ -405,10 +536,19 @@ export class ProcedureStore {
       throw new Error("procedure_store_transition_procedure_id_mismatch");
     }
     this.#assertLegalTransition(prior.status, next.status);
-    const currentPath = this.#currentPath(next.procedureId);
-    if (!(await this.#fileExists(currentPath))) {
+    // HIGH 1：读取真实落盘状态，校验 prior 一致（stale/伪造 prior 拒绝）。
+    const stored = await this.getProcedure(prior.procedureId);
+    if (stored === undefined) {
       throw new Error("procedure_store_missing_prior");
     }
+    if (
+      stored.procedureId !== prior.procedureId ||
+      stored.procedureRevision !== prior.procedureRevision ||
+      stored.status !== prior.status
+    ) {
+      throw new Error("procedure_store_stale_prior");
+    }
+    const currentPath = this.#currentPath(next.procedureId);
     await this.#writeProcedureFile(currentPath, next, { exclusive: false });
     if (next.procedureRevision !== prior.procedureRevision) {
       await this.#writeProcedureFile(
@@ -417,6 +557,7 @@ export class ProcedureStore {
         { exclusive: true },
       );
     }
+    await this.#writeReleaseState(next);
     const meta_ = auditMetaOf(next);
     await this.#appendEvent(
       next.procedureId,
@@ -430,7 +571,7 @@ export class ProcedureStore {
 
   /**
    * 级联删除入口：prior 存在 ⇒ 先写删除事件（审计先于清理，toStatus="deleted"）→
-   * 再删 current/history/events 目录（事件历史随同清理）。prior 不存在 ⇒ 幂等（0 操作）。
+   * 再删 current/history/release/events 目录（事件历史随同清理）。prior 不存在 ⇒ 幂等（0 操作）。
    */
   async remove(procedureId: string, meta: TransitionMeta): Promise<void> {
     await this.#ensureInit();
@@ -448,6 +589,7 @@ export class ProcedureStore {
     );
     await rm(currentPath, { force: true });
     await rm(this.#historyDir(procedureId), { recursive: true, force: true });
+    await rm(this.#releaseDir(procedureId), { recursive: true, force: true });
     await rm(this.#eventsDir(procedureId), { recursive: true, force: true });
   }
 
@@ -506,6 +648,27 @@ export class ProcedureStore {
       }
       const procedure = parseStoredProcedure(parsed, dir);
       if (procedure.procedureRevision === procedureRevision) return procedure;
+    }
+    return undefined;
+  }
+
+  /**
+   * rollback stable lookup seam（HIGH 2）：只返回该 procedureRevision 已真实到达合法
+   * stable 发布状态的记录——active，或 suspended 且 suspendedFrom="active"（曾发布为
+   * active；drift/cascade 的 revalidation 资格由 rollbackProcedure 的 suspendKind 门另判）。
+   * 从未 active 的 draft/validated/canary（含 suspendedFrom≠active）与 retired revision
+   * ⇒ undefined（不可作 stable 目标）。
+   * 返回对象 = immutable artifact 快照（history 内容）+ release 状态（status/reportId/
+   * suspendedFrom/suspendKind/lifecycleReason），供 rollbackProcedure 的既有
+   * revision/procedureId/parentSkillId lineage 校验与稳定状态判定直接消费。
+   */
+  async getStableByRevision(procedureRevision: string): Promise<CompiledProcedure | undefined> {
+    await this.#ensureInit();
+    const release = await this.#findReleaseByRevision(procedureRevision);
+    if (release === undefined) return undefined;
+    if (release.status === "active") return this.#composeStableCandidate(release);
+    if (release.status === "suspended" && release.suspendedFrom === "active") {
+      return this.#composeStableCandidate(release);
     }
     return undefined;
   }
