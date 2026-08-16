@@ -12,16 +12,24 @@
  */
 import type { OverlayEvaluationReport } from "./evaluate.ts";
 
-/** Gate P6 冻结门槛（合成/held-out 校准前按此值冻结；后续按真实分布校准）。 */
+/**
+ * Gate P6 冻结门槛（held-out 校准定值，2026-08-16）：
+ * 校准依据（src/activation/heldout.ts HELDOUT_CASES，12 例：四栏各 3，与 dev fixture
+ * 不重复）：hard_confuser / multi_skill / cross_language 的 recallAtK=1.0、goldPreserved=1.0、
+ * confuserNotRecalled=1.0；no_skill noSkillPrecision=1.0。门槛 = held-out 各栏指标下界减 0.1
+ * 容差（recallAtK/confuserNotRecalled/goldPreservedInTopK → 0.9）；noSkillPrecision 是
+ * 安全硬边界（no-skill 不误召），不放松（保持 1）。
+ * 若后续 held-out 分布扩展后某栏掉到门槛下，须重新校准并如实报告，不得为过门调低。
+ */
 export const PROMOTION_THRESHOLDS = {
   /** 每栏 Recall@K / set recall 最低值（gold 非空栏）。 */
-  recallAtK: 0.8,
-  /** no-skill 栏不误召率最低值。 */
+  recallAtK: 0.9,
+  /** no-skill 栏不误召率最低值（安全硬边界）。 */
   noSkillPrecision: 1,
   /** hard-confuser 栏 confuser 不误召率最低值。 */
-  confuserNotRecalled: 0.8,
+  confuserNotRecalled: 0.9,
   /** 退化检测：learned Top-K 保留 static gold 命中比例最低值。 */
-  goldPreservedInTopK: 1,
+  goldPreservedInTopK: 0.9,
 } as const;
 
 export interface PromotionThresholds {
