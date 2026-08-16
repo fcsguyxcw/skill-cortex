@@ -205,11 +205,37 @@ export function computeCost(input: CostInput): CostReport {
 
 export type GateStatus = "pass" | "fail";
 
+/** ADR-0011 §5：validation evidence 分类（automated / static_review / owner_attested）。 */
+export type GateEvidenceClass = "automated" | "static_review" | "owner_attested";
+
+/**
+ * Gate P3 冻结映射：每门证据来源分类（ADR-0011 §5 + 本批冻结）。
+ * 只用于诚实分级与审计，不参与 judgePromotion 判定。
+ * - automated：冻结输入可确定性重放（replay/公式/结构校验）；
+ * - static_review：静态审查/冻结声明（需审阅者或 Owner 确认）；
+ * - owner_attested：Owner 对真实来源/环境事实的证明，仓库不可自动重证。
+ */
+export const GATE_EVIDENCE_CLASSES: Readonly<Record<string, readonly GateEvidenceClass[]>> = {
+  offset_recall: ["automated"],
+  practice_evidence: ["automated", "owner_attested"], // Store/policy/binding 自动核查；real 来源事实不可由仓库重证
+  artifact_safety: ["static_review"],
+  source_binding: ["automated"],
+  evidence_independence: ["owner_attested"],
+  verifier_independence: ["static_review"],
+  correctness: ["automated"],
+  fallback: ["automated"],
+  cost: ["automated"],
+  real_cost_evidence: ["automated", "owner_attested"], // 结构/公式自动核查；真实宿主测量归属为 attestation
+  scope_conformance: ["static_review"],
+};
+
 export interface GateResult {
   gateId: string;
   name: string;
   status: GateStatus;
   detail: string;
+  /** ADR-0011 §5：本门证据来源分类（冻结映射，非空；仅分级不参与判定）。 */
+  evidenceClasses: readonly GateEvidenceClass[];
 }
 
 /**
@@ -308,7 +334,12 @@ export interface PromotionInput {
 }
 
 function gate(gateId: string, name: string, status: GateStatus, detail: string): GateResult {
-  return { gateId, name, status, detail };
+  const evidenceClasses = GATE_EVIDENCE_CLASSES[gateId];
+  // ADR-0011 §5：任何 gateId 必须有非空冻结映射（fail fast，防止未分级的新门静默通过）。
+  if (evidenceClasses === undefined || evidenceClasses.length === 0) {
+    throw new Error(`gate_evidence_classes_missing: ${gateId}`);
+  }
+  return { gateId, name, status, detail, evidenceClasses };
 }
 
 /**

@@ -1,12 +1,27 @@
 # Phase 3 Gate 报告：OFFSET pagination partial procedure
 
+> 2026-08-16 纠偏附注：本文后文关于 `permissionPolicyHash=sha256:4f×32` 的表述仅为历史记录，
+> 不再是当前证据。最新 formal runner 已对 effectless/permissionless pilot 省略该字段，隔离
+> `formal_real_store` 与 `evaluation_fixture`，逐门标注 evidence class，并重新 11/11 PASS。
+> 当前机器可读结果见 `2026-08-14-phase3-p3-validation-report.json`；fresh-clone 一致性复验见
+> `2026-08-16-phase3-validation-evidence-envelope.json`。Envelope 不重证 real provenance、不可晋升。
+
+当前权威 artifact identity（2026-08-16 formal 重跑）：
+
+| 字段 | 当前值 |
+|---|---|
+| procedureRevision | `rev:e782a7f22c885305e5dd1d75022c09181db471a15616175fd7f210af481a14c2` |
+| artifactHash | `sha256:43c1401df70024ae6c8aeede4df756aa57608ede30ed9a13ff3dd5600a5fdd8c` |
+| status | `validated` |
+| evidenceIds | 2 条真实事件（见当前机器可读 validation report） |
+
 日期：2026-08-14（更新：2026-08-15，Gate P3 正式闭环）
 结论：**Gate P3 = PASS（11/11 门，decision=validated，2026-08-15 真实证据闭环）；
 procedure 进入 `validated`（非 `active`）；禁止启动 Phase 4。**
 停止边界：validated ≠ active；进入 active 前必须再过 canary + shadow replay（ADR-0008），
 不得在当前阶段启动 Phase 4。
 
-## 1. 实际交付
+## 1. 历史实际交付（初始 draft，已被 2026-08-16 identity 取代）
 
 - `src/procedures/phase3/`：bounded SQL lexer/detector、完整
   `CompiledProcedure` draft builder、dependency/source fail-closed 检查，以及仅允许
@@ -132,7 +147,7 @@ verifier 独立性、correctness、fallback、真实成本证据结构（B6 修�
 - `docs/evaluation/2026-08-14-phase3-pagination-thresholds.md`
 - `docs/research/2026-08-14-phase3-pagination-pilot-inventory.md`
 
-## 8. Gate P3 正式闭环证据（2026-08-15）
+## 8. 历史 Gate P3 正式闭环证据（2026-08-15，已被 2026-08-16 纠偏重跑取代）
 
 正式 validation runner：`src/evaluation/phase3/p3-gate-runner.ts`（+ 单测
 `p3-gate-runner.test.ts`，用真实 Store 事件，非 fixture）；validation report：
@@ -163,6 +178,7 @@ validated procedure：
 | evidenceIds | 2 条真实事件（obs-79b95a72…、obs-9ee1fe77…） |
 | validationReportId | `validation:phase3-pagination-p3-gate-2026-08-15` |
 
-permissionPolicyHash 为合法 sha256 占位（`4f`×32），由 Owner 冻结环境提供；真实值替换时须重新评审本闭环。
+历史实现曾把 permissionPolicyHash 写成 sha256 占位（`4f`×32）；该做法已被 ADR-0011
+判定为无效证据并在 2026-08-16 纠偏中移除，当前结果不得引用此占位。
 validated ≠ active：进入 canary/active 前必须先过 shadow replay + canary gate（ADR-0008），
 不得启动 Phase 4。

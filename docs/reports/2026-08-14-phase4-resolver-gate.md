@@ -1,8 +1,11 @@
 # Phase 4 Gate 报告：Execution Resolver 核心
 
 日期：2026-08-15
-状态：**Component implemented（纯函数核心）；未接线宿主执行路径；不启动 canary/active/Phase 5**
-契约：ADR-0008「Runtime resolution、fallback 与失效」+ data-contracts §4.6/§6.2 + 冻结 ExecutionDecision
+状态：**Component implemented（2026-08-16 按 ADR-0012 纠偏验收）；未接线宿主执行路径；不启动真实 canary/active/Phase 5**
+契约：ADR-0008、ADR-0012「Runtime resolution、fallback 与失效」+ data-contracts §4.6/§6.2 + 冻结 ExecutionDecision
+
+> 2026-08-16 纠偏说明：§1–§7 保留 2026-08-15 的历史实现记录，其中关于 effect 子集、
+> 慢路径伪授权、外层手工 abstain 路由和 “canary 模拟” 的描述已被 §8 取代，不再作为当前契约。
 
 ## 1. 模块设计
 
@@ -150,3 +153,32 @@ node --test src/evaluation/phase4/canary.test.ts  PASS；6 tests（canary 模拟
 npm test（全量）                          PASS；344 tests；342 pass；0 fail；2 skip（既有 symlink）
 git diff --check                          PASS
 ```
+
+## 8. 2026-08-16 ADR-0012 纠偏验收（当前权威状态）
+
+- resolver 按 `executionContext × procedure.status` 矩阵 fail closed；缺失/非法 context 输出
+  `unknown`，父 Skill 身份检查先于 revision，requested effects 必须与声明集合精确相等。
+- executor 只在 compiled procedure 路径请求授权，claims 精确复制 `declaredEffects` 与
+  `requiredPermissions`；加载父 `SKILL.md` 本身不伪装成授权 effect。
+- artifact 必须返回 `disposition` 与 `sideEffectCount`。缺失/非法值或非零副作用进入
+  `safety_stop`，不加载慢路径、不调用 verifier；`abstained + 0` 由 executor 统一回退。
+- runtime guard 缺观察或 phase 错时补 `unknown` 并停止；verifier ID 不属于 procedure
+  postconditions 时按 verifier failure 回退。
+- `src/evaluation/phase4/canary.ts` 仅为 project-local `shadow_replay` harness；它不执行
+  `validated → canary/active` 状态转换，也不是宿主发布证据。
+- 独立只读审查未发现 blocker/high/medium；`sideEffectCount` 仍是 host/artifact 提供的可观察值，
+  真实 I/O 与 `tool_call` gate 必须在 host integration 阶段另行验证。
+
+```text
+node --test src/runtime/resolver.test.ts src/runtime/fallback.test.ts src/runtime/executor.test.ts src/evaluation/phase4/canary.test.ts
+  PASS；57/57
+npm.cmd test
+  PASS；376 tests；374 pass；0 fail；2 skip（Windows symlink 权限）
+npm.cmd run typecheck
+  PASS
+git diff --check
+  PASS
+```
+
+当前 gate 结论：**Phase 4 component implemented；host integration 与 end-to-end incomplete；
+不得启动真实 canary/active。**

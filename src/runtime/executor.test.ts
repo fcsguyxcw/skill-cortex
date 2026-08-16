@@ -15,7 +15,6 @@ import { describe, it } from "node:test";
 import type { CompiledProcedure } from "../core/contracts/index.ts";
 import {
   execute,
-  SLOW_PATH_AUTH_EFFECT,
   type AuthorizationRequest,
   type ExecuteInput,
   type ExecutorServices,
@@ -27,6 +26,10 @@ const SKILL: SelectedSkillInput = {
   skillRevision: "rev:1111111111111111111111111111111111111111111111111111111111111111",
 };
 
+/** 测试 policy hash（ADR-0011：不得用 4f 占位；fixture 声明非空 effect 时须三方一致）。 */
+const TEST_POLICY_HASH = `sha256:${'a'.repeat(64)}`;
+const SOURCE_HASH = "sha256:3333333333333333333333333333333333333333333333333333333333333333";
+
 function makeProcedure(overrides: Partial<CompiledProcedure> = {}): CompiledProcedure {
   return {
     schemaVersion: 1,
@@ -35,7 +38,7 @@ function makeProcedure(overrides: Partial<CompiledProcedure> = {}): CompiledProc
     parentSkillRevision: SKILL.skillRevision,
     procedureRevision: "rev:2222222222222222222222222222222222222222222222222222222222222222",
     status: "validated",
-    dependencyFingerprint: { sourceHash: "sha256:3333333333333333333333333333333333333333333333333333333333333333" },
+    dependencyFingerprint: { sourceHash: SOURCE_HASH, permissionPolicyHash: TEST_POLICY_HASH },
     inputSchema: {},
     preconditions: [{ predicateId: "pre-1", description: "input bounded" }],
     coveredSteps: [{ stepId: "detect-offset-pagination", sourceClauseRefs: [] }],
@@ -58,8 +61,10 @@ function makeProcedure(overrides: Partial<CompiledProcedure> = {}): CompiledProc
 
 function env(overrides: Partial<ResolverEnvironment> = {}): ResolverEnvironment {
   return {
+    // ADR-0012：快路径 fixture 恒在 shadow_replay 上下文（validated 放行）。
+    executionContext: "shadow_replay",
     currentSkillRevision: SKILL.skillRevision,
-    currentDependencyFingerprint: { sourceHash: "sha256:3333333333333333333333333333333333333333333333333333333333333333" },
+    currentDependencyFingerprint: { sourceHash: SOURCE_HASH, permissionPolicyHash: TEST_POLICY_HASH },
     preconditions: [{ predicateId: "pre-1", result: true }],
     requestedEffects: ["read-only-analysis"],
     authorizationRequired: false,
@@ -97,7 +102,8 @@ function makeServices(overrides: Partial<ExecutorServices> = {}): {
         steps: [
           { stepId: "detect-offset-pagination", actor: "procedure", operationClass: "detect-offset-pagination", outcome: "ok" },
         ],
-        sideEffectCount: recording.sideEffectProbe,
+        disposition: "completed", // ADR-0012 §4：默认 completed
+        sideEffectCount: 0, // MVP：无副作用
       };
     },
     async loadParentSkill() {
@@ -279,9 +285,9 @@ describe("executor：快路径与 guard（plan §9）", () => {
   });
 });
 
-describe("executor：同一授权 gate（plan §9）", () => {
-  it("同一注入 gate 被快慢两条路径调用；denied ⇒ 两侧都安全停止", async () => {
-    // 慢路径：gate 被调用（effect=SLOW_PATH_AUTH_EFFECT）。
+describe("executor：授权 gate（ADR-0012 §5/§6）", () => {
+  it("仅快路径调用 gate；慢路径加载本身不调用 auth（ADR-0012 §6）", async () => {
+    // 慢路径：不调用 auth（加载 SKILL.md 不是 effect）。
     const slow = makeServices();
     const slowOutcome = await execute({
       selectedSkill: SKILL,
@@ -290,25 +296,42 @@ describe("executor：同一授权 gate（plan §9）", () => {
       services: slow.services,
     });
     assert.equal(slowOutcome.outcome, "slow_path");
-    assert.deepEqual(slow.recording.authCalls, [{ skillId: SKILL.skillId, effect: SLOW_PATH_AUTH_EFFECT }]);
+    assert.deepEqual(slow.recording.authCalls, [], "慢路径加载不得调用授权 gate");
 
-    // 快路径：同一 gate 被调用（effect=requestedEffects）。
+    // 快路径：同一 gate 被调用，claims 精确复制 procedure 声明（effects/permissions 两维）。
     const fast = makeServices();
     const fastOutcome = await execute(fastInput(fast.services));
     assert.equal(fastOutcome.outcome, "fast_path");
-    assert.deepEqual(fast.recording.authCalls, [{ skillId: SKILL.skillId, effect: "read-only-analysis" }]);
+    assert.deepEqual(fast.recording.authCalls, [
+      {
+        skillId: SKILL.skillId,
+        procedureId: makeProcedure().procedureId,
+        claims: { effects: ["read-only-analysis"], permissions: [] },
+      },
+    ]);
+  });
 
-    // denied：慢路径与快路径都被拦截，无 artifact / 无慢路径加载。
-    const deniedSlow = makeServices({ checkAuthorization: async () => "denied" });
-    const ds = await execute({ selectedSkill: SKILL, environment: env(), taskInput: {}, services: deniedSlow.services });
-    assert.equal(ds.outcome, "denied");
-    assert.equal(deniedSlow.recording.slowPathCalls, 0);
+  it("快路径 claims：effects/permissions exact declarations，无占位字符串", async () => {
+    const { services, recording } = makeServices();
+    const outcome = await execute(fastInput(services));
+    assert.equal(outcome.outcome, "fast_path");
+    assert.equal(recording.authCalls.length, 1);
+    const request = recording.authCalls[0]!;
+    assert.deepEqual(request.claims.effects, ["read-only-analysis"]);
+    assert.deepEqual(request.claims.permissions, []);
+    assert.deepEqual(request.claims.effects, makeProcedure().declaredEffects);
+    assert.deepEqual(request.claims.permissions, makeProcedure().requiredPermissions);
+    // 禁止占位：claims 与 request 中不得出现任何占位字符串。
+    assert.ok(!JSON.stringify(request).includes("<procedure-execution>"));
+    assert.ok(!JSON.stringify(request).includes("load-parent-skill"));
+  });
 
-    const deniedFast = makeServices({ checkAuthorization: async () => "denied" });
-    const df = await execute(fastInput(deniedFast.services));
+  it("gate denied ⇒ 安全停止：无 artifact、无慢路径加载（仅快路径）", async () => {
+    const denied = makeServices({ checkAuthorization: async () => "denied" });
+    const df = await execute(fastInput(denied.services));
     assert.equal(df.outcome, "denied");
-    assert.equal(deniedFast.recording.artifactCalls, 0, "denied 后不得执行 artifact");
-    assert.equal(deniedFast.recording.slowPathCalls, 0);
+    assert.equal(denied.recording.artifactCalls, 0, "denied 后不得执行 artifact");
+    assert.equal(denied.recording.slowPathCalls, 0, "denied 后不得加载慢路径");
   });
 
   it("authorization_required 决策（h 分支）：gate 批准后快路径继续，拒绝则停止", async () => {
@@ -356,5 +379,126 @@ describe("executor：abstain 与副作用", () => {
     await execute(fastInput(verifierFail.services));
     assert.equal(verifierFail.recording.artifactCalls, 2, "verifier 失败每轮 artifact 恰一次，回退不重放");
     assert.equal(verifierFail.recording.sideEffectProbe, 2);
+  });
+});
+
+describe("executor：artifact disposition 与 safety_stop（ADR-0012 §4 + 本轮冻结）", () => {
+  it("disposition=abstained + sideEffectCount=0 ⇒ fallback(procedure_abstained) + 慢路径恢复，verifier 不调用", async () => {
+    const { services, recording } = makeServices({
+      executeArtifact: async () => {
+        recording.artifactCalls += 1;
+        return {
+          result: { class: "abstain" },
+          steps: [
+            { stepId: "detect-offset-pagination", actor: "procedure", operationClass: "detect-offset-pagination", outcome: "ok" },
+          ],
+          disposition: "abstained",
+          sideEffectCount: 0,
+        };
+      },
+    });
+    const outcome = await execute(fastInput(services));
+    assert.equal(outcome.outcome, "fallback");
+    if (outcome.outcome === "fallback") {
+      assert.equal(outcome.fallbackReason, "procedure_abstained");
+      assert.equal(outcome.fallback.fallbackMode, "load_parent_skill");
+      assert.equal(outcome.slowPath.loaded, true);
+      assert.deepEqual(outcome.verifierResults, [], "abstained 跳过 verifier");
+    }
+    assert.equal(recording.artifactCalls, 1);
+    assert.equal(recording.verifyCalls, 0, "abstained 不得调用 verifier");
+    assert.equal(recording.slowPathCalls, 1);
+  });
+
+  it("disposition 缺失/非法 ⇒ safety_stop(artifact_result_invalid)：不 loadParentSkill、verifier 不调用", async () => {
+    for (const result of [
+      { disposition: undefined, sideEffectCount: 0 },
+      { disposition: "weird", sideEffectCount: 0 },
+    ] as const) {
+      const { services, recording } = makeServices({
+        executeArtifact: async () => {
+          recording.artifactCalls += 1;
+          // 运行时非法形状（disposition 缺失/非法）——故意绕过类型以测 fail-closed。
+          const artifact = {
+            result: { class: "uses_offset" },
+            steps: [],
+            disposition: result.disposition,
+            sideEffectCount: result.sideEffectCount,
+          } as unknown as import("./executor.ts").ArtifactExecutionResult;
+          return artifact;
+        },
+      });
+      const outcome = await execute(fastInput(services));
+      assert.equal(outcome.outcome, "safety_stop", `disposition=${String(result.disposition)}`);
+      if (outcome.outcome === "safety_stop") {
+        assert.equal(outcome.safetyReason, "artifact_result_invalid");
+      }
+      assert.equal(recording.artifactCalls, 1, "artifact 只执行一次");
+      assert.equal(recording.slowPathCalls, 0, "safety_stop 不得 loadParentSkill（避免重复/掩盖副作用）");
+      assert.equal(recording.verifyCalls, 0, "safety_stop 不调用 verifier");
+    }
+  });
+
+  it("sideEffectCount>0 ⇒ safety_stop(unexpected_side_effect)：不 loadParentSkill、verifier 不调用", async () => {
+    const { services, recording } = makeServices({
+      executeArtifact: async () => {
+        recording.artifactCalls += 1;
+        return {
+          result: { class: "uses_offset" },
+          steps: [],
+          disposition: "completed",
+          sideEffectCount: 1,
+        };
+      },
+    });
+    const outcome = await execute(fastInput(services));
+    assert.equal(outcome.outcome, "safety_stop");
+    if (outcome.outcome === "safety_stop") {
+      assert.equal(outcome.safetyReason, "unexpected_side_effect");
+    }
+    assert.equal(recording.artifactCalls, 1);
+    assert.equal(recording.slowPathCalls, 0, "safety_stop 不得 loadParentSkill");
+    assert.equal(recording.verifyCalls, 0);
+  });
+
+  it("sideEffectCount 缺失/非数 ⇒ safety_stop(artifact_result_invalid)", async () => {
+    for (const sideEffectCount of [undefined, "many"]) {
+      const { services, recording } = makeServices({
+        executeArtifact: async () => {
+          recording.artifactCalls += 1;
+          return {
+            result: { class: "uses_offset" },
+            steps: [],
+            disposition: "completed",
+            sideEffectCount: sideEffectCount as unknown as number,
+          };
+        },
+      });
+      const outcome = await execute(fastInput(services));
+      assert.equal(outcome.outcome, "safety_stop");
+      if (outcome.outcome === "safety_stop") {
+        assert.equal(outcome.safetyReason, "artifact_result_invalid");
+      }
+      assert.equal(recording.slowPathCalls, 0);
+      assert.equal(recording.verifyCalls, 0);
+    }
+  });
+
+  it("verifierId 未声明（∉ postconditions）⇒ verifier_failure fallback + verifierResults 记 fail", async () => {
+    const { services, recording } = makeServices({
+      verifyPostcondition: async () => {
+        recording.verifyCalls += 1;
+        return { pass: true, verifierId: "v-unknown" };
+      },
+    });
+    const outcome = await execute(fastInput(services));
+    assert.equal(outcome.outcome, "fallback");
+    if (outcome.outcome === "fallback") {
+      assert.equal(outcome.fallbackReason, "verifier_failure");
+      assert.equal(outcome.slowPath.loaded, true);
+      assert.deepEqual(outcome.verifierResults, [{ verifierId: "v-unknown", result: "fail" }]);
+    }
+    assert.equal(recording.artifactCalls, 1);
+    assert.equal(recording.verifyCalls, 1, "verifier 被调用后因未声明而判 fail");
   });
 });

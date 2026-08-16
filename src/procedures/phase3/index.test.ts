@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  LEGACY_PLACEHOLDER_POLICY_HASH,
   PAGINATION_DETECTOR_SCHEMA_VERSION,
   PAGINATION_DETECTOR_VERSION,
   buildPhase3ProcedureDraft,
@@ -22,7 +23,6 @@ function draft() {
     parentSkillRevision: PARENT_SKILL_REVISION,
     skillMdHash: SKILL_HASH,
     selectedReferenceHash: REFERENCE_HASH,
-    permissionPolicyHash: POLICY_HASH,
     createdAt: "2026-08-14T00:00:00.000Z",
     evidenceIds: ["practice:offset-1"],
   });
@@ -36,7 +36,6 @@ function current() {
     selectedReferenceHash: REFERENCE_HASH,
     detectorSchemaVersion: PAGINATION_DETECTOR_SCHEMA_VERSION,
     detectorVersion: PAGINATION_DETECTOR_VERSION,
-    permissionPolicyHash: POLICY_HASH,
   };
 }
 
@@ -106,7 +105,9 @@ describe("procedure draft and bindings", () => {
     assert.equal(first.sourceBindings.selectedReferenceHash, `sha256:${REFERENCE_HASH}`);
     assert.equal(first.sourceBindings.detectorSchemaVersion, PAGINATION_DETECTOR_SCHEMA_VERSION);
     assert.equal(first.sourceBindings.detectorVersion, PAGINATION_DETECTOR_VERSION);
-    assert.equal(first.dependencyFingerprint.permissionPolicyHash, `sha256:${POLICY_HASH}`);
+    // ADR-0011：effectless/permissionless ⇒ permissionPolicyHash 必须显式省略。
+    assert.equal(first.sourceBindings.permissionPolicyHash, undefined);
+    assert.equal(first.dependencyFingerprint.permissionPolicyHash, undefined);
     assert.match(first.artifactHash, /^sha256:[0-9a-f]{64}$/);
     assert.deepEqual(first.declaredEffects, []);
     assert.deepEqual(first.requiredPermissions, []);
@@ -119,7 +120,6 @@ describe("procedure draft and bindings", () => {
       parentSkillRevision: PARENT_SKILL_REVISION,
       skillMdHash: SKILL_HASH,
       selectedReferenceHash: REFERENCE_HASH,
-      permissionPolicyHash: POLICY_HASH,
       createdAt: "2026-08-14T00:00:00.000Z",
     };
     assert.throws(
@@ -133,6 +133,30 @@ describe("procedure draft and bindings", () => {
     assert.throws(
       () => buildPhase3ProcedureDraft({ ...base, createdAt: "2026-08-14" }),
       /created_at_must_be_iso_timestamp/,
+    );
+  });
+
+  it("rejects any provided permissionPolicyHash for effectless procedure (incl. old 4f placeholder)", () => {
+    const base = {
+      parentSkillId: PARENT_SKILL_ID,
+      parentSkillRevision: PARENT_SKILL_REVISION,
+      skillMdHash: SKILL_HASH,
+      selectedReferenceHash: REFERENCE_HASH,
+      createdAt: "2026-08-14T00:00:00.000Z",
+    };
+    // ADR-0011 §1/§4：effectless 必须省略；合法 hash 也拒绝。
+    assert.throws(
+      () => buildPhase3ProcedureDraft({ ...base, permissionPolicyHash: POLICY_HASH }),
+      /permission_policy_hash_forbidden_for_effectless/,
+    );
+    // 旧占位 `sha256:4f…`（64 hex）同样拒绝。
+    assert.throws(
+      () => buildPhase3ProcedureDraft({ ...base, permissionPolicyHash: "4f".repeat(32) }),
+      /permission_policy_hash_forbidden_for_effectless/,
+    );
+    assert.throws(
+      () => buildPhase3ProcedureDraft({ ...base, permissionPolicyHash: "not-a-hash" }),
+      /permission_policy_hash_forbidden_for_effectless/,
     );
   });
 
@@ -157,12 +181,91 @@ describe("procedure draft and bindings", () => {
     assert.equal(sourceMismatch.ok, false);
     if (!sourceMismatch.ok) assert.equal(sourceMismatch.reason, "source_mismatch");
 
-    const dependencyMismatch = checkPhase3ProcedureBindings(procedure, {
+    // effectless 且 current 提供 hash：procedure 未绑定 ⇒ 不构成约束（resolver 语义）。
+    const extraCurrentPolicy = checkPhase3ProcedureBindings(procedure, {
       ...current(),
-      permissionPolicyHash: "not-a-hash",
+      permissionPolicyHash: POLICY_HASH,
     });
-    assert.equal(dependencyMismatch.ok, false);
-    if (!dependencyMismatch.ok) assert.equal(dependencyMismatch.reason, "dependency_mismatch");
+    assert.deepEqual(extraCurrentPolicy, { ok: true });
+  });
+
+  it("fails bindings when an effectless procedure carries a permissionPolicyHash (old placeholder artifact)", () => {
+    // 直接构造旧形状 artifact（builder 已拒绝带 hash 的 effectless draft）：
+    // 模拟“去占位前”携带 `sha256:4f…` 的 procedure，binding 必须 fail。
+    const procedure = draft();
+    const legacy = {
+      ...procedure,
+      sourceBindings: {
+        ...procedure.sourceBindings,
+        permissionPolicyHash: `sha256:${POLICY_HASH}`,
+      },
+      dependencyFingerprint: {
+        ...procedure.dependencyFingerprint,
+        permissionPolicyHash: `sha256:${POLICY_HASH}`,
+      },
+    };
+    const placeholder = {
+      ...procedure,
+      sourceBindings: {
+        ...procedure.sourceBindings,
+        permissionPolicyHash: LEGACY_PLACEHOLDER_POLICY_HASH,
+      },
+      dependencyFingerprint: {
+        ...procedure.dependencyFingerprint,
+        permissionPolicyHash: LEGACY_PLACEHOLDER_POLICY_HASH,
+      },
+    };
+    for (const legacyProcedure of [legacy, placeholder]) {
+      const binding = checkPhase3ProcedureBindings(legacyProcedure, current());
+      assert.equal(binding.ok, false);
+      if (!binding.ok) {
+        assert.equal(binding.reason, "dependency_mismatch");
+        assert.ok(binding.mismatches.includes("permissionPolicyHash"));
+      }
+    }
+  });
+
+  it("fails bindings when a permission-declaring procedure binds the legacy placeholder on all three sides", () => {
+    // ADR-0011 §2/§4：声明非空 effects/permissions 时，三方均为已知旧占位
+    // `sha256:4f…` 仍不是真实 policy 指纹 ⇒ dependency_mismatch，不能通过。
+    const procedure = draft();
+    const declaring = {
+      ...procedure,
+      declaredEffects: ["analyze"],
+      requiredPermissions: ["read-only-analysis"],
+      sourceBindings: {
+        ...procedure.sourceBindings,
+        permissionPolicyHash: LEGACY_PLACEHOLDER_POLICY_HASH,
+      },
+      dependencyFingerprint: {
+        ...procedure.dependencyFingerprint,
+        permissionPolicyHash: LEGACY_PLACEHOLDER_POLICY_HASH,
+      },
+    };
+    const binding = checkPhase3ProcedureBindings(declaring, {
+      ...current(),
+      permissionPolicyHash: LEGACY_PLACEHOLDER_POLICY_HASH,
+    });
+    assert.equal(binding.ok, false);
+    if (!binding.ok) {
+      assert.equal(binding.reason, "dependency_mismatch");
+      assert.ok(binding.mismatches.includes("permissionPolicyHash"));
+    }
+  });
+
+  it("tool schema hash does not depend on permissionPolicyHash", () => {
+    const procedure = draft();
+    // ADR-0011 §5：工具 schema hash 只由 reference + detector 版本派生，不依赖权限绑定。
+    const changedReference = buildPhase3ProcedureDraft({
+      ...current(),
+      selectedReferenceHash: "b".repeat(64),
+      createdAt: procedure.createdAt,
+    });
+    assert.ok(!Object.keys(procedure.dependencyFingerprint).includes("permissionPolicyHash"));
+    assert.notEqual(
+      changedReference.dependencyFingerprint.toolSchemaHash,
+      procedure.dependencyFingerprint.toolSchemaHash,
+    );
   });
 
   it("immutably transitions only a validated decision with a controlled report ID", () => {

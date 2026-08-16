@@ -4,7 +4,7 @@
 
 审计对象：`agent/phase3-procedure-gate`，`b3fd709`；关闭证据 commit `9af7e67..d5165a9` 及 `p3-gate-runner`
 
-状态：**B1–B6 已关闭；Phase 3 procedure 达到 `validated`；Phase 4 active path 仍不得启动（validated ≠ active，须先过 shadow replay + canary gate，ADR-0008）**
+状态：**B1–B6 已关闭；2026-08-16 Gate P3 已完成纠偏并重新 validated；Phase 4 resolver/executor component implemented，但 host integration 与 end-to-end incomplete；任何真实 canary/active 或 Phase 5 路径不得启动**
 
 本文冻结当前代码与真实宿主接线的验收结果，供下一轮 Herdr leader 纠偏。它不替代
 ADR 的架构决定；当 implementation plan 的阶段状态与本文的更新证据冲突时，先处理
@@ -25,8 +25,8 @@ ADR 的架构决定；当 implementation plan 的阶段状态与本文的更新�
 | Phase 0：宿主核验与基线 | 已完成 | 不适用 | 不适用 | **Complete** |
 | Phase 1：Registry 与 prompt 外 discovery | 已实现 | 真实 Pi runner 链注入 Top-K、移除原生 block 已验证 | 已通过 Gate P1 | **Complete** |
 | Phase 2：Practice Store 与证据治理 | Store、policy、分区、脱敏、删除已实现 | 已接真实 Practice observer（隔离 + --no-session 真实会话） | 已通过 Gate P2 | **Complete** |
-| Phase 3：离线部分编译与晋升 | detector、draft、verifier、induction seam、成本 benchmark 已实现 | 真实 PracticeEvent 经 induction 产生 draft 并绑定 evidence | Gate P3 正式闭环，procedure `validated` | **Complete（validated，未 canary/active）** |
-| Phase 4：Execution Resolver 与安全回退 | resolveExecution/guard/fallback/executor/canary 已实现 | 未接真实 Pi tool 事件（注入接口） | 未完成 | **Component complete** |
+| Phase 3：离线部分编译与晋升 | detector、draft、verifier、induction seam、成本 benchmark、formal runner、envelope 已实现 | 默认 project-local Store 的真实 PracticeEvent 经 induction 产生 draft 并绑定 evidence | Gate P3 纠偏后重新 11/11 PASS，procedure `validated` | **Complete（validated，未 canary/active）** |
+| Phase 4：Execution Resolver 与安全回退 | resolveExecution/guard/fallback/executor 已按 ADR-0012 实现；project-local shadow replay 已通过 | 未接真实 Pi tool 事件（注入接口） | 未完成 | **Component implemented；host integration / E2E incomplete** |
 | Phase 5：生命周期、失效与回滚 | 未开始 | 未开始 | 未开始 | **Not started** |
 | Phase 6：Activation Memory | 未开始 | 未开始 | 未开始 | **Not started** |
 | Phase 7：系统验证与交接 | 只有前序阶段的局部评测工具 | 未开始 | 未开始 | **Not started** |
@@ -38,6 +38,37 @@ evidenceIds，held-out 质量门全过，真实成本复测 `N_break-even=0.0001
 成本）。`validated ≠ active`：进入 canary/active 前须先过 shadow replay + canary gate。
 详见 [Phase 3 Gate 报告](../reports/2026-08-14-phase3-gate-report.md)与
 [P3 validation report](../reports/2026-08-14-phase3-p3-validation-report.json)。
+
+> 注：上段的 2026-08-15 artifact identity 已被 2026-08-16 纠偏重跑取代；Gate P3 曾因
+> permission binding 重开，现已按 §2.1 关闭并重新 `validated`。
+
+## 2.1 2026-08-16 重新评审与关闭结果（以本节为准）
+
+- **重新评审发现（现已关闭）— permission binding**：`P3_GATE_FROZEN.permissionPolicyHash` 曾为 `sha256:4f×32`
+  占位，被 P3 报告与 validation report 引用为 binding 证据，但该值不是任何可核验 policy 的
+  指纹（ADR-0011 §4）。permission binding 维度不满足 ADR-0008 的可追溯证据要求；component 与
+  本地 evidence chain（真实事件 → induction → draft）本身仍存在且未被否定。
+- **重新评审发现（现已关闭）— evaluation/formal 来源隔离**：`p3-gate-runner.test.ts` 曾把临时构造事件标成
+  `provenance="real"`，并通过可注入 Store 获得 `validated`。按 ADR-0011 §7，fixture/envelope
+  入口只能验证结构与推导一致性，必须保持 `draft`；只有默认 project-local real Store 路径可
+  执行 formal transition。
+- **上述 P3 blocker 已关闭**：
+  - effectless/permissionless pilot 现显式省略 `permissionPolicyHash`；旧 4f artifact 与声明非空
+    时使用同一占位的 artifact 均 binding fail；
+  - 任一 Store/tenant/event/cost override 均标记为 `evaluation_fixture`；即使 deliberate spoof
+    fixture 的 11 门 assessment 全过，公开 decision 仍为 `draft`，不执行 transition；
+  - 默认 project-local Store formal 重跑 `sourceMode=formal_real_store`，前置全 PASS、11/11 PASS、
+    `assessmentDecision=validated`、最终 `decision=validated`；
+  - committed redacted envelope 与 validation report 锚点一致；replay 固定输出
+    `provesRealProvenance=false`、`promotionEligible=false`，不能冒充真实 Store 证据；
+  - 11 门已逐项标注 `automated` / `static_review` / `owner_attested`，不再声称 11/11 全自动。
+- **Phase 4 component gate 已关闭**：resolver/executor 已实现 ADR-0012 的 `executionContext`
+  状态矩阵、父 Skill 身份检查、精确 effect 集、两维 authorization claims、artifact 结构化
+  disposition、零副作用 `safety_stop`、guard fail-closed 与 verifier binding；project-local
+  shadow replay 和定向测试通过。该结论不证明真实宿主授权、guard 观察或 artifact I/O 已接线。
+- **Phase 4 host integration / end-to-end 仍 incomplete**：真实 Pi `tool_call` adapter、逐次授权
+  gate、guard 观察来源与 artifact 入口尚未验收；因此不得启动真实 canary/active。
+- **未改变**：Phase 1/2 判定；`.skill-cortex` 真实事件与 B1–B6 关闭证据；`validated ≠ active`。
 
 ## 3. Blocking findings（2026-08-16 更新：B1–B6 已全部关闭）
 
@@ -159,23 +190,35 @@ procedure 生成与验证成本，再重新计算 break-even。不得为了过�
 
 ## 4. 下一轮 Herdr 的严格执行顺序（2026-08-16 更新）
 
-B1–B6 已全部关闭（见 §3），Phase 3 procedure `validated`，Phase 4 component complete。剩余待办：
+B1–B6、Gate P3 纠偏项与 Phase 4 component gate 已关闭。执行顺序（上游步骤未关闭
+不得启动下游）：
 
-1. **Phase 4 host integration**（当前 blocker）：executor 未接真实 Pi tool 事件——guard
-   观察来源、授权 gate 宿主 hook、artifact 入口均为注入接口，需接线并验证真实 tool 事件
-   （tool_call/tool_result/agent_settled）后，才能宣称 host integration / end-to-end complete。
-2. 补齐 B6 的 `permissionPolicyHash`：当前为 Owner 冻结环境占位值，替换真实值后须重新
-   跑 `p3-gate-runner` 并评审闭环。
-3. **不进入真实宿主 canary/active 部署**：procedure `validated`，但 shadow replay +
-   canary gate（ADR-0008）的真实宿主侧验证未做；Phase 5（生命周期/失效/回滚）未开始。
+1. **[完成] 修复 P3 permission binding 表示**（ADR-0011）：effectless/permissionless
+   procedure 显式省略 `permissionPolicyHash`（移除 4f 占位、draft builder 参数改 optional、
+   binding check 与 resolver/contracts 同步），或对声明了权限的 procedure 提供真实 policy
+   指纹；本步只关闭代码表示缺口，不单独关闭 formal gate。
+2. **[完成] 补齐 redacted validation evidence envelope**（ADR-0011 §6）：fresh-clone 一致性复验
+   资产；同时隔离 formal runner 与注入 fixture/envelope 入口，后两者不得触发晋升；不得进入
+   Practice Store / production proposal、不得声称重新证明 real provenance。
+3. **[完成] 最终重跑并评审 Gate P3**：使用真实 project-local Store 重跑 `p3-gate-runner`，同时验证
+   envelope 与 validation report 的冻结锚点一致；两者均通过后才可关闭 formal gate。
+4. **[完成] Phase 4 component 修复：resolver/executor core**（ADR-0012）：executionContext 门控
+   （缺失/unknown fail closed）、`parent_skill_mismatch` 身份检查、artifact 结构化
+   disposition、authorization claims（effects+permissions 两维声明）；纯函数层实现与测试，
+   不涉及宿主事件。
+5. **Phase 4 host integration：adapter 与真实 tool_call 接线**（在第 4 步 core 契约之上）：
+   接入 guard 观察来源、授权 gate、artifact 入口与宿主 `tool_call` block；验证真实 tool
+   事件（tool_call/tool_result/agent_settled）后才有 host integration / end-to-end complete。
+6. **不进入真实宿主 canary/active 部署**：P3/P4 门控未关闭前，任何 canary/active 上下文与
+   Phase 5（生命周期/失效/回滚）工作不得启动。
 
 ## 5. 当前验证证据与边界
 
-本次审计前的当前分支验证结果：
+2026-08-16 纠偏后的当前分支验证结果：
 
 ```text
 npm.cmd test
-  213 tests；212 pass；0 fail；1 skip
+  376 tests；374 pass；0 fail；2 skip
 
 npm.cmd run typecheck
   PASS
@@ -184,5 +227,5 @@ git diff --check
   PASS
 ```
 
-唯一 skip 来自 Windows 文件 symlink 权限。这些结果证明当前组件没有已知测试失败，但不关闭
-B1～B6，也不证明真实宿主或端到端路径完成。
+2 个 skip 均来自 Windows 文件 symlink 权限。这些结果关闭 Phase 4 纯函数 component gate，
+但不证明真实宿主或端到端路径完成。

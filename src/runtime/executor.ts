@@ -1,19 +1,21 @@
 /**
  * Phase 4 — Execution Orchestrator（project-local 编排；不真实宿主部署）。
  *
- * 流程（ADR-0008 runtime resolution/fallback + implementation plan §9）：
+ * 流程（ADR-0008 runtime resolution/fallback + implementation plan §9 + ADR-0012）：
  *
  *   resolveExecution → 决策：
  *   - abstain（no_skill_selected）：无副作用返回；
- *   - 同一授权 gate 应用于【快慢两条路径】（plan §9：快慢路径使用同一 authorization gate）；
- *     denied ⇒ 安全停止（outcome=denied，无副作用）；
- *   - skill_md（无 procedure / revision 失配 / dependency 失配 / 前置条件失败 /
- *     越界 effect / 状态不足）：走慢路径（加载父 SKILL.md，project-local 模拟）；
- *   - compiled_procedure（eligible / authorization_required 已获准）：
- *       guard 检查（任一 fail|unknown ⇒ 在下一 effectful step 前停止 → fallback）
- *       → artifact 执行（确定性、可回放、只读或幂等）→ postcondition verifier；
- *   - guard/verifier/procedure 失败 ⇒ resolveFallback（安全停止 + load_parent_skill），
- *     并执行慢路径回退；不重复副作用（快路径已停止，绝不重放 artifact）。
+ *   - skill_md：加载父 SKILL.md 本身不是 effect（ADR-0012 §6），不调用授权 gate；
+ *     后续真实工具调用由宿主 gate 逐次拦截（host adapter 层，不在此模块）；
+ *   - compiled_procedure（快路径）：仅此处调用授权 gate（claims=procedure 声明两维）；
+ *       guard 检查（缺声明观察 ⇒ checkGuards 内部合成 unknown ⇒ fail-closed）
+ *       → artifact 执行（恰一次）→ 运行期结果安全校验（disposition/sideEffectCount）
+ *       → disposition=abstained ⇒ 自动回退父 Skill（procedure_abstained，跳过 verifier）
+ *       → disposition=completed 且 sideEffectCount=0 ⇒ postcondition verifier（verifierId
+ *         必须属于 procedure.postconditions）
+ *   - guard/verifier/procedure 失败 ⇒ resolveFallback（安全停止 + load_parent_skill）；
+ *     artifact 结果非法（disposition/sideEffectCount 缺失或非法）或 sideEffectCount≠0
+ *     ⇒ safety_stop：**不得 loadParentSkill**（避免重复/掩盖副作用），不调 verifier。
  *
  * 边界：
  * - 本编排不修改 procedure 状态（suspend/canary fail 是调用方按 Phase 5 提案，不在当前调用
@@ -34,13 +36,21 @@ import {
   type SelectedSkillInput,
 } from "./resolver.ts";
 
-/** 慢路径动作的授权 effect 标记（project-local 模拟；真实宿主部署另行核验）。 */
-export const SLOW_PATH_AUTH_EFFECT = "load-parent-skill";
+/**
+ * 授权声明（ADR-0012 §5）：effects 与 permissions 两维分离，精确复制 procedure 声明
+ * （declaredEffects / requiredPermissions），禁止占位字符串。
+ */
+export interface AuthorizationClaims {
+  /** 与 procedure.declaredEffects 逐项一致（数组可为空当且仅当声明为空）。 */
+  effects: readonly string[];
+  /** 与 procedure.requiredPermissions 逐项一致（数组可为空当且仅当声明为空）。 */
+  permissions: readonly string[];
+}
 
 export interface AuthorizationRequest {
   skillId: string;
-  /** 本次请求的 effect：快路径 = requestedEffects 拼接；慢路径 = SLOW_PATH_AUTH_EFFECT。 */
-  effect: string;
+  procedureId?: string;
+  claims: AuthorizationClaims;
 }
 
 export type AuthorizationResult = "approved" | "denied";
@@ -52,12 +62,18 @@ export interface ArtifactStep {
   outcome: "ok" | "failed" | "unknown";
 }
 
+/**
+ * artifact 结构化结果（ADR-0012 §4）：disposition 必填；sideEffectCount 必填 number。
+ * 缺失/非法/非 0 由 executor 按 safety_stop 处理（不得 loadParentSkill）。
+ */
 export interface ArtifactExecutionResult {
   /** 结构化结果（finding 等，opaque 透传）。 */
   result: unknown;
   steps: ArtifactStep[];
-  /** 可观察副作用计数（测试/审计 seam；MVP 快路径必须为 0）。 */
-  sideEffectCount?: number;
+  /** 结构化处置（ADR-0012 §4）：completed=产生满足后置条件的确定结果；abstained=无副作用放弃。 */
+  disposition: "completed" | "abstained";
+  /** 可观察副作用计数（MVP 快路径必须为 0）。 */
+  sideEffectCount: number;
 }
 
 export interface SlowPathOutput {
@@ -110,6 +126,7 @@ export type ExecutionOutcome =
       decision: ExecutionDecision;
       result: unknown;
       steps: ArtifactStep[];
+      disposition: "completed";
       guardResults: PracticeEvent["guardResults"];
       verifierResults: PracticeEvent["verifierResults"];
     }
@@ -120,6 +137,14 @@ export type ExecutionOutcome =
       fallback: FallbackOutcome;
       /** 回退后已执行的慢路径（成功加载父 SKILL.md）。 */
       slowPath: SlowPathOutput;
+      guardResults: PracticeEvent["guardResults"];
+      verifierResults: PracticeEvent["verifierResults"];
+    }
+  | {
+      outcome: "safety_stop";
+      decision: ExecutionDecision;
+      /** artifact 结果非法（disposition/sideEffectCount 缺失或非法）或意外副作用。 */
+      safetyReason: "artifact_result_invalid" | "unexpected_side_effect";
       guardResults: PracticeEvent["guardResults"];
       verifierResults: PracticeEvent["verifierResults"];
     };
@@ -145,44 +170,32 @@ export async function execute(input: ExecuteInput): Promise<ExecutionOutcome> {
     return { outcome: "abstain", decision };
   }
 
-  // 同一授权 gate：慢路径 = 加载父 Skill；快路径 = 请求的 effects。
-  const effect =
-    decision.mode === "skill_md"
-      ? SLOW_PATH_AUTH_EFFECT
-      : environment.requestedEffects.join(",") || "<procedure-execution>";
-  const authorization = await services.checkAuthorization({
-    skillId: decision.skillId,
-    effect,
-  });
-  if (authorization === "denied") {
-    return { outcome: "denied", decision, authorization: "denied" };
-  }
-
-  // 慢路径（含 resolver 的 skill_md 拒绝分支）：加载父 SKILL.md（project-local 模拟）。
+  // ADR-0012 §6：加载父 SKILL.md 本身不是 effect，不调用授权 gate；
+  // 后续真实工具调用由宿主 gate 逐次拦截（host adapter 层）。
   if (decision.mode === "skill_md") {
     const slowPath = await services.loadParentSkill(decision);
     return { outcome: "slow_path", decision, slowPath };
   }
 
-  // 快路径：guard → artifact → postcondition verifier。
-  // fail-closed：procedure 声明的每个 runtime guard 必须有观察；缺省 ⇒ unknown ⇒ 停止。
-  const declaredRuntimeGuards = new Map(
-    procedure!.runtimeGuards.map((guard) => [guard.predicateId, guard] as const),
-  );
-  const providedObservations = input.guardObservations ?? [];
-  const missingGuardObservation = (
-    predicateId: string,
-  ): GuardObservation => ({ predicateId, phase: "runtime", result: "unknown" });
-  const completeObservations: GuardObservation[] = [
-    ...procedure!.runtimeGuards.map((guard) => {
-      const found = providedObservations.find((o) => o.predicateId === guard.predicateId);
-      return found ?? missingGuardObservation(guard.predicateId);
-    }),
-    ...providedObservations.filter((o) => !declaredRuntimeGuards.has(o.predicateId)),
-  ];
+  // 快路径（compiled_procedure）：仅此处调用授权 gate。
+  // claims 精确复制 procedure 声明（effects/permissions 两维），禁止占位字符串。
+  const claims: AuthorizationClaims = {
+    effects: [...procedure!.declaredEffects],
+    permissions: [...procedure!.requiredPermissions],
+  };
+  const authorization = await services.checkAuthorization({
+    skillId: decision.skillId,
+    procedureId: procedure!.procedureId,
+    claims,
+  });
+  if (authorization === "denied") {
+    return { outcome: "denied", decision, authorization: "denied" };
+  }
+
+  // guard：缺声明观察 ⇒ checkGuards 内部合成 unknown ⇒ fail-closed（不再在此重复合成）。
   const guardOutcome = checkGuards({
     procedure: procedure!,
-    observations: completeObservations,
+    observations: input.guardObservations ?? [],
   });
   if (!guardOutcome.ok) {
     // 在下一 effectful step 前安全停止；guard predicateId 不是 stepId，不猜首失败步骤。
@@ -199,6 +212,7 @@ export async function execute(input: ExecuteInput): Promise<ExecutionOutcome> {
     };
   }
 
+  // artifact 执行（恰一次）。
   let artifactResult: ArtifactExecutionResult;
   try {
     artifactResult = await services.executeArtifact({ procedure: procedure!, input: taskInput });
@@ -216,11 +230,78 @@ export async function execute(input: ExecuteInput): Promise<ExecutionOutcome> {
     };
   }
 
+  // 运行期结果安全校验（ADR-0012 §4 + 本轮冻结）：
+  // - disposition 缺失/非法或 sideEffectCount 缺失/非有限数 ⇒ safety_stop(artifact_result_invalid)
+  // - sideEffectCount !== 0 ⇒ safety_stop(unexpected_side_effect)
+  // - safety_stop 不得 loadParentSkill（避免重复/掩盖已发生副作用），verifier 不调用。
+  const disposition = artifactResult.disposition;
+  const sideEffectCount = artifactResult.sideEffectCount;
+  if (
+    (disposition !== "completed" && disposition !== "abstained") ||
+    typeof sideEffectCount !== "number" ||
+    !Number.isFinite(sideEffectCount)
+  ) {
+    return {
+      outcome: "safety_stop",
+      decision,
+      safetyReason: "artifact_result_invalid",
+      guardResults: guardResultsOf(guardOutcome),
+      verifierResults: [],
+    };
+  }
+  if (sideEffectCount !== 0) {
+    return {
+      outcome: "safety_stop",
+      decision,
+      safetyReason: "unexpected_side_effect",
+      guardResults: guardResultsOf(guardOutcome),
+      verifierResults: [],
+    };
+  }
+
+  // abstained + sideEffectCount=0 ⇒ 无副作用放弃，自动回退父 Skill（跳过 verifier）。
+  if (disposition === "abstained") {
+    const fallback = resolveFallback({ reason: "procedure_abstained", steps: artifactResult.steps });
+    const slowPath = await services.loadParentSkill(decision);
+    return {
+      outcome: "fallback",
+      decision,
+      fallbackReason: "procedure_abstained",
+      fallback,
+      slowPath,
+      guardResults: guardResultsOf(guardOutcome),
+      verifierResults: [],
+    };
+  }
+
+  // completed + 0 ⇒ postcondition verifier；verifierId 必须属于 procedure.postconditions。
   const verification = await services.verifyPostcondition({
     procedure: procedure!,
     result: artifactResult.result,
     taskInput,
   });
+  const verifierDeclared = procedure!.postconditions.some(
+    (p) => p.verifierId === verification.verifierId,
+  );
+  if (!verifierDeclared) {
+    // verifierId 未声明：verifier 结果不可接受 ⇒ verifier_failure（不信任未声明的 verifier）。
+    const candidate = artifactResult.steps.find((step) => step.outcome === "failed")?.stepId;
+    const fallback = resolveFallback({
+      reason: "verifier_failure",
+      steps: artifactResult.steps,
+      candidateFailurePoint: candidate,
+    });
+    const slowPath = await services.loadParentSkill(decision);
+    return {
+      outcome: "fallback",
+      decision,
+      fallbackReason: "verifier_failure",
+      fallback,
+      slowPath,
+      guardResults: guardResultsOf(guardOutcome),
+      verifierResults: [{ verifierId: verification.verifierId, result: "fail" }],
+    };
+  }
   if (!verification.pass) {
     // 快路径已执行（副作用仅限只读/幂等 MVP）；安全停止，不重放、不自我发布。
     const candidate = artifactResult.steps.find((step) => step.outcome === "failed")?.stepId;
@@ -252,6 +333,7 @@ export async function execute(input: ExecuteInput): Promise<ExecutionOutcome> {
     decision,
     result: artifactResult.result,
     steps: artifactResult.steps,
+    disposition: "completed",
     guardResults: guardResultsOf(guardOutcome),
     verifierResults: [
       {

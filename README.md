@@ -15,16 +15,18 @@
 4. [ADR-0006：双记忆架构](docs/adr/0006-dual-memory-skill-architecture.md)：当前总体架构决定。
 5. [ADR-0007：Prompt 外 Discovery](docs/adr/0007-prompt-external-skill-discovery.md)：当前发现机制决定。
 6. [ADR-0008：证据与 Procedure 晋升](docs/adr/0008-practice-evidence-and-procedure-promotion.md)：当前学习、验证、失效和回退契约。
-7. [双记忆数据合同](docs/design/dual-memory-data-contracts.md)：规范字段、不变量、状态机和数据所有权。
-8. [多 Agent 实施计划](docs/plans/2026-08-14-dual-memory-implementation-plan.md)：Phase 0～7、所有权、gate、验证和停止条件。
-9. [Phase 0：Pi 宿主 API 核验](docs/research/2026-08-14-phase0-pi-api-inventory.md)：当前安装版本允许与不可用的宿主接口。
-10. [Phase 0：Project-local 基线与 Pilot](docs/research/2026-08-14-phase0-project-baseline.md)：技术栈、身份算法、数据政策和首个 pilot 决策。
-11. [Phase 1 Gate P1 验收报告](docs/reports/2026-08-14-phase1-gate-report.md)：Registry、静态 discovery、shadow adapter、测试和限制。
-12. [ADR-0009：Practice Store 事件文件与显式删除](docs/adr/0009-practice-store-event-files-and-deletion.md)：以不可变事件文件、claim 与 tombstone 落实原子身份和物理删除。
-13. [Phase 2 Gate P2 验收报告](docs/reports/2026-08-14-phase2-gate-report.md)：Practice Store、policy、删除、回放、测试与风险边界。
-14. [ADR-0005：Benchmark 数据边界](docs/adr/0005-benchmark-data-boundary.md)：仍有效的评测数据完整性规则，适用范围由 ADR-0007/0008 澄清。
-15. [相关工作与新颖性边界](docs/research/2026-08-14-skill-cortex-related-work.md)：哪些机制已有先行工作，哪些仍只是待验证假设。
-16. [对抗性架构审查](docs/reviews/2026-08-14-skill-cortex-audit.md)：安全、归因、版本、回退和评测风险；其中 routing-only 阶段决定已经失效。
+7. [ADR-0011：Validation Evidence 与 Policy Binding](docs/adr/0011-phase3-validation-evidence-and-policy-binding.md)：permissionPolicyHash 省略/必填语义、validation evidence 分类与 redacted envelope 边界。
+8. [ADR-0012：Runtime Execution Context 与 Release Gates](docs/adr/0012-runtime-execution-context-and-release-gates.md)：ExecutionContext 释放门控、身份/授权契约与 artifact disposition。
+9. [双记忆数据合同](docs/design/dual-memory-data-contracts.md)：规范字段、不变量、状态机和数据所有权。
+10. [多 Agent 实施计划](docs/plans/2026-08-14-dual-memory-implementation-plan.md)：Phase 0～7、所有权、gate、验证和停止条件。
+11. [Phase 0：Pi 宿主 API 核验](docs/research/2026-08-14-phase0-pi-api-inventory.md)：当前安装版本允许与不可用的宿主接口。
+12. [Phase 0：Project-local 基线与 Pilot](docs/research/2026-08-14-phase0-project-baseline.md)：技术栈、身份算法、数据政策和首个 pilot 决策。
+13. [Phase 1 Gate P1 验收报告](docs/reports/2026-08-14-phase1-gate-report.md)：Registry、静态 discovery、shadow adapter、测试和限制。
+14. [ADR-0009：Practice Store 事件文件与显式删除](docs/adr/0009-practice-store-event-files-and-deletion.md)：以不可变事件文件、claim 与 tombstone 落实原子身份和物理删除。
+15. [Phase 2 Gate P2 验收报告](docs/reports/2026-08-14-phase2-gate-report.md)：Practice Store、policy、删除、回放、测试与风险边界。
+16. [ADR-0005：Benchmark 数据边界](docs/adr/0005-benchmark-data-boundary.md)：仍有效的评测数据完整性规则，适用范围由 ADR-0007/0008 澄清。
+17. [相关工作与新颖性边界](docs/research/2026-08-14-skill-cortex-related-work.md)：哪些机制已有先行工作，哪些仍只是待验证假设。
+18. [对抗性架构审查](docs/reviews/2026-08-14-skill-cortex-audit.md)：安全、归因、版本、回退和评测风险；其中 routing-only 阶段决定已经失效。
 
 [旧版“从轨迹学习新技能”讨论稿](docs/research/2026-08-14-learning-skills-into-programs.md)仅用于追溯项目纠偏过程，不再定义当前范围。
 
@@ -60,9 +62,9 @@ flowchart TD
 
 ## 当前阶段
 
-当前状态以[最新实施进度审计](docs/reviews/2026-08-14-implementation-progress-audit.md)为准：Phase 0 complete；Phase 1、Phase 2 与 Phase 3 均已通过对应 gate；Phase 3 procedure 达到 `validated`；Phase 4 component complete（host integration 未接线）；Phase 5～7 未开始。component、host integration 与 end-to-end 必须分别验收。
+当前状态以[最新实施进度审计](docs/reviews/2026-08-14-implementation-progress-audit.md)的更新段（§2.1）为准：Phase 0 complete；Phase 1、Phase 2 已通过对应 gate；Phase 3 已按 [ADR-0011](docs/adr/0011-phase3-validation-evidence-and-policy-binding.md) 移除伪 policy hash、隔离 formal/evaluation 来源并重新通过 Gate P3，procedure 为 `validated`；Phase 4 resolver/executor **component implemented**（[ADR-0012](docs/adr/0012-runtime-execution-context-and-release-gates.md) 契约与 project-local shadow replay 已通过），但 host integration 与 end-to-end 均未完成，任何真实 canary/active 路径仍禁止启动；Phase 5～7 未开始。component、host integration 与 end-to-end 必须分别验收。
 
-Phase 3 procedure 已正式晋升至 `validated`（Gate P3 闭环）：2 条真实、可归因、policy-valid 的 pagination PracticeEvent 经 induction seam 绑定 evidenceIds，held-out 质量门全过，真实成本复测 `N_break-even=0.000109 ≤ 10`。`validated ≠ active`：进入 canary/active 前须先过 shadow replay + canary gate（ADR-0008）。Phase 4 Execution Resolver 已实现 component 层（resolveExecution/guard/fallback/executor/canary），host integration 未接线。证据见 [Phase 3 Gate 报告](docs/reports/2026-08-14-phase3-gate-report.md)、[P3 validation report](docs/reports/2026-08-14-phase3-p3-validation-report.json)与 [Phase 4 Resolver Gate 报告](docs/reports/2026-08-14-phase4-resolver-gate.md)。
+Phase 3 最新 formal runner 使用默认 project-local Store 重跑：2 条真实、可归因、policy-valid 的 pagination PracticeEvent 经 induction seam 绑定 evidenceIds，11 门分别标注 `automated` / `static_review` / `owner_attested`，held-out 质量门全过，真实成本 `N_break-even=0.000109 ≤ 10`。fresh clone 可用[脱敏 evidence envelope](docs/reports/2026-08-16-phase3-validation-evidence-envelope.json)复验 committed report 锚点，但该 replay 明确不重证 real provenance、不能触发晋升。`validated ≠ active`：任何 canary/active 上下文前须先过 shadow replay + canary gate（ADR-0008、ADR-0012）。
 
 Phase 0 已冻结：
 
@@ -80,13 +82,15 @@ Phase 2 只建立 append-only、脱敏、隔离且可删除的 Practice Store；
 | [ADR-0006](docs/adr/0006-dual-memory-skill-architecture.md) | **当前有效** | Installed Skill 语义来源、双记忆、Practice Store、ExecutionResolver |
 | [ADR-0007](docs/adr/0007-prompt-external-skill-discovery.md) | **当前有效** | prompt 外自动 Top-K、无 Router LLM、候选卡、补搜与安全隔离 |
 | [ADR-0008](docs/adr/0008-practice-evidence-and-procedure-promotion.md) | **当前有效** | Practice Evidence、双记忆更新、Procedure 晋升、失效和回退 |
+| [ADR-0011](docs/adr/0011-phase3-validation-evidence-and-policy-binding.md) | **当前有效** | permissionPolicyHash 省略/必填语义、validation evidence 分类（automated/static_review/owner_attested）、redacted envelope 边界 |
+| [ADR-0012](docs/adr/0012-runtime-execution-context-and-release-gates.md) | **当前有效** | ExecutionContext 释放门控、身份/版本绑定、artifact disposition、authorization claims 与宿主 gate |
 | [ADR-0005](docs/adr/0005-benchmark-data-boundary.md) | **Accepted**，scope 由 ADR-0007/0008 澄清 | 人工 Gold、真实 shadow observation 与 synthetic stress 的证据隔离 |
 | [ADR-0001](docs/adr/0001-routing-only-mvp.md) | 历史，已被 ADR-0006 替代 | routing-only 方案演化记录 |
 | [ADR-0002](docs/adr/0002-general-core-pi-shadow.md) | 历史，已被 ADR-0006/0007 替代 | 通用核心、adapter 和 shadow 思路的来源记录 |
 | [ADR-0003](docs/adr/0003-shadow-local-retriever.md) | 历史，已被 ADR-0007 替代 | 本地检索方案与替代项分析的来源记录 |
 | [ADR-0004](docs/adr/0004-promotion-principle.md) | 历史，相关 scope 已被 ADR-0007/0008 替代 | 成本与质量硬门槛的来源记录 |
 
-范围说明以[当前研究规范](docs/research/2026-08-14-experience-guided-installed-skill-proceduralization.md)为准；具体架构决策以 ADR-0006～0008 为准。
+范围说明以[当前研究规范](docs/research/2026-08-14-experience-guided-installed-skill-proceduralization.md)为准；具体架构决策以 ADR-0006～0008 及 ADR-0011/0012 为准。
 
 ## 不可突破的约束
 

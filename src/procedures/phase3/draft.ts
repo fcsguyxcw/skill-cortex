@@ -13,12 +13,16 @@ const SKILL_REVISION_PATTERN = /^rev:[0-9a-f]{64}$/u;
 const ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?(?:Z|[+-]\d{2}:\d{2})$/u;
 const VALIDATION_REPORT_ID_PATTERN = /^validation:[A-Za-z0-9][A-Za-z0-9._-]{0,95}$/u;
 
+/** 已知旧占位 `sha256:4f…`（ADR-0011 §2/§4：格式合法但不是真实 policy 指纹，必须拒绝）。 */
+export const LEGACY_PLACEHOLDER_POLICY_HASH = `sha256:${"4f".repeat(32)}`;
+
 export interface ProcedureSourceBindings {
   skillMdHash: string;
   selectedReferenceHash: string;
   detectorSchemaVersion: string;
   detectorVersion: string;
-  permissionPolicyHash: string;
+  /** ADR-0011：effectless/permissionless 时必须省略；声明非空权限时必填真实指纹。 */
+  permissionPolicyHash?: string;
 }
 
 export interface Phase3ProcedureDraft extends Omit<CompiledProcedure, "status"> {
@@ -36,7 +40,8 @@ export interface BuildPhase3ProcedureInput {
   parentSkillRevision: string;
   skillMdHash: string;
   selectedReferenceHash: string;
-  permissionPolicyHash: string;
+  /** ADR-0011：effectless/permissionless procedure 必须省略；提供任何值（含旧 4f 占位）一律拒绝。 */
+  permissionPolicyHash?: string;
   createdAt: string;
   evidenceIds?: string[];
   detectorSchemaVersion?: string;
@@ -104,6 +109,13 @@ export function buildPhase3ProcedureDraft(
     "parent_skill_revision_must_be_rev_sha256",
   );
   const createdAt = requireIsoTimestamp(input.createdAt);
+  // ADR-0011 §1/§4：本 builder 恒构造 effectless/permissionless procedure
+  // （declaredEffects=[] 且 requiredPermissions=[]）。此类 procedure 必须显式省略
+  // permissionPolicyHash；提供任何值（尤其旧 `sha256:4f…` 占位）一律构建拒绝，
+  // 确保旧占位 artifact 不能继续 valid。
+  if (input.permissionPolicyHash !== undefined) {
+    throw new TypeError("permission_policy_hash_forbidden_for_effectless");
+  }
   const bindings: ProcedureSourceBindings = {
     skillMdHash: normalizeHash(input.skillMdHash, "skill_md_hash"),
     selectedReferenceHash: normalizeHash(
@@ -117,10 +129,6 @@ export function buildPhase3ProcedureDraft(
     detectorVersion: requireText(
       input.detectorVersion ?? PAGINATION_DETECTOR_VERSION,
       "detector_version",
-    ),
-    permissionPolicyHash: normalizeHash(
-      input.permissionPolicyHash,
-      "permission_policy_hash",
     ),
   };
   const artifactSpec = {
@@ -143,7 +151,7 @@ export function buildPhase3ProcedureDraft(
     dependencyFingerprint: {
       sourceHash: bindings.skillMdHash,
       toolSchemaHash: toolSchemaHash(bindings),
-      permissionPolicyHash: bindings.permissionPolicyHash,
+      // ADR-0011：effectless/permissionless ⇒ 显式省略 permissionPolicyHash（不构成约束）。
     },
     inputSchema: {
       type: "object",
@@ -215,7 +223,8 @@ export interface CurrentProcedureBindings {
   selectedReferenceHash: string;
   detectorSchemaVersion: string;
   detectorVersion: string;
-  permissionPolicyHash: string;
+  /** ADR-0011：effectless 时省略；procedure 声明非空权限时必填真实指纹。 */
+  permissionPolicyHash?: string;
 }
 
 export type BindingCheck =
@@ -233,7 +242,8 @@ export function checkPhase3ProcedureBindings(
 ): BindingCheck {
   const sourceMismatches: string[] = [];
   const dependencyMismatches: string[] = [];
-  const safeHash = (value: string): string | undefined => {
+  const safeHash = (value: string | undefined): string | undefined => {
+    if (value === undefined) return undefined;
     const match = HASH_PATTERN.exec(value);
     return match === null ? undefined : `sha256:${match[1]}`;
   };
@@ -258,11 +268,33 @@ export function checkPhase3ProcedureBindings(
     sourceMismatches.push("selectedReferenceHash");
   }
 
-  const policyHash = safeHash(current.permissionPolicyHash);
-  if (
-    policyHash === undefined ||
-    procedure.sourceBindings.permissionPolicyHash !== policyHash ||
-    procedure.dependencyFingerprint.permissionPolicyHash !== policyHash
+  // permission 维度（ADR-0011 §1/§2/§4）：
+  // - procedure 声明了 effects/permissions ⇒ sourceBindings、dependencyFingerprint 与
+  //   runtime current 三方必须都存在合法 hash 且相等（缺一/占位/格式坏 ⇒ fail-closed）；
+  // - effectless/permissionless ⇒ procedure 侧必须显式省略（携带任何 hash，含旧 4f 占位，
+  //   ⇒ binding fail，旧占位 artifact 不能继续 valid）；runtime current 未绑定字段
+  //   不构成约束（resolver 语义）。
+  const hasDeclaredPermissions =
+    procedure.declaredEffects.length > 0 || procedure.requiredPermissions.length > 0;
+  if (hasDeclaredPermissions) {
+    const boundPolicy = safeHash(procedure.sourceBindings.permissionPolicyHash);
+    const fingerprintPolicy = safeHash(procedure.dependencyFingerprint.permissionPolicyHash);
+    const currentPolicy = safeHash(current.permissionPolicyHash);
+    if (
+      boundPolicy === undefined ||
+      fingerprintPolicy === undefined ||
+      currentPolicy === undefined ||
+      boundPolicy !== fingerprintPolicy ||
+      boundPolicy !== currentPolicy ||
+      // ADR-0011 §2/§4：三方一致且格式合法仍不足——已知旧占位
+      // `sha256:4f…` 不是真实 policy 指纹，必须拒绝（safeHash 规范化后直接可比）。
+      boundPolicy === LEGACY_PLACEHOLDER_POLICY_HASH
+    ) {
+      dependencyMismatches.push("permissionPolicyHash");
+    }
+  } else if (
+    procedure.sourceBindings.permissionPolicyHash !== undefined ||
+    procedure.dependencyFingerprint.permissionPolicyHash !== undefined
   ) {
     dependencyMismatches.push("permissionPolicyHash");
   }
@@ -277,8 +309,9 @@ export function checkPhase3ProcedureBindings(
     selectedReferenceHash: referenceHash ?? "sha256:" + "0".repeat(64),
     detectorSchemaVersion: current.detectorSchemaVersion,
     detectorVersion: current.detectorVersion,
-    permissionPolicyHash: policyHash ?? "sha256:" + "0".repeat(64),
   });
+  // toolSchemaHash 不依赖 permissionPolicyHash（ADR-0011 §5）：任何权限绑定变化
+  // 都由上面的 permission 维度单独判定。
   if (procedure.dependencyFingerprint.toolSchemaHash !== expectedToolSchemaHash) {
     dependencyMismatches.push("toolSchemaHash");
   }

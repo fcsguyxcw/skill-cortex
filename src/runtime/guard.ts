@@ -40,13 +40,29 @@ export function toGuardResultValue(result: boolean | "unknown"): GuardResultValu
   return "unknown";
 }
 
-/** 检查全部 guard 观察：任一 fail/unknown ⇒ 停止快路径。 */
+/** 检查全部 guard 观察：任一 fail/unknown ⇒ 停止快路径。
+ *
+ * 本轮冻结（ADR-0012 + leader）：fail-closed 下沉到本函数本身——procedure 声明的每个
+ * runtime guard 必须有同 phase（runtime）观察；缺失或 phase 错 ⇒ 合成 unknown 追加
+ * （绝不因“没观察到”而乐观通过）。传入观察保持原顺序；声明 guard 的缺省合成追加在末尾。 */
 export function checkGuards(input: GuardInput): GuardOutcome {
   const guardResults: PracticeEvent["guardResults"] = [];
   const checkedPreconditions: ExecutionDecision["checkedPreconditions"] = [];
   let firstFailedGuard: { predicateId: string; phase: GuardPhase } | undefined;
 
+  const effective: GuardObservation[] = [...input.observations];
+  const coveredRuntime = new Set<string>();
   for (const observation of input.observations) {
+    if (observation.phase === "runtime") coveredRuntime.add(observation.predicateId);
+  }
+  // 声明 runtime guard 缺观察/phase 错 ⇒ 合成 unknown（fail-closed）。
+  for (const declared of input.procedure.runtimeGuards) {
+    if (!coveredRuntime.has(declared.predicateId)) {
+      effective.push({ predicateId: declared.predicateId, phase: "runtime", result: "unknown" });
+    }
+  }
+
+  for (const observation of effective) {
     const value = toGuardResultValue(observation.result);
     guardResults.push({
       predicateId: observation.predicateId,

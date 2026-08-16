@@ -26,7 +26,6 @@ const PARENT_SKILL_REVISION = `rev:${"b".repeat(64)}`;
 const SOURCE_HASH = `sha256:${"c".repeat(64)}`;
 const REFERENCE_HASH = `sha256:${"d".repeat(64)}`;
 const POLICY_HASH = `sha256:${"e".repeat(64)}`;
-
 /** 构造 policy-valid 且满足 induction 契约的 PracticeEvent。 */
 function makeEvent(id: number, overrides: Partial<PracticeEvent> = {}): PracticeEvent {
   return {
@@ -60,7 +59,6 @@ function makeEvent(id: number, overrides: Partial<PracticeEvent> = {}): Practice
 
 const DEFAULT_OPTIONS = {
   selectedReferenceHash: REFERENCE_HASH,
-  permissionPolicyHash: POLICY_HASH,
 };
 
 describe("inducePhase3ProcedureDraft（B4 induction seam）", () => {
@@ -88,6 +86,9 @@ describe("inducePhase3ProcedureDraft（B4 induction seam）", () => {
     assert.deepEqual(procedure.coveredSteps.map((s) => s.stepId), [INDUCED_OPERATION_CLASS]);
     assert.deepEqual(procedure.evidenceIds, ["obs-1", "obs-2"]);
     assert.equal(procedure.validationReportId, "pending:phase3-pagination-validation");
+    // ADR-0011：effectless pilot 的 permissionPolicyHash 必须显式省略。
+    assert.equal(procedure.sourceBindings.permissionPolicyHash, undefined);
+    assert.equal(procedure.dependencyFingerprint.permissionPolicyHash, undefined);
     // 冻结步骤 1 的防呆：coveredStep 引用必须指向当次对齐的 operation。
     assert.equal(procedure.coveredSteps[0]!.stepId, "detect-offset-pagination");
   });
@@ -247,6 +248,15 @@ describe("inducePhase3ProcedureDraft（B4 induction seam）", () => {
     assert.equal(badPolicy.ok, false);
     if (badPolicy.ok) return;
     assert.equal(badPolicy.reason, "permission_policy_hash_invalid");
+
+    // ADR-0011：effectless pilot 提供合法 hash 也必须拒绝（不得携带）。
+    const forbiddenPolicy = inducePhase3ProcedureDraft(
+      [makeEvent(1), makeEvent(2)],
+      { ...DEFAULT_OPTIONS, permissionPolicyHash: POLICY_HASH },
+    );
+    assert.equal(forbiddenPolicy.ok, false);
+    if (forbiddenPolicy.ok) return;
+    assert.equal(forbiddenPolicy.reason, "permission_policy_hash_forbidden_for_effectless");
 
     const badCreated = inducePhase3ProcedureDraft(
       [makeEvent(1), makeEvent(2)],

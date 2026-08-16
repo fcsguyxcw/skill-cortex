@@ -8,7 +8,7 @@
 
 import type { PaginationCase, PaginationClass } from "./cases.ts";
 
-/** finding 的受控形状：class 必填；evidence.matchText 可选（结构不变量）。 */
+/** finding 的受控形状：class 必填；evidence.matchText 为 unknown（verify 运行时强制 string，缺/非字符串 ⇒ fail）。 */
 export interface Finding {
   class?: unknown;
   evidence?: { matchText?: unknown };
@@ -45,8 +45,8 @@ export function isFindingClass(value: unknown): value is PaginationClass {
  * 1. finding 非对象或缺失/非法 class → fail(malformed_finding)；
  * 2. class 与 case.expected 精确匹配（含 expected=abstain 且输出 abstain 的正确 abstain）
  *    → 走证据校验(3) 后 pass；
- * 3. 证据校验（仅当 finding.evidence?.matchText 为字符串时强制，否则直接 pass）：
- *    - case.sql 必须包含 matchText，否则 fail(evidence_not_in_input)；
+ * 3. 证据校验（强制）：finding.evidence 必须存在且 matchText 为 string，否则 fail(malformed_finding)；
+ *    - 非空 case.sql 的 matchText 不得为空；case.sql 必须包含 matchText，否则 fail；
  *    - 对 uses_offset，matchText 必须含 "OFFSET"（大小写不敏感），否则 fail(evidence_keyword_mismatch)；
  * 4. 其余（含 expected≠abstain 但输出 abstain 的 unexpected abstain）→ fail(label_mismatch)。
  * 无第三态：abstain 要么正确（pass）要么 unexpected（fail），全 abstain 无法逃过 accuracy。
@@ -76,7 +76,11 @@ export function verify(case_: PaginationCase, finding: unknown): VerifyResult {
 function checkEvidence(case_: PaginationCase, finding: Finding): VerifyCode | "ok" {
   const matchText = finding.evidence?.matchText;
   if (typeof matchText !== "string") {
-    return "ok"; // 未提供证据 → 按合同直接 pass
+    return "malformed_finding"; // 缺 evidence 对象或 matchText 非字符串 → fail（不扩展枚举）
+  }
+  // 空输入的 abstain 可如实返回空证据；非空输入不得用空串绕过 evidence 约束。
+  if (case_.sql.length > 0 && matchText.length === 0) {
+    return "malformed_finding";
   }
   if (!case_.sql.includes(matchText)) {
     return "evidence_not_in_input";

@@ -20,6 +20,7 @@ export type FallbackReason =
   | "guard_failure"
   | "verifier_failure"
   | "procedure_error"
+  | "procedure_abstained"
   | "unknown";
 
 export interface FallbackInput {

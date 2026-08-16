@@ -17,9 +17,10 @@
  *   同输入任意顺序 → 同输出；可覆盖）。
  *
  * 约束：不写用户环境、不启动 Phase 4、不修改 detector.ts/draft.ts 现有契约（只复用）。
- * 环境/依赖绑定哈希（selectedReferenceHash、permissionPolicyHash）不在 PracticeEvent 契约内，
- * 由调用方按冻结环境提供；对齐后的 fragment.parentSkillId 可供 promotion pipeline 与
- * 冻结的 supabase-postgres-best-practices 绑定做最终核对。
+ * 环境/依赖绑定哈希（selectedReferenceHash）不在 PracticeEvent 契约内，由调用方按冻结环境
+ * 提供；permissionPolicyHash 按 ADR-0011 当前 effectless pilot 显式省略（提供即拒绝）；
+ * 对齐后的 fragment.parentSkillId 可供 promotion pipeline 与冻结的
+ * supabase-postgres-best-practices 绑定做最终核对。
  */
 import type { PracticeEvent } from "../../core/contracts/index.ts";
 import { validatePracticeEvent } from "../../practice/policy/index.ts";
@@ -44,8 +45,12 @@ const ISO_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?(?:Z|[
 export interface InductionOptions {
   /** 环境/依赖事实（PracticeEvent 不携带）：draft sourceBindings.selectedReferenceHash。 */
   selectedReferenceHash: string;
-  /** 环境/依赖事实：draft sourceBindings.permissionPolicyHash。 */
-  permissionPolicyHash: string;
+  /**
+   * 环境/依赖事实：draft sourceBindings.permissionPolicyHash。
+   * ADR-0011：当前 pilot effectless/permissionless ⇒ 必须省略；提供合法 hash 也会被拒绝
+   * （effectless 不得携带）。未来 procedure 声明非空权限时由调用方提供真实指纹。
+   */
+  permissionPolicyHash?: string;
   /** 可选覆盖 draft.createdAt；缺省 = max(events.occurredAt)（确定性派生）。 */
   createdAt?: string;
   detectorSchemaVersion?: string;
@@ -161,8 +166,13 @@ export function inducePhase3ProcedureDraft(
   if (!HASH_RE.test(options.selectedReferenceHash)) {
     return fail("selected_reference_hash_invalid", passed);
   }
-  if (!HASH_RE.test(options.permissionPolicyHash)) {
-    return fail("permission_policy_hash_invalid", passed);
+  // ADR-0011：当前 pilot effectless ⇒ permissionPolicyHash 必须省略。非法 hash 报 invalid；
+  // 合法 hash 也报 forbidden（effectless 不得携带，含旧 4f 占位）。
+  if (options.permissionPolicyHash !== undefined) {
+    if (!HASH_RE.test(options.permissionPolicyHash)) {
+      return fail("permission_policy_hash_invalid", passed);
+    }
+    return fail("permission_policy_hash_forbidden_for_effectless", passed);
   }
   if (
     options.createdAt !== undefined &&
@@ -188,7 +198,6 @@ export function inducePhase3ProcedureDraft(
     parentSkillRevision: fragment.parentSkillRevision,
     skillMdHash: fragment.sourceHash,
     selectedReferenceHash: options.selectedReferenceHash,
-    permissionPolicyHash: options.permissionPolicyHash,
     createdAt: fragment.createdAt,
     evidenceIds: [...fragment.evidenceIds],
     detectorSchemaVersion: options.detectorSchemaVersion,

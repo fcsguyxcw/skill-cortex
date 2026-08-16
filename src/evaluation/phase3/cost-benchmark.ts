@@ -148,11 +148,10 @@ function frozenInductionEvents(): readonly PracticeEvent[] {
   return [mk(1), mk(2)];
 }
 
-/** 冻结 induction 选项（与 B4 seam 合同一致；哈希固定）。 */
+/** 冻结 induction 选项（与 B4 seam 合同一致；permissionPolicyHash 按 ADR-0011 省略）。 */
 function frozenInductionOptions() {
   return {
     selectedReferenceHash: `sha256:${"d".repeat(64)}`,
-    permissionPolicyHash: `sha256:${"e".repeat(64)}`,
   };
 }
 

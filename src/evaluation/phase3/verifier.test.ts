@@ -11,15 +11,26 @@ function caseById(id: string): PaginationCase {
 }
 
 describe("Phase 3 verifier（独立二值判定，不依赖 detector）", () => {
-  it("四类正确 finding → pass", () => {
-    assert.deepEqual(verify(caseById("T01"), { class: "uses_offset" }), { pass: true, code: "ok" });
-    assert.deepEqual(verify(caseById("T02"), { class: "uses_keyset" }), { pass: true, code: "ok" });
-    assert.deepEqual(verify(caseById("T03"), { class: "no_pagination" }), { pass: true, code: "ok" });
-    assert.deepEqual(verify(caseById("H12"), { class: "abstain" }), { pass: true, code: "ok" });
+  it("四类正确 finding（带合法 evidence）→ pass", () => {
+    assert.deepEqual(verify(caseById("T01"), { class: "uses_offset", evidence: { matchText: "OFFSET 40" } }), { pass: true, code: "ok" });
+    assert.deepEqual(verify(caseById("T02"), { class: "uses_keyset", evidence: { matchText: "id > $1" } }), { pass: true, code: "ok" });
+    assert.deepEqual(verify(caseById("T03"), { class: "no_pagination", evidence: { matchText: "author_id = $1" } }), { pass: true, code: "ok" });
+    assert.deepEqual(verify(caseById("H12"), { class: "abstain", evidence: { matchText: "OFFSET" } }), { pass: true, code: "ok" });
   });
 
-  it("H14 空串 SQL 的正确 abstain → pass", () => {
-    assert.deepEqual(verify(caseById("H14"), { class: "abstain" }), { pass: true, code: "ok" });
+  it("H14 空串 SQL 的正确 abstain（空串 evidence 仍合法）→ pass", () => {
+    assert.deepEqual(verify(caseById("H14"), { class: "abstain", evidence: { matchText: "" } }), { pass: true, code: "ok" });
+  });
+
+  it("非空 SQL 不得用空串 evidence 绕过来源校验", () => {
+    assert.deepEqual(
+      verify(caseById("T03"), { class: "no_pagination", evidence: { matchText: "" } }),
+      { pass: false, code: "malformed_finding" },
+    );
+    assert.deepEqual(
+      verify(caseById("H12"), { class: "abstain", evidence: { matchText: "" } }),
+      { pass: false, code: "malformed_finding" },
+    );
   });
 
   it("label 不匹配 → label_mismatch（含 unexpected abstain）", () => {
@@ -62,18 +73,21 @@ describe("Phase 3 verifier（独立二值判定，不依赖 detector）", () => 
     );
   });
 
-  it("证据缺失 → 直接 pass（合同步骤 3）", () => {
-    // 无 evidence 字段
-    assert.deepEqual(verify(caseById("H01"), { class: "uses_offset" }), { pass: true, code: "ok" });
-    // evidence 存在但 matchText 缺失
-    assert.deepEqual(
-      verify(caseById("H01"), { class: "uses_offset", evidence: {} }),
-      { pass: true, code: "ok" },
-    );
-    assert.deepEqual(
-      verify(caseById("H01"), { class: "uses_offset", evidence: { matchText: undefined } }),
-      { pass: true, code: "ok" },
-    );
+  it("证据缺失/非字符串 → malformed_finding（fail-closed，不再直接 pass）", () => {
+    const badFindings: unknown[] = [
+      { class: "uses_offset" }, // 无 evidence 字段
+      { class: "uses_offset", evidence: {} }, // evidence 存在但 matchText 缺失
+      { class: "uses_offset", evidence: { matchText: undefined } },
+      { class: "uses_offset", evidence: { matchText: null } },
+      { class: "uses_offset", evidence: { matchText: 42 } },
+      { class: "uses_offset", evidence: { matchText: ["OFFSET 40"] } },
+      { class: "uses_offset", evidence: { matchText: {} } },
+    ];
+    for (const bad of badFindings) {
+      const r = verify(caseById("H01"), bad);
+      assert.equal(r.pass, false, `缺/非字符串 evidence 必须 fail: ${JSON.stringify(bad)}`);
+      assert.equal(r.code, "malformed_finding");
+    }
   });
 
   it("非 uses_offset 的 matchText 命中（如小写列名 offset）→ 仅校验 includes，不查 keyword", () => {

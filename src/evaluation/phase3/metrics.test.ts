@@ -9,6 +9,7 @@ import { PracticeStore } from "../../practice/store/index.ts";
 import { HELDOUT_CASES } from "./cases.ts";
 import type { PaginationCase, PaginationClass } from "./cases.ts";
 import {
+  GATE_EVIDENCE_CLASSES,
   THRESHOLDS,
   computeCost,
   evaluate,
@@ -32,9 +33,9 @@ function mapOf(entries: Array<[string, unknown]>): Map<string, unknown> {
   return new Map(entries);
 }
 
-/** held-out 全部正确 finding（无 evidence → 合同直接 pass）。 */
+/** held-out 全部正确 finding（evidence.matchText 取 case.sql 全文，保证通过 includes/OFFSET 校验）。 */
 function perfectHeldoutFindings(): Map<string, unknown> {
-  return mapOf(HELDOUT_CASES.map((c) => [c.id, { class: c.expected }]));
+  return mapOf(HELDOUT_CASES.map((c) => [c.id, { class: c.expected, evidence: { matchText: c.sql } }]));
 }
 
 /** 自洽的合法真实成本证据（nBreakEven = 300/35 ≈ 8.57 < 10）。 */
@@ -189,7 +190,7 @@ describe("Phase 3 指标汇总", () => {
   });
 
   it("全 abstain 防逃逸：accuracy=3/15≈0.20、unexpected-abstain=12/12=1.0 → draft", () => {
-    const findings = mapOf(HELDOUT_CASES.map((c) => [c.id, { class: "abstain" }]));
+    const findings = mapOf(HELDOUT_CASES.map((c) => [c.id, { class: "abstain", evidence: { matchText: c.sql } }]));
     const { metrics } = evaluate(HELDOUT_CASES, findings);
     assert.equal(metrics.accuracy, 3 / 15);
     assert.equal(metrics.unexpectedAbstainRate, 1);
@@ -249,8 +250,8 @@ describe("Phase 3 指标汇总", () => {
 describe("Phase 3 阈值边界（含等号）", () => {
   it("accuracy：=0.95 pass、<0.95 fail", () => {
     const cases20 = Array.from({ length: 20 }, (_, i) => mk(`A${i}`, "no_pagination"));
-    const pass19 = mapOf(cases20.map((c, i) => [c.id, { class: i === 19 ? "uses_offset" : "no_pagination" }]));
-    const pass18 = mapOf(cases20.map((c, i) => [c.id, { class: i >= 18 ? "uses_offset" : "no_pagination" }]));
+    const pass19 = mapOf(cases20.map((c, i) => [c.id, { class: i === 19 ? "uses_offset" : "no_pagination", evidence: { matchText: c.sql } }]));
+    const pass18 = mapOf(cases20.map((c, i) => [c.id, { class: i >= 18 ? "uses_offset" : "no_pagination", evidence: { matchText: c.sql } }]));
     const m19 = evaluate(cases20, pass19).metrics;
     const m18 = evaluate(cases20, pass18).metrics;
     assert.equal(m19.accuracy, 19 / 20); // 0.95 恰好达标
@@ -261,8 +262,8 @@ describe("Phase 3 阈值边界（含等号）", () => {
 
   it("offset FPR：=0.05 pass、>0.05 fail", () => {
     const cases20 = Array.from({ length: 20 }, (_, i) => mk(`F${i}`, "no_pagination"));
-    const fpr1 = mapOf(cases20.map((c, i) => [c.id, { class: i === 0 ? "uses_offset" : "no_pagination" }]));
-    const fpr2 = mapOf(cases20.map((c, i) => [c.id, { class: i < 2 ? "uses_offset" : "no_pagination" }]));
+    const fpr1 = mapOf(cases20.map((c, i) => [c.id, { class: i === 0 ? "uses_offset" : "no_pagination", evidence: { matchText: c.sql } }]));
+    const fpr2 = mapOf(cases20.map((c, i) => [c.id, { class: i < 2 ? "uses_offset" : "no_pagination", evidence: { matchText: c.sql } }]));
     const m1 = evaluate(cases20, fpr1).metrics;
     const m2 = evaluate(cases20, fpr2).metrics;
     assert.equal(m1.offsetFpr, 0.05);
@@ -275,17 +276,17 @@ describe("Phase 3 阈值边界（含等号）", () => {
     const cases20 = Array.from({ length: 20 }, (_, i) =>
       mk(`R${i}`, i < 4 ? "abstain" : "no_pagination"),
     );
-    const m4 = evaluate(cases20, mapOf(cases20.map((c) => [c.id, { class: c.expected }]))).metrics;
+    const m4 = evaluate(cases20, mapOf(cases20.map((c) => [c.id, { class: c.expected, evidence: { matchText: c.sql } }]))).metrics;
     assert.equal(m4.abstainRate, 0.2); // 4/20 正确 abstain
     const cases20b = Array.from({ length: 20 }, (_, i) => mk(`U${i}`, "no_pagination"));
     const u2 = evaluate(
       cases20b,
-      mapOf(cases20b.map((c, i) => [c.id, { class: i < 2 ? "abstain" : "no_pagination" }])),
+      mapOf(cases20b.map((c, i) => [c.id, { class: i < 2 ? "abstain" : "no_pagination", evidence: { matchText: c.sql } }])),
     ).metrics;
     assert.equal(u2.unexpectedAbstainRate, 0.1); // 2/20
     const u3 = evaluate(
       cases20b,
-      mapOf(cases20b.map((c, i) => [c.id, { class: i < 3 ? "abstain" : "no_pagination" }])),
+      mapOf(cases20b.map((c, i) => [c.id, { class: i < 3 ? "abstain" : "no_pagination", evidence: { matchText: c.sql } }])),
     ).metrics;
     assert.equal(u3.unexpectedAbstainRate, 0.15); // 3/20
     assert.equal(m4.abstainRate <= THRESHOLDS.abstainRate, true);
@@ -330,6 +331,37 @@ describe("Phase 3 promotion 硬门", () => {
     assert.equal(decision, "validated");
     assert.ok(gates.every((g) => g.status !== "fail"));
     assert.equal(byteCostReference, byteCost); // 独立参考输出
+  });
+
+  it("11 门证据分类映射冻结（ADR-0011 §5），且不存在空数组", () => {
+    const { gates } = judgePromotion(promotionOk(ideal));
+    assert.equal(gates.length, 11);
+    const gateIds = gates.map((g) => g.gateId);
+    // 输出门与冻结映射表一一对应（无遗漏、无多余）。
+    assert.deepEqual([...gateIds].sort(), Object.keys(GATE_EVIDENCE_CLASSES).sort());
+    for (const gateResult of gates) {
+      assert.ok(
+        gateResult.evidenceClasses.length > 0,
+        `${gateResult.gateId} 不得有空数组`,
+      );
+      assert.deepEqual(
+        gateResult.evidenceClasses,
+        GATE_EVIDENCE_CLASSES[gateResult.gateId],
+        `${gateResult.gateId} 证据分类与冻结映射一致`,
+      );
+    }
+    // 冻结映射逐门锁定（ADR-0011 §5 分类语义）。
+    assert.deepEqual(GATE_EVIDENCE_CLASSES.offset_recall, ["automated"]);
+    assert.deepEqual(GATE_EVIDENCE_CLASSES.practice_evidence, ["automated", "owner_attested"]);
+    assert.deepEqual(GATE_EVIDENCE_CLASSES.artifact_safety, ["static_review"]);
+    assert.deepEqual(GATE_EVIDENCE_CLASSES.source_binding, ["automated"]);
+    assert.deepEqual(GATE_EVIDENCE_CLASSES.evidence_independence, ["owner_attested"]);
+    assert.deepEqual(GATE_EVIDENCE_CLASSES.verifier_independence, ["static_review"]);
+    assert.deepEqual(GATE_EVIDENCE_CLASSES.correctness, ["automated"]);
+    assert.deepEqual(GATE_EVIDENCE_CLASSES.fallback, ["automated"]);
+    assert.deepEqual(GATE_EVIDENCE_CLASSES.cost, ["automated"]);
+    assert.deepEqual(GATE_EVIDENCE_CLASSES.real_cost_evidence, ["automated", "owner_attested"]);
+    assert.deepEqual(GATE_EVIDENCE_CLASSES.scope_conformance, ["static_review"]);
   });
 
   it("任一声明门失败 → draft", () => {

@@ -16,8 +16,10 @@
 3. `docs/adr/0006-dual-memory-skill-architecture.md`
 4. `docs/adr/0007-prompt-external-skill-discovery.md`
 5. `docs/adr/0008-practice-evidence-and-procedure-promotion.md`
-6. `docs/design/dual-memory-data-contracts.md`
-7. `docs/plans/2026-08-14-dual-memory-implementation-plan.md`
+6. `docs/adr/0011-phase3-validation-evidence-and-policy-binding.md`
+7. `docs/adr/0012-runtime-execution-context-and-release-gates.md`
+8. `docs/design/dual-memory-data-contracts.md`
+9. `docs/plans/2026-08-14-dual-memory-implementation-plan.md`
 
 ADR-0001 至 ADR-0004 和带 historical/superseded 标记的研究、审查文档只用于理解决策历史，不得作为当前实现依据。ADR-0005 只约束其 applicability note 声明的评估证据。
 

@@ -1,5 +1,10 @@
 export type SkillScope = "project" | "user" | "temporary";
 
+/** 释放门控上下文（ADR-0012 §1）：合法请求上下文三态。 */
+export type ExecutionContext = "shadow_replay" | "canary" | "active";
+/** 决策可观察上下文：合法三态 + unknown（resolver 对缺失/非法输入规范化，绝不伪造合法值）。 */
+export type DecisionExecutionContext = ExecutionContext | "unknown";
+
 export interface DependencyFingerprint {
   sourceHash: string;
   toolSchemaHash?: string;
@@ -148,6 +153,8 @@ export interface ExecutionDecision {
   decisionId: string;
   skillId: string;
   skillRevision: string;
+  /** 本次执行所处的释放门控上下文（ADR-0012）；unknown = 缺失/非法输入规范化的 fail-closed 值。 */
+  executionContext: DecisionExecutionContext;
   mode: "compiled_procedure" | "skill_md" | "abstain";
   procedureId?: string;
   checkedPreconditions: Array<{ predicateId: string; result: boolean | "unknown" }>;
@@ -155,6 +162,7 @@ export interface ExecutionDecision {
   reason:
     | "eligible_procedure"
     | "no_procedure"
+    | "parent_skill_mismatch"
     | "revision_mismatch"
     | "dependency_mismatch"
     | "precondition_failed"

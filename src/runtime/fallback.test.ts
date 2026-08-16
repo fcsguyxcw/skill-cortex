@@ -94,11 +94,40 @@ describe("checkGuards", () => {
     assert.deepEqual(outcome.firstFailedGuard, { predicateId: "post-1", phase: "postcondition" });
   });
 
-  it("空观察 ⇒ ok=true（无 guard 需检查）", () => {
-    const outcome = checkGuards({ procedure: makeProcedure(), observations: [] });
+  it("空观察 ⇒ ok=true（仅当无声明 runtime guard 需检查）", () => {
+    const procedure = { ...makeProcedure(), runtimeGuards: [] };
+    const outcome = checkGuards({ procedure, observations: [] });
     assert.equal(outcome.ok, true);
     assert.deepEqual(outcome.checkedPreconditions, []);
     assert.deepEqual(outcome.guardResults, []);
+  });
+
+  it("声明 runtime guard 缺观察 ⇒ 合成 unknown 追加 ⇒ ok=false（修正空观察错误 PASS）", () => {
+    const procedure = makeProcedure(); // 声明 rg-1
+    const outcome = checkGuards({ procedure, observations: [] });
+    assert.equal(outcome.ok, false);
+    assert.deepEqual(outcome.guardResults, [
+      { predicateId: "rg-1", phase: "runtime", result: "unknown" },
+    ]);
+    assert.deepEqual(outcome.firstFailedGuard, { predicateId: "rg-1", phase: "runtime" });
+  });
+
+  it("同 predicate 但 phase 非 runtime ⇒ 视为 runtime 缺失并追加 unknown；传入观察保持原顺序", () => {
+    const procedure = makeProcedure(); // 声明 rg-1（runtime）
+    const outcome = checkGuards({
+      procedure,
+      observations: [
+        { predicateId: "pre-1", phase: "precondition", result: true },
+        { predicateId: "rg-1", phase: "precondition", result: true }, // phase 错：不算 runtime 观察
+      ],
+    });
+    assert.equal(outcome.ok, false);
+    assert.deepEqual(outcome.guardResults, [
+      { predicateId: "pre-1", phase: "precondition", result: "pass" },
+      { predicateId: "rg-1", phase: "precondition", result: "pass" },
+      { predicateId: "rg-1", phase: "runtime", result: "unknown" }, // 追加在末尾
+    ]);
+    assert.deepEqual(outcome.firstFailedGuard, { predicateId: "rg-1", phase: "runtime" });
   });
 });
 
@@ -106,7 +135,7 @@ describe("resolveFallback", () => {
   it("no_skill_selected ⇒ fallback=abstain；其余失败类别 ⇒ load_parent_skill", () => {
     const abstain = resolveFallback({ reason: "no_skill_selected", steps: [] });
     assert.equal(abstain.fallbackMode, "abstain");
-    for (const reason of ["no_procedure", "revision_mismatch", "dependency_mismatch", "precondition_failed", "guard_failure", "verifier_failure", "procedure_error", "unknown"] as const) {
+    for (const reason of ["no_procedure", "revision_mismatch", "dependency_mismatch", "precondition_failed", "guard_failure", "verifier_failure", "procedure_error", "procedure_abstained", "unknown"] as const) {
       const outcome = resolveFallback({ reason, steps: [] });
       assert.equal(outcome.fallbackMode, "load_parent_skill", `reason=${reason}`);
     }
