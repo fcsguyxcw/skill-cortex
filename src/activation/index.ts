@@ -5,3 +5,4 @@ export * from "./evaluate.ts";
 export * from "./state.ts";
 export * from "./promotion.ts";
 export * from "./cascade.ts";
+export * from "./store.ts";
