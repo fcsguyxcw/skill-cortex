@@ -26,7 +26,7 @@ ADR 的架构决定；当 implementation plan 的阶段状态与本文的更新�
 | Phase 1：Registry 与 prompt 外 discovery | 已实现 | 真实 Pi runner 链注入 Top-K、移除原生 block 已验证 | 已通过 Gate P1 | **Complete** |
 | Phase 2：Practice Store 与证据治理 | Store、policy、分区、脱敏、删除已实现 | 已接真实 Practice observer（隔离 + --no-session 真实会话） | 已通过 Gate P2 | **Complete** |
 | Phase 3：离线部分编译与晋升 | detector、draft、verifier、induction seam、成本 benchmark 已实现 | 真实 PracticeEvent 经 induction 产生 draft 并绑定 evidence | Gate P3 正式闭环，procedure `validated` | **Complete（validated，未 canary/active）** |
-| Phase 4：Execution Resolver 与安全回退 | 未开始 | 未开始 | 未开始 | **Not started** |
+| Phase 4：Execution Resolver 与安全回退 | resolveExecution/guard/fallback/executor/canary 已实现 | 未接真实 Pi tool 事件（注入接口） | 未完成 | **Component complete** |
 | Phase 5：生命周期、失效与回滚 | 未开始 | 未开始 | 未开始 | **Not started** |
 | Phase 6：Activation Memory | 未开始 | 未开始 | 未开始 | **Not started** |
 | Phase 7：系统验证与交接 | 只有前序阶段的局部评测工具 | 未开始 | 未开始 | **Not started** |
@@ -159,14 +159,15 @@ procedure 生成与验证成本，再重新计算 break-even。不得为了过�
 
 ## 4. 下一轮 Herdr 的严格执行顺序（2026-08-16 更新）
 
-原 B1–B6 的 8 步已全部完成（见 §3 关闭证据）。剩余待办：
+B1–B6 已全部关闭（见 §3），Phase 3 procedure `validated`，Phase 4 component complete。剩余待办：
 
-1. **不启动 Phase 4 active path**：procedure 当前 `validated` 但未过 shadow replay +
-   canary gate（ADR-0008）；进入 canary/active 前须先完成 shadow replay 与 canary 评审。
+1. **Phase 4 host integration**（当前 blocker）：executor 未接真实 Pi tool 事件——guard
+   观察来源、授权 gate 宿主 hook、artifact 入口均为注入接口，需接线并验证真实 tool 事件
+   （tool_call/tool_result/agent_settled）后，才能宣称 host integration / end-to-end complete。
 2. 补齐 B6 的 `permissionPolicyHash`：当前为 Owner 冻结环境占位值，替换真实值后须重新
    跑 `p3-gate-runner` 并评审闭环。
-3. 若决定启动 Phase 4（Execution Resolver），须先确认 resolver 契约（ADR-0008 运行时
-   resolution）、实现 guard + fallback + 独立 verifier 接入，并保持 project-local。
+3. **不进入真实宿主 canary/active 部署**：procedure `validated`，但 shadow replay +
+   canary gate（ADR-0008）的真实宿主侧验证未做；Phase 5（生命周期/失效/回滚）未开始。
 
 ## 5. 当前验证证据与边界
 

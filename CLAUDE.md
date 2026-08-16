@@ -27,12 +27,13 @@ ADR-0001～0004 与带 historical/superseded 标记的文档只用于理解决�
 | Phase | 状态 |
 |---|---|
 | 0 宿主核验与基线 | Complete |
-| 1 Registry 与 prompt 外 discovery | Partial（B1/B2 已实现 + 真实 runner 链测试） |
-| 2 Practice Store 与证据治理 | Partial（B3 observer 已实现，收尾中） |
-| 3 离线编译与晋升 | offline pilot only，Gate P3 失败 |
-| 4～7 | Not started |
+| 1 Registry 与 prompt 外 discovery | Complete（B1/B2 关闭） |
+| 2 Practice Store 与证据治理 | Complete（B3 关闭，真实 observer 接线） |
+| 3 离线编译与晋升 | Complete（procedure `validated`，Gate P3 正式闭环） |
+| 4 Execution Resolver | Component complete（resolveExecution/guard/fallback/executor/canary）；host integration 未接线 |
+| 5～7 | Not started |
 
-硬规则：上游 gate 未通过不得启动下游 active path；**Phase 4 当前禁止启动**。关闭 blocker 必须附测试、复现或真实端到端证据。
+硬规则：上游 gate 未通过不得启动下游 active path。Phase 4 host integration 未完成：executor 未接真实 Pi tool 事件（guard 观察来源、授权 gate、artifact 入口为注入接口），真实宿主部署前须先接线并验证。关闭 blocker 必须附测试、复现或真实端到端证据。
 
 ## 4. 版本漂移边界（2026-08-15 决策，重要）
 

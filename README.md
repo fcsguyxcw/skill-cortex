@@ -60,9 +60,9 @@ flowchart TD
 
 ## 当前阶段
 
-当前状态以[最新实施进度审计](docs/reviews/2026-08-14-implementation-progress-audit.md)为准：Phase 0 complete；Phase 1、Phase 2 与 Phase 3 均已通过对应 gate；Phase 3 procedure 达到 `validated`；Phase 4～7 未开始。component、host integration 与 end-to-end 必须分别验收。
+当前状态以[最新实施进度审计](docs/reviews/2026-08-14-implementation-progress-audit.md)为准：Phase 0 complete；Phase 1、Phase 2 与 Phase 3 均已通过对应 gate；Phase 3 procedure 达到 `validated`；Phase 4 component complete（host integration 未接线）；Phase 5～7 未开始。component、host integration 与 end-to-end 必须分别验收。
 
-Phase 3 procedure 已正式晋升至 `validated`（Gate P3 闭环）：2 条真实、可归因、policy-valid 的 pagination PracticeEvent 经 induction seam 绑定 evidenceIds，held-out 质量门全过，真实成本复测 `N_break-even=0.000109 ≤ 10`。`validated ≠ active`：进入 canary/active 前须先过 shadow replay + canary gate（ADR-0008）；Phase 4 未启动。证据见 [Phase 3 Gate 报告](docs/reports/2026-08-14-phase3-gate-report.md)与 [P3 validation report](docs/reports/2026-08-14-phase3-p3-validation-report.json)。
+Phase 3 procedure 已正式晋升至 `validated`（Gate P3 闭环）：2 条真实、可归因、policy-valid 的 pagination PracticeEvent 经 induction seam 绑定 evidenceIds，held-out 质量门全过，真实成本复测 `N_break-even=0.000109 ≤ 10`。`validated ≠ active`：进入 canary/active 前须先过 shadow replay + canary gate（ADR-0008）。Phase 4 Execution Resolver 已实现 component 层（resolveExecution/guard/fallback/executor/canary），host integration 未接线。证据见 [Phase 3 Gate 报告](docs/reports/2026-08-14-phase3-gate-report.md)、[P3 validation report](docs/reports/2026-08-14-phase3-p3-validation-report.json)与 [Phase 4 Resolver Gate 报告](docs/reports/2026-08-14-phase4-resolver-gate.md)。
 
 Phase 0 已冻结：
 
