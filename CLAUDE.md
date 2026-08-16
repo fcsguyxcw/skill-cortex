@@ -32,7 +32,8 @@ ADR-0001～0004 与带 historical/superseded 标记的文档只用于理解决�
 | 3 离线编译与晋升 | Complete（procedure `validated`，Gate P3 正式闭环） |
 | 4 Execution Resolver | Component + host integration（shadow）+ E2E complete；生产入口接线与 canary/active 未启动 |
 | 5 生命周期、失效与回滚 | Complete（Gate P5 PASS：失效矩阵 + rollback + host E2E）；真实宿主部署未启动 |
-| 6～7 | Not started |
+| 6 Activation Memory | Component implemented（induction/rerank/评估/promotion/store）；host integration / E2E incomplete |
+| 7 | Not started |
 
 硬规则：上游 gate 未通过不得启动下游 active path。Phase 4 host integration（shadow）已接真实 Pi tool 事件并经隔离 E2E 验收（block / fast_path / 归因 / 漂移 fail-closed）；生产入口（.pi/extensions/skill-cortex/index.ts）接线与 canary/active 未启动，此前不得进入 Phase 5 active path。关闭 blocker 必须附测试、复现或真实端到端证据。
 
