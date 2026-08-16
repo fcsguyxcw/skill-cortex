@@ -60,9 +60,9 @@ flowchart TD
 
 ## 当前阶段
 
-当前状态以[最新实施进度审计](docs/reviews/2026-08-14-implementation-progress-audit.md)为准：Phase 0 complete；Phase 1 与 Phase 2 partial；Phase 3 仅完成 evaluation scaffold / offline pilot，Gate P3 未通过；Phase 4～7 未开始。component、host integration 与 end-to-end 必须分别验收。
+当前状态以[最新实施进度审计](docs/reviews/2026-08-14-implementation-progress-audit.md)为准：Phase 0 complete；Phase 1、Phase 2 与 Phase 3 均已通过对应 gate；Phase 3 procedure 达到 `validated`；Phase 4～7 未开始。component、host integration 与 end-to-end 必须分别验收。
 
-Phase 3 procedure 保持 `draft`。Held-out 质量门全部通过，但真实 Practice evidence 为 0，且首个点估计 `N_break-even=10.129724 > 10`。不得启动 canary/active 或 Phase 4，证据见 Phase 3 Gate 报告。
+Phase 3 procedure 已正式晋升至 `validated`（Gate P3 闭环）：2 条真实、可归因、policy-valid 的 pagination PracticeEvent 经 induction seam 绑定 evidenceIds，held-out 质量门全过，真实成本复测 `N_break-even=0.000109 ≤ 10`。`validated ≠ active`：进入 canary/active 前须先过 shadow replay + canary gate（ADR-0008）；Phase 4 未启动。证据见 [Phase 3 Gate 报告](docs/reports/2026-08-14-phase3-gate-report.md)与 [P3 validation report](docs/reports/2026-08-14-phase3-p3-validation-report.json)。
 
 Phase 0 已冻结：
 

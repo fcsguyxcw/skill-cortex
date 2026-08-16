@@ -1,10 +1,10 @@
 # Implementation Progress Audit：Phase 1～3 实施状态
 
-日期：2026-08-14
+日期：2026-08-14（B1–B6 关闭更新 2026-08-16）
 
-审计对象：`agent/phase3-procedure-gate`，`b3fd709`
+审计对象：`agent/phase3-procedure-gate`，`b3fd709`；关闭证据 commit `9af7e67..d5165a9` 及 `p3-gate-runner`
 
-状态：**当前实施阻塞清单；未关闭前不得启动 Phase 4 active path**
+状态：**B1–B6 已关闭；Phase 3 procedure 达到 `validated`；Phase 4 active path 仍不得启动（validated ≠ active，须先过 shadow replay + canary gate，ADR-0008）**
 
 本文冻结当前代码与真实宿主接线的验收结果，供下一轮 Herdr leader 纠偏。它不替代
 ADR 的架构决定；当 implementation plan 的阶段状态与本文的更新证据冲突时，先处理
@@ -23,19 +23,46 @@ ADR 的架构决定；当 implementation plan 的阶段状态与本文的更新�
 | Phase | Component | Host integration | End-to-end | 当前判定 |
 |---|---|---|---|---|
 | Phase 0：宿主核验与基线 | 已完成 | 不适用 | 不适用 | **Complete** |
-| Phase 1：Registry 与 prompt 外 discovery | Registry、BM25、Top-K、shadow adapter 已实现 | 未完成 | 未完成 | **Partial** |
-| Phase 2：Practice Store 与证据治理 | Store、policy、分区、脱敏、删除与 evaluation replay 已实现 | 未接真实 Practice observer | 未完成 | **Partial** |
-| Phase 3：离线部分编译与晋升 | 手写 SQL detector、draft builder、verifier 与离线 gate 已实现 | 无真实 PracticeEvent 输入或执行 resolver | 未完成，Gate P3 失败 | **Evaluation scaffold / offline pilot only** |
+| Phase 1：Registry 与 prompt 外 discovery | 已实现 | 真实 Pi runner 链注入 Top-K、移除原生 block 已验证 | 已通过 Gate P1 | **Complete** |
+| Phase 2：Practice Store 与证据治理 | Store、policy、分区、脱敏、删除已实现 | 已接真实 Practice observer（隔离 + --no-session 真实会话） | 已通过 Gate P2 | **Complete** |
+| Phase 3：离线部分编译与晋升 | detector、draft、verifier、induction seam、成本 benchmark 已实现 | 真实 PracticeEvent 经 induction 产生 draft 并绑定 evidence | Gate P3 正式闭环，procedure `validated` | **Complete（validated，未 canary/active）** |
 | Phase 4：Execution Resolver 与安全回退 | 未开始 | 未开始 | 未开始 | **Not started** |
 | Phase 5：生命周期、失效与回滚 | 未开始 | 未开始 | 未开始 | **Not started** |
 | Phase 6：Activation Memory | 未开始 | 未开始 | 未开始 | **Not started** |
 | Phase 7：系统验证与交接 | 只有前序阶段的局部评测工具 | 未开始 | 未开始 | **Not started** |
 
-Phase 3 当前保持 `draft`：真实 Store-verified Practice evidence 为 0，且首个成本点估计
-`N_break-even=10.129724 > 10`。不得进入 canary/active 或 Phase 4。详见
-[Phase 3 Gate 报告](../reports/2026-08-14-phase3-gate-report.md)。
+Phase 3 procedure 已由 `draft` 晋升至 `validated`（Gate P3 正式闭环，`p3-gate-runner`）：
+2 条真实、可归因、policy-valid 的 pagination PracticeEvent 经 induction seam 绑定
+evidenceIds，held-out 质量门全过，真实成本复测 `N_break-even=0.000109 ≤ 10`（原
+`10.129724` 误用开发流水线墙钟作分子，已按 ADR-0008 纠正为 procedure 运行时生成+验证
+成本）。`validated ≠ active`：进入 canary/active 前须先过 shadow replay + canary gate。
+详见 [Phase 3 Gate 报告](../reports/2026-08-14-phase3-gate-report.md)与
+[P3 validation report](../reports/2026-08-14-phase3-p3-validation-report.json)。
 
-## 3. Blocking findings
+## 3. Blocking findings（2026-08-16 更新：B1–B6 已全部关闭）
+
+以下 B1–B6 为 `b3fd709` 时点的阻塞清单；关闭证据：
+
+- **B1**（关闭 `9af7e67`）：inject 模式精确移除 Pi 原生全量 Skill block（唯一性/残留
+  marker 校验，失败 fail open），真实 runner 链测试证明最终 prompt 仅含 Top-K。
+- **B2**（关闭 `9af7e67`）：project-local `load_skill` 六重 fail-closed（路径/revision/
+  source/manifest/大小/编码），不依赖用户全局扩展。
+- **B3**（关闭 `8b8ea56`）：project-local 真实 Practice observer（隔离 runner + 真实
+  0.84.2 --no-session 会话）产生脱敏、归因、policy-valid 的 real 事件；host version
+  不硬编码（环境字段省略）。
+- **B4**（关闭 `3ab80ad` + `1c06750`）：pagination evidence hook 产生带
+  `detect-offset-pagination` + verifier pass 的 verified real 事件；`induction.ts`
+  从 ≥2 条契约事件对齐稳定片段产出 draft 并绑定 evidenceIds。
+- **B5**（关闭于本文状态表）：component / host integration / end-to-end 三层已分别
+  验收，不再以 component PASS 冒充整 phase complete。
+- **B6**（关闭 `d5165a9`）：`cost-benchmark.ts` 冻结口径 + 可重复 runner，四类成本
+  mean/stddev（45 慢路径样本），N_break-even 修正为 0.000109。
+
+正式闭环由 `p3-gate-runner`（真实事件 → induction → judgePromotion 11/11 PASS →
+`transitionPhase3ProcedureValidation` draft→validated）固化，证据见
+[P3 validation report](../reports/2026-08-14-phase3-p3-validation-report.json)。
+
+以下保留原始 B1–B6 描述作为历史记录。
 
 ### B1. Prompt-external discovery 尚未真正接管 Pi
 
@@ -130,17 +157,16 @@ Phase 1 的原 `PASS` 只证明 Registry、retriever、candidate card、fake-hos
 procedure 生成与验证成本，再重新计算 break-even。不得为了过门而修改阈值、挑样本或手工
 替换成本数字。
 
-## 4. 下一轮 Herdr 的严格执行顺序
+## 4. 下一轮 Herdr 的严格执行顺序（2026-08-16 更新）
 
-1. 不启动 Phase 4，不晋升当前 draft procedure。
-2. 关闭 B1：补真实 Pi 最终 prompt 回归测试并修复全量 metadata 残留。
-3. 关闭 B2：明确并验证项目可拥有的 Skill 按需加载路径。
-4. 关闭 B3：接通 project-local、真实宿主 Practice observer。
-5. 生成真实、可归因、policy-valid 的 PracticeEvent；不得把 synthetic/evaluation 数据改标。
-6. 关闭 B4：实现最小 `multiple events → repeated/stable fragment → draft procedure` seam。
-7. 关闭 B6：建立可重复成本 benchmark，按冻结阈值复测。
-8. 重新审计 Phase 1～3 的三层状态；只有 blocker 有关闭证据后，才决定是否进入 resolver、
-   lifecycle 和 Activation Memory。
+原 B1–B6 的 8 步已全部完成（见 §3 关闭证据）。剩余待办：
+
+1. **不启动 Phase 4 active path**：procedure 当前 `validated` 但未过 shadow replay +
+   canary gate（ADR-0008）；进入 canary/active 前须先完成 shadow replay 与 canary 评审。
+2. 补齐 B6 的 `permissionPolicyHash`：当前为 Owner 冻结环境占位值，替换真实值后须重新
+   跑 `p3-gate-runner` 并评审闭环。
+3. 若决定启动 Phase 4（Execution Resolver），须先确认 resolver 契约（ADR-0008 运行时
+   resolution）、实现 guard + fallback + 独立 verifier 接入，并保持 project-local。
 
 ## 5. 当前验证证据与边界
 
