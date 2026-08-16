@@ -1,8 +1,10 @@
 # Phase 3 Gate 报告：OFFSET pagination partial procedure
 
-日期：2026-08-14
-结论：**Gate P3 未通过；procedure 保持 `draft`，不得进入 canary/active。**
-停止边界：Phase 3 实现与离线评测已完成；按用户要求不启动 Phase 4。
+日期：2026-08-14（更新：2026-08-15，Gate P3 正式闭环）
+结论：**Gate P3 = PASS（11/11 门，decision=validated，2026-08-15 真实证据闭环）；
+procedure 进入 `validated`（非 `active`）；禁止启动 Phase 4。**
+停止边界：validated ≠ active；进入 active 前必须再过 canary + shadow replay（ADR-0008），
+不得在当前阶段启动 Phase 4。
 
 ## 1. 实际交付
 
@@ -88,17 +90,14 @@ N_break-even = 0.463 / (5355.194 − 0.002 − 1116.133) = 0.000109
 
 PASS：OFFSET recall、结构化安全、source/dependency binding、train/held-out 独立性、
 verifier 独立性、correctness、fallback、真实成本证据结构（B6 修正后含方差）、cost
-（B6 修正后 `N_break-even=0.000109 ≤ 10`）、scope conformance。
+（B6 修正后 `N_break-even=0.000109 ≤ 10`）、scope conformance、**practice_evidence
+（2026-08-15：2 条 Store-verified `provenance=real` PracticeEvent，见 §8）**。
 
-FAIL：
+正式闭环判定（见 §8）：**11/11 门 PASS，decision=`validated`，已执行 draft→validated 转换**。
 
-1. `practice_evidence`：0 个 Store-verified `provenance=real` PracticeEvent；ADR-0008
-   要求多次真实、可归因使用。resolver 会重新读取 Store、执行 policy 校验，并核对父
-   Skill/revision/source、covered operation 和对应 verifier PASS；evaluation/synthetic/shadow、
-   重复 ID、其它 rule 的事件或普通对象都不能冒充本 procedure 的真实证据。
-
-最终 `judgePromotion` 返回 `draft`（practice_evidence 仍是唯一未过硬门）。没有调用 validated
-transition，没有生成 canary/active 状态，也没有把当前 Agent 的选择写成 gold label。
+**历史记录（2026-08-14 原判定）**：原 Gate P3 因 `practice_evidence`（0 条真实事件）与
+`cost`（错误分子 10.129724）双失败返回 `draft`；两者已分别由 B4 真实事件闭环与 B6 口径修正
+关闭，详见 §8 与 §3。
 
 ## 5. 验证命令与结果
 
@@ -132,3 +131,38 @@ transition，没有生成 canary/active 状态，也没有把当前 Agent 的选
 - `docs/adr/0010-phase3-pagination-pilot.md`
 - `docs/evaluation/2026-08-14-phase3-pagination-thresholds.md`
 - `docs/research/2026-08-14-phase3-pagination-pilot-inventory.md`
+
+## 8. Gate P3 正式闭环证据（2026-08-15）
+
+正式 validation runner：`src/evaluation/phase3/p3-gate-runner.ts`（+ 单测
+`p3-gate-runner.test.ts`，用真实 Store 事件，非 fixture）；validation report：
+`docs/reports/2026-08-14-phase3-p3-validation-report.json`。
+
+整链（13 步口径，全部真实证据）：
+
+1. 从 project-local PracticeStore 读 2 条真实事件（`project:bcf863bc…`，
+   `obs-79b95a72…`、`obs-9ee1fe77…`）；
+2. `inducePhase3ProcedureDraft`（冻结 hashes）→ draft 绑定冻结父身份一致
+   （`skill:670b8f65…` / `rev:ce271d33…` / `sha256:8e5a86aa…`）；
+3. `resolvePracticeEvidence` → distinct store-verified real events = 2 ≥ 2；
+4. `docs/reports/2026-08-14-phase3-cost-benchmark.json` 的 realCostEvidence validate PASS
+   （nBreakEven=0.000109，sampleSize=45）；
+5. `replayHeldoutPagination` → accuracy=1、offsetRecall=1、offsetFpr=0、abstainRate=0.2；
+6. `checkPhase3ProcedureBindings` → ok（真实冻结值，非裸 boolean）；
+7. `judgePromotion` → **11/11 门 PASS，decision=`validated`**；
+8. `transitionPhase3ProcedureValidation` → `status=validated`，
+   `validationReportId=validation:phase3-pagination-p3-gate-2026-08-15`。
+
+validated procedure：
+
+| 字段 | 值 |
+|---|---|
+| procedure id | `procedure:phase3-pagination:3fa65ed335945a40`（与 §1 冻结一致） |
+| procedure revision | `rev:7fd2f9abd0abc2b6af5f9bc8cdfd0cccd7b3e6f3790989df993243f49d029127` |
+| status | `validated` |
+| evidenceIds | 2 条真实事件（obs-79b95a72…、obs-9ee1fe77…） |
+| validationReportId | `validation:phase3-pagination-p3-gate-2026-08-15` |
+
+permissionPolicyHash 为合法 sha256 占位（`4f`×32），由 Owner 冻结环境提供；真实值替换时须重新评审本闭环。
+validated ≠ active：进入 canary/active 前必须先过 shadow replay + canary gate（ADR-0008），
+不得启动 Phase 4。

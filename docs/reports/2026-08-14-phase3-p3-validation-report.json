@@ -1,0 +1,347 @@
+{
+  "frozen": {
+    "tenantScope": "project:bcf863bcbed32e5513c21e03a7fbebab",
+    "eventIds": [
+      "obs-79b95a7214bcc42134378bef3428132e2582e32e",
+      "obs-9ee1fe7756f2334733d47fcb67aa16463393401b"
+    ],
+    "parentSkillId": "skill:670b8f65dca2ceda3de0d70e92ccd8b5cb832e7c4fd2e5d845b58b19e230cbe2",
+    "parentSkillRevision": "rev:ce271d3393e3f1ee836ab48419f33e4337098ecf809e936b969a8ea8af2a8dec",
+    "sourceHash": "sha256:8e5a86aa92990a706512a6454e3a6a6345a950b454e75a11d048210d0a2ca830",
+    "selectedReferenceHash": "sha256:73c9fa10a3d439bedea0e11b640bd25bf30dd50f0d9006cf85baf7c3151543fa",
+    "permissionPolicyHash": "sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f",
+    "requiredOperationClass": "detect-offset-pagination",
+    "requiredVerifierId": "phase3-pagination-structured-finding",
+    "validationReportId": "validation:phase3-pagination-p3-gate-2026-08-15",
+    "storeRootDir": ".skill-cortex/practice",
+    "costBenchmarkReportPath": "docs/reports/2026-08-14-phase3-cost-benchmark.json",
+    "validationReportPath": "docs/reports/2026-08-14-phase3-p3-validation-report.json"
+  },
+  "measuredAt": "2026-08-15T23:56:58.994Z",
+  "steps": {
+    "readRealEvents": {
+      "ok": true,
+      "detail": "读取 2 条真实事件（obs-79b95a7214bcc42134378bef3428132e2582e32e, obs-9ee1fe7756f2334733d47fcb67aa16463393401b）"
+    },
+    "inductionBinding": {
+      "ok": true,
+      "detail": "draft 绑定冻结父身份/revision/sourceHash/reference 全部一致"
+    },
+    "resolvePracticeEvidence": {
+      "ok": true,
+      "detail": "distinct store-verified real events = 2 ≥ 2"
+    },
+    "costEvidence": {
+      "ok": true,
+      "detail": "realCostEvidence 验证 PASS（unit=latency_ms; nBreakEven=0.000109; sampleSize=45）"
+    },
+    "heldoutReplay": {
+      "ok": true,
+      "detail": "held-out 15 例: accuracy=1; offsetRecall=1; offsetFpr=0; abstainRate=0.2"
+    },
+    "sourceBindingCheck": {
+      "ok": true,
+      "detail": "source/dependency binding check ok"
+    }
+  },
+  "allPreconditionsOk": true,
+  "draft": {
+    "schemaVersion": 1,
+    "procedureId": "procedure:phase3-pagination:3fa65ed335945a40",
+    "parentSkillId": "skill:670b8f65dca2ceda3de0d70e92ccd8b5cb832e7c4fd2e5d845b58b19e230cbe2",
+    "parentSkillRevision": "rev:ce271d3393e3f1ee836ab48419f33e4337098ecf809e936b969a8ea8af2a8dec",
+    "procedureRevision": "rev:7fd2f9abd0abc2b6af5f9bc8cdfd0cccd7b3e6f3790989df993243f49d029127",
+    "status": "draft",
+    "dependencyFingerprint": {
+      "sourceHash": "sha256:8e5a86aa92990a706512a6454e3a6a6345a950b454e75a11d048210d0a2ca830",
+      "toolSchemaHash": "sha256:3547a9dcf6d2adb70f17bcb5268318b3f85683fde3343478ef3d79a2fa8e4a26",
+      "permissionPolicyHash": "sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f"
+    },
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sql"
+      ],
+      "properties": {
+        "sql": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16384
+        }
+      }
+    },
+    "preconditions": [
+      {
+        "predicateId": "bounded-sql-input",
+        "description": "sql is a string between 1 and 16384 characters"
+      },
+      {
+        "predicateId": "source-bindings-current",
+        "description": "parent source and detector dependency bindings match current values"
+      }
+    ],
+    "coveredSteps": [
+      {
+        "stepId": "detect-offset-pagination",
+        "sourceClauseRefs": [
+          "SKILL.md#how-to-use",
+          "references/data-pagination.md#offset-pagination"
+        ]
+      }
+    ],
+    "forbiddenAutomationSteps": [
+      "execute-sql",
+      "connect-database",
+      "network-access",
+      "rewrite-query",
+      "modify-installed-skill",
+      "read-installed-skill-at-runtime"
+    ],
+    "runtimeGuards": [
+      {
+        "predicateId": "bounded-supported-sql",
+        "description": "unsupported, malformed, or uncertain input abstains before classification",
+        "beforeStepIds": [
+          "detect-offset-pagination"
+        ]
+      },
+      {
+        "predicateId": "source-and-dependency-match",
+        "description": "any source or dependency mismatch stops the fast path",
+        "beforeStepIds": [
+          "detect-offset-pagination"
+        ]
+      }
+    ],
+    "llmHoles": [],
+    "declaredEffects": [],
+    "requiredPermissions": [],
+    "postconditions": [
+      {
+        "verifierId": "phase3-pagination-structured-finding",
+        "description": "returns one controlled class and evidence copied from the input"
+      }
+    ],
+    "artifactLocator": "builtin:procedures/phase3/pagination-detector@1.0.0",
+    "artifactHash": "sha256:b4e6381b7587163a8e62221c33f0a74302a8a650d62b85baabdca3eb272d4d68",
+    "evidenceIds": [
+      "obs-79b95a7214bcc42134378bef3428132e2582e32e",
+      "obs-9ee1fe7756f2334733d47fcb67aa16463393401b"
+    ],
+    "validationReportId": "pending:phase3-pagination-validation",
+    "createdAt": "2026-08-15T15:41:03.058Z",
+    "sourceBindings": {
+      "skillMdHash": "sha256:8e5a86aa92990a706512a6454e3a6a6345a950b454e75a11d048210d0a2ca830",
+      "selectedReferenceHash": "sha256:73c9fa10a3d439bedea0e11b640bd25bf30dd50f0d9006cf85baf7c3151543fa",
+      "detectorSchemaVersion": "phase3-pagination-finding-v1",
+      "detectorVersion": "1.0.0",
+      "permissionPolicyHash": "sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f"
+    }
+  },
+  "evidenceAssessment": {
+    "ok": true,
+    "distinctRealCount": 2,
+    "reason": "ok",
+    "eventIds": [
+      "obs-79b95a7214bcc42134378bef3428132e2582e32e",
+      "obs-9ee1fe7756f2334733d47fcb67aa16463393401b"
+    ],
+    "parentSkillId": "skill:670b8f65dca2ceda3de0d70e92ccd8b5cb832e7c4fd2e5d845b58b19e230cbe2",
+    "parentSkillRevision": "rev:ce271d3393e3f1ee836ab48419f33e4337098ecf809e936b969a8ea8af2a8dec",
+    "sourceHash": "sha256:8e5a86aa92990a706512a6454e3a6a6345a950b454e75a11d048210d0a2ca830",
+    "requiredOperationClass": "detect-offset-pagination",
+    "requiredVerifierId": "phase3-pagination-structured-finding"
+  },
+  "heldoutMetrics": {
+    "accuracy": 1,
+    "offsetRecall": 1,
+    "offsetFpr": 0,
+    "expectedAbstainRecall": 1,
+    "abstainRate": 0.2,
+    "unexpectedAbstainRate": 0,
+    "counts": {
+      "total": 15,
+      "offsetExpected": 5,
+      "nonOffsetExpected": 10,
+      "abstainExpected": 3,
+      "nonAbstainExpected": 12,
+      "offsetPredicted": 5,
+      "abstainPredicted": 3,
+      "passed": 15
+    }
+  },
+  "realCostEvidence": {
+    "unit": "latency_ms",
+    "compileAndValidationCost": 0.4633099999999994,
+    "meanSlowPathCost": 5355.19436888889,
+    "meanFastPathCost": 0.0024472740000000006,
+    "meanFallbackCost": 1116.133231111111,
+    "nBreakEven": 0.00010929549077437722,
+    "sampleSize": 45
+  },
+  "gates": [
+    {
+      "gateId": "offset_recall",
+      "name": "offset recall = 1.0（质量硬门）",
+      "status": "pass",
+      "detail": "offsetRecall=1（|H_offset|=5）"
+    },
+    {
+      "gateId": "practice_evidence",
+      "name": "≥2 个 Store-verified、policy-valid、父绑定匹配的 distinct real PracticeEvent",
+      "status": "pass",
+      "detail": "distinct real eventIds=2 ≥ 2"
+    },
+    {
+      "gateId": "artifact_safety",
+      "name": "无 SQL 执行/连接/网络/自动改写（静态审查）",
+      "status": "pass",
+      "detail": "静态审查通过"
+    },
+    {
+      "gateId": "source_binding",
+      "name": "绑定父 skill_id + revision + dependency fingerprint",
+      "status": "pass",
+      "detail": "绑定声明齐备"
+    },
+    {
+      "gateId": "evidence_independence",
+      "name": "held-out 未用于调参/反向修正，标签未回改",
+      "status": "pass",
+      "detail": "Owner 声明证据独立"
+    },
+    {
+      "gateId": "verifier_independence",
+      "name": "verifier 独立于 procedure/LLM 自评",
+      "status": "pass",
+      "detail": "冻结 oracle + 独立 verifier"
+    },
+    {
+      "gateId": "correctness",
+      "name": "accuracy≥0.95 且 offset FPR≤0.05 且 expected-abstain recall=1.0",
+      "status": "pass",
+      "detail": "accuracy=1; offsetFpr=0; expectedAbstainRecall=1"
+    },
+    {
+      "gateId": "fallback",
+      "name": "unexpected-abstain rate ≤ 0.10",
+      "status": "pass",
+      "detail": "unexpectedAbstainRate=0（|H_nonabstain|=12）"
+    },
+    {
+      "gateId": "cost",
+      "name": "abstain rate ≤ 0.20；nBreakEven ≤ 10（仅真实 evidence）",
+      "status": "pass",
+      "detail": "abstainRate=0.2; realCostEvidence[latency_ms] nBreakEven=0.00010929549077437722"
+    },
+    {
+      "gateId": "real_cost_evidence",
+      "name": "真实宿主 LLM 慢路径成本证据（结构化 unit/sampleSize/分母语义验证）",
+      "status": "pass",
+      "detail": "已验证：unit=latency_ms; sampleSize=45; nBreakEven=0.00010929549077437722"
+    },
+    {
+      "gateId": "scope_conformance",
+      "name": "未超出只读静态检测声明范围",
+      "status": "pass",
+      "detail": "仅只读静态检测"
+    }
+  ],
+  "decision": "validated",
+  "validatedProcedure": {
+    "schemaVersion": 1,
+    "procedureId": "procedure:phase3-pagination:3fa65ed335945a40",
+    "parentSkillId": "skill:670b8f65dca2ceda3de0d70e92ccd8b5cb832e7c4fd2e5d845b58b19e230cbe2",
+    "parentSkillRevision": "rev:ce271d3393e3f1ee836ab48419f33e4337098ecf809e936b969a8ea8af2a8dec",
+    "procedureRevision": "rev:7fd2f9abd0abc2b6af5f9bc8cdfd0cccd7b3e6f3790989df993243f49d029127",
+    "status": "validated",
+    "dependencyFingerprint": {
+      "sourceHash": "sha256:8e5a86aa92990a706512a6454e3a6a6345a950b454e75a11d048210d0a2ca830",
+      "toolSchemaHash": "sha256:3547a9dcf6d2adb70f17bcb5268318b3f85683fde3343478ef3d79a2fa8e4a26",
+      "permissionPolicyHash": "sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f"
+    },
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sql"
+      ],
+      "properties": {
+        "sql": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16384
+        }
+      }
+    },
+    "preconditions": [
+      {
+        "predicateId": "bounded-sql-input",
+        "description": "sql is a string between 1 and 16384 characters"
+      },
+      {
+        "predicateId": "source-bindings-current",
+        "description": "parent source and detector dependency bindings match current values"
+      }
+    ],
+    "coveredSteps": [
+      {
+        "stepId": "detect-offset-pagination",
+        "sourceClauseRefs": [
+          "SKILL.md#how-to-use",
+          "references/data-pagination.md#offset-pagination"
+        ]
+      }
+    ],
+    "forbiddenAutomationSteps": [
+      "execute-sql",
+      "connect-database",
+      "network-access",
+      "rewrite-query",
+      "modify-installed-skill",
+      "read-installed-skill-at-runtime"
+    ],
+    "runtimeGuards": [
+      {
+        "predicateId": "bounded-supported-sql",
+        "description": "unsupported, malformed, or uncertain input abstains before classification",
+        "beforeStepIds": [
+          "detect-offset-pagination"
+        ]
+      },
+      {
+        "predicateId": "source-and-dependency-match",
+        "description": "any source or dependency mismatch stops the fast path",
+        "beforeStepIds": [
+          "detect-offset-pagination"
+        ]
+      }
+    ],
+    "llmHoles": [],
+    "declaredEffects": [],
+    "requiredPermissions": [],
+    "postconditions": [
+      {
+        "verifierId": "phase3-pagination-structured-finding",
+        "description": "returns one controlled class and evidence copied from the input"
+      }
+    ],
+    "artifactLocator": "builtin:procedures/phase3/pagination-detector@1.0.0",
+    "artifactHash": "sha256:b4e6381b7587163a8e62221c33f0a74302a8a650d62b85baabdca3eb272d4d68",
+    "evidenceIds": [
+      "obs-79b95a7214bcc42134378bef3428132e2582e32e",
+      "obs-9ee1fe7756f2334733d47fcb67aa16463393401b"
+    ],
+    "validationReportId": "validation:phase3-pagination-p3-gate-2026-08-15",
+    "createdAt": "2026-08-15T15:41:03.058Z",
+    "sourceBindings": {
+      "skillMdHash": "sha256:8e5a86aa92990a706512a6454e3a6a6345a950b454e75a11d048210d0a2ca830",
+      "selectedReferenceHash": "sha256:73c9fa10a3d439bedea0e11b640bd25bf30dd50f0d9006cf85baf7c3151543fa",
+      "detectorSchemaVersion": "phase3-pagination-finding-v1",
+      "detectorVersion": "1.0.0",
+      "permissionPolicyHash": "sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f"
+    }
+  },
+  "validationReportId": "validation:phase3-pagination-p3-gate-2026-08-15"
+}
