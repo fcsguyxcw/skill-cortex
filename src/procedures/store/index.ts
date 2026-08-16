@@ -81,6 +81,8 @@ export interface ReleaseStateRecord {
   validationReportId?: string;
   canaryReportId?: string;
   activeReportId?: string;
+  /** MED：累计 evidenceIds（含 canary replayEvidenceIds；stable 重建时恢复，cascade 可查）。 */
+  evidenceIds?: string[];
   suspendedFrom?: "validated" | "canary" | "active";
   suspendKind?: "manual" | "dependency_drift" | "evidence_cascade";
   lifecycleReason?: string;
@@ -381,6 +383,7 @@ export class ProcedureStore {
         : {}),
       ...(procedure.canaryReportId !== undefined ? { canaryReportId: procedure.canaryReportId } : {}),
       ...(procedure.activeReportId !== undefined ? { activeReportId: procedure.activeReportId } : {}),
+      ...(procedure.evidenceIds.length > 0 ? { evidenceIds: [...procedure.evidenceIds] } : {}),
       ...(procedure.suspendedFrom !== undefined ? { suspendedFrom: procedure.suspendedFrom } : {}),
       ...(procedure.suspendKind !== undefined ? { suspendKind: procedure.suspendKind } : {}),
       ...(procedure.lifecycleReason !== undefined ? { lifecycleReason: procedure.lifecycleReason } : {}),
@@ -454,6 +457,7 @@ export class ProcedureStore {
         : {}),
       ...(release.canaryReportId !== undefined ? { canaryReportId: release.canaryReportId } : {}),
       ...(release.activeReportId !== undefined ? { activeReportId: release.activeReportId } : {}),
+      ...(release.evidenceIds !== undefined ? { evidenceIds: [...release.evidenceIds] } : {}),
       ...(release.suspendedFrom !== undefined ? { suspendedFrom: release.suspendedFrom } : {}),
       ...(release.suspendKind !== undefined ? { suspendKind: release.suspendKind } : {}),
       ...(release.lifecycleReason !== undefined ? { lifecycleReason: release.lifecycleReason } : {}),
