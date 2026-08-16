@@ -252,7 +252,7 @@ export async function rollbackToPreviousStable(
   if (!result.ok) {
     return { ...result, slowPath: true };
   }
-  await options.store.rollbackTo(options.failedProcedure, result.rollbackTo, {
+  await options.store.rollbackTo(options.failedProcedure, previous!, {
     trigger: options.trigger,
   });
   return result;

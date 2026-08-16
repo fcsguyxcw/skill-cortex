@@ -320,6 +320,15 @@ describe("Phase 5 host lifecycle E2E（真实事件源）", () => {
     const missing = result.missingSkills.find((o) => o.procedureId === procA.procedureId);
     assert.ok(missing !== undefined, "A 的旧 parent 不在快照 ⇒ 命中");
     assert.equal((await store.getProcedure(procA.procedureId))!.status, "suspended");
+    // MEDIUM：identity snapshot 先于 drift 处理 ⇒ 审计原因必须是 skill identity change，
+    // 不得被 drift 步落成 current_unavailable。
+    const suspendedA = await store.getProcedure(procA.procedureId);
+    assert.equal(suspendedA!.suspendKind, "dependency_drift");
+    assert.match(suspendedA!.lifecycleReason ?? "", /skill identity change/);
+    assert.ok(
+      !(suspendedA!.lifecycleReason ?? "").includes("current_unavailable"),
+      "原因必须是 identity 缺失而非 current_unavailable",
+    );
     assert.equal((await store.getProcedure(procB.procedureId))!.status, "active", "B 仍安装 ⇒ 不变");
   });
 
@@ -516,10 +525,35 @@ describe("Phase 5 host lifecycle E2E（真实事件源）", () => {
     assert.ok(events.some((e) => e.toStatus === "suspended"), "reload 后审计事件保持");
 
     // reload 后 rollback 判定仍工作（current 匹配 stable ⇒ 允许）。
-    const v2Failed = transitionPhase3ProcedureSuspend(
-      { ...procA, procedureRevision: "rev:" + "f".repeat(64), previousStableRevision: procA.procedureRevision } as Phase3InvalidatableProcedure,
-      { decision: "suspended", reason: "dependency drift: tool", suspendKind: "dependency_drift" },
-    );
+    // 模拟 v2（同 procedureId 新 revision，previousStableRevision=v1）作为 current 并失效：
+    // 无 revision save seam，直写 current 构造（仿 store 单测）。
+    const v2Active = buildPhase3ProcedureDraft({
+      parentSkillId: procA.parentSkillId,
+      parentSkillRevision: procA.parentSkillRevision,
+      skillMdHash: procA.dependencyFingerprint.sourceHash,
+      selectedReferenceHash: "44c9fa10a3d439bedea0e11b640bd25bf30dd50f0d9006cf85baf7c3151543fa",
+      createdAt: "2026-08-14T00:00:00.000Z",
+      evidenceIds: [EVIDENCE_ID],
+    });
+    const v2Validated = transitionPhase3ProcedureValidation(v2Active, { decision: "validated", validationReportId: VALIDATION_REPORT });
+    const v2Canary = transitionPhase3ProcedureCanary(v2Validated, { decision: "canary", canaryReportId: CANARY_REPORT });
+    const v2Published = transitionPhase3ProcedureActive(v2Canary, {
+      decision: "active",
+      activeReportId: ACTIVE_REPORT,
+      previousStableRevision: procA.procedureRevision,
+    });
+    const v2Failed = transitionPhase3ProcedureSuspend(v2Published as Phase3InvalidatableProcedure, {
+      decision: "suspended",
+      reason: "dependency drift: tool",
+      suspendKind: "dependency_drift",
+    });
+    // 直写 procA 的 current 文件：先移除 procB（其状态断言已完成），保证 current 目录只剩
+    // procA 一个文件（无 revision save seam，跨 revision 状态须直写构造）。
+    await reloaded.remove(procB.procedureId, { trigger: "tool" });
+    const currentDir = path.join(reloaded.tenantDir, "current");
+    const currentFile = readdirSync(currentDir).find((f) => f.endsWith(".json"))!;
+    writeFileSync(path.join(currentDir, currentFile), JSON.stringify(v2Failed), "utf8");
+
     const result = await rollbackToPreviousStable({
       store: reloaded,
       failedProcedure: v2Failed,
@@ -527,5 +561,8 @@ describe("Phase 5 host lifecycle E2E（真实事件源）", () => {
       trigger: "tool",
     });
     assert.equal(result.ok, true, "reload 后 rollback 判定恢复（current match stable）");
+    const restored = await reloaded.getProcedure(procA.procedureId);
+    assert.equal(restored!.procedureRevision, procA.procedureRevision, "真正落盘恢复 stable revision");
+    assert.equal(restored!.status, "active");
   });
 });

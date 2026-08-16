@@ -639,6 +639,70 @@ describe("ProcedureStore：HIGH 1 — transition 不信任调用者 prior（stal
   });
 });
 
+describe("ProcedureStore：HIGH 2 — transition 禁止同 revision 偷改 immutable 内容", () => {
+  it("同 revision 改 artifactHash / dependencyFingerprint / postconditions ⇒ 拒绝（零写入）", async () => {
+    const store = makeStore();
+    const draft = draftOf();
+    await store.save(draft, { trigger: "agent" });
+    const validated = validatedOf();
+    await store.transition(draft, validated, { trigger: "procedure" });
+    const eventsBefore = await store.listEvents(draft.procedureId);
+
+    const forgedHash = { ...canaryOf(), artifactHash: "sha256:" + "9".repeat(64) } as CompiledProcedure;
+    await assert.rejects(
+      store.transition(validated, forgedHash, { trigger: "tool" }),
+      /procedure_store_immutable_content_mutation: artifactHash/,
+    );
+
+    const forgedFingerprint = {
+      ...canaryOf(),
+      dependencyFingerprint: {
+        ...validated.dependencyFingerprint,
+        sourceHash: "sha256:" + "8".repeat(64),
+      },
+    } as CompiledProcedure;
+    await assert.rejects(
+      store.transition(validated, forgedFingerprint, { trigger: "tool" }),
+      /procedure_store_immutable_content_mutation: dependencyFingerprint/,
+    );
+
+    const forgedPostconditions = {
+      ...canaryOf(),
+      postconditions: [{ verifierId: "fake-verifier", description: "x" }],
+    } as CompiledProcedure;
+    await assert.rejects(
+      store.transition(validated, forgedPostconditions, { trigger: "tool" }),
+      /procedure_store_immutable_content_mutation: postconditions/,
+    );
+
+    // 拒绝后 current/events 全部不变（零写入）。
+    assert.equal((await store.getProcedure(draft.procedureId))!.status, "validated");
+    assert.deepEqual(await store.listEvents(draft.procedureId), eventsBefore, "事件不被追加");
+    assert.equal((await store.getProcedure(draft.procedureId))!.artifactHash, validated.artifactHash);
+  });
+
+  it("合法状态字段变更（status / reportId / evidenceIds / lifecycleReason）⇒ 接受", async () => {
+    const store = makeStore();
+    const draft = draftOf();
+    await store.save(draft, { trigger: "agent" });
+    const validated = validatedOf();
+    await store.transition(draft, validated, { trigger: "procedure" });
+    const canary = canaryOf();
+    await store.transition(validated, canary, { trigger: "procedure" });
+    const active = activeOf();
+    await store.transition(canary, active, { trigger: "tool" });
+    const suspended = suspendedOf();
+    await store.transition(active, suspended, { trigger: "user" });
+    const stored = await store.getProcedure(draft.procedureId);
+    assert.equal(stored!.status, "suspended");
+    assert.equal(stored!.lifecycleReason, REASON);
+    assert.equal(stored!.activeReportId, ACTIVE_REPORT);
+    assert.equal(stored!.canaryReportId, CANARY_REPORT);
+    assert.equal(stored!.validationReportId, VALIDATION_REPORT);
+    assert.equal(stored!.artifactHash, draft.artifactHash, "immutable 内容保持不变");
+  });
+});
+
 describe("ProcedureStore：HIGH 2 — rollback stable lookup（release state 语义）", () => {
   it("v1 到达 active ⇒ getStableByRevision 返回 active（带发布报告）；v2 指向 v1 ⇒ rollback 成功", async () => {
     const store = makeStore();
@@ -784,29 +848,12 @@ describe("ProcedureStore：rollback 落盘 seam（闭环）", () => {
     return v2Suspended;
   }
 
-  /** 用 rollbackProcedure 从 stable 派生 active target（镜像 lifecycle 闭环）。 */
-  function rollbackTargetOf(
-    failed: CompiledProcedure,
-    stable: CompiledProcedure,
-  ): CompiledProcedure & { status: "active" } {
-    const result = rollbackProcedure({
-      current: failed,
-      stableLookup: (revision) => (revision === stable.procedureRevision ? stable : undefined),
-      dependencyRevalidated: true,
-    });
-    assert.equal(result.ok, true);
-    return (result as { ok: true; rollbackTo: CompiledProcedure & { status: "active" } }).rollbackTo;
-  }
-
   it("rollbackTo 落盘：current 切回 stable revision + reload 保持 active + 可审计事件（append-only）", async () => {
     const store = makeStore();
     const { draft: v1 } = await persistActiveV1(store);
     const v2Failed = await persistFailedV2(store, v1);
-    const stable = await store.getStableByRevision(v1.procedureRevision);
-    assert.ok(stable !== undefined);
-    const target = rollbackTargetOf(v2Failed, stable!);
 
-    await store.rollbackTo(v2Failed, target, { trigger: "tool" });
+    await store.rollbackTo(v2Failed, v1.procedureRevision, { trigger: "tool" });
 
     const current = await store.getProcedure(v1.procedureId);
     assert.equal(current!.procedureRevision, v1.procedureRevision, "current 切回 stable revision");
@@ -843,57 +890,86 @@ describe("ProcedureStore：rollback 落盘 seam（闭环）", () => {
     );
   });
 
-  it("rollbackTo fail-closed：target 非 active / revision 不等于 previousStableRevision / lineage 失配 ⇒ 拒绝且 current 不变", async () => {
+  it("rollbackTo HIGH 3：恢复来源只认 store 重读的 stableNow——落盘内容与 getStableByRevision 一致（caller 无法注入被篡改内容）", async () => {
     const store = makeStore();
     const { draft: v1 } = await persistActiveV1(store);
     const v2Failed = await persistFailedV2(store, v1);
-    const stable = await store.getStableByRevision(v1.procedureRevision);
-    const target = rollbackTargetOf(v2Failed, stable!);
+    const stableNow = await store.getStableByRevision(v1.procedureRevision);
+    assert.ok(stableNow !== undefined);
+
+    // 新 API 只传 stableRevision；store 内部重读 stableNow 作为恢复来源。
+    await store.rollbackTo(v2Failed, v1.procedureRevision, { trigger: "tool" });
+    const current = await store.getProcedure(v1.procedureId);
+    assert.equal(current!.procedureRevision, stableNow!.procedureRevision);
+    assert.equal(current!.status, "active");
+    assert.equal(current!.artifactHash, stableNow!.artifactHash, "内容与 stableNow 一致");
+    assert.deepEqual(current!.dependencyFingerprint, stableNow!.dependencyFingerprint);
+    assert.deepEqual(current!.runtimeGuards, stableNow!.runtimeGuards);
+    assert.equal(current!.activeReportId, stableNow!.activeReportId);
+    // 恢复版本清 suspended 元数据（stableNow 若为 suspended-from-active）。
+    assert.equal(current!.lifecycleReason, undefined);
+    assert.equal(current!.suspendedFrom, undefined);
+  });
+
+  it("rollbackTo fail-closed：stableRevision ≠ previousStableRevision ⇒ 拒绝且 current 不变", async () => {
+    const store = makeStore();
+    const { draft: v1 } = await persistActiveV1(store);
+    const v2Failed = await persistFailedV2(store, v1);
 
     await assert.rejects(
-      store.rollbackTo(v2Failed, { ...target, status: "suspended" } as CompiledProcedure, { trigger: "tool" }),
-      /procedure_store_rollback_target_not_active/,
-    );
-    await assert.rejects(
-      store.rollbackTo(v2Failed, { ...target, procedureRevision: "rev:" + "f".repeat(64) } as CompiledProcedure, { trigger: "tool" }),
+      store.rollbackTo(v2Failed, "rev:" + "f".repeat(64), { trigger: "tool" }),
       /procedure_store_rollback_target_revision_mismatch/,
     );
-    await assert.rejects(
-      store.rollbackTo(v2Failed, { ...target, parentSkillId: "skill:" + "f".repeat(64) } as CompiledProcedure, { trigger: "tool" }),
-      /procedure_store_rollback_lineage_mismatch/,
-    );
-    // 全部拒绝后 current 仍为 failed（v2 suspended），非 target。
+    // 拒绝后 current 仍为 failed（v2 suspended），非 stable。
     const current = await store.getProcedure(v1.procedureId);
     assert.equal(current!.procedureRevision, v2Failed.procedureRevision);
     assert.equal(current!.status, "suspended");
+  });
+
+  it("rollbackTo HIGH 1：stale failed（current 已推进到 v3）⇒ 拒绝且 current/events 不变", async () => {
+    const store = makeStore();
+    const { draft: v1 } = await persistActiveV1(store);
+    const v2Failed = await persistFailedV2(store, v1);
+    // 调用方拿 v2 failed 期间，current 被推进到 v3（不同 revision 的 suspended）。
+    const v3Failed = { ...v2Failed, procedureRevision: "rev:" + "3".repeat(64) } as CompiledProcedure;
+    const currentDir = path.join(store.tenantDir, "current");
+    const file = readdirSync(currentDir).find((f) => f.endsWith(".json"))!;
+    writeFileSync(path.join(currentDir, file), JSON.stringify(v3Failed), "utf8");
+    const eventsBefore = await store.listEvents(v1.procedureId);
+
+    // stale failed（v2）提交回滚 v1 ⇒ 三要素校验拒绝。
+    await assert.rejects(
+      store.rollbackTo(v2Failed, v1.procedureRevision, { trigger: "tool" }),
+      /procedure_store_rollback_stale_prior/,
+    );
+    const after = await store.getProcedure(v1.procedureId);
+    assert.equal(after!.procedureRevision, v3Failed.procedureRevision, "current 不被覆盖回 v1");
+    assert.equal(after!.status, "suspended");
+    assert.deepEqual(await store.listEvents(v1.procedureId), eventsBefore, "事件不被追加");
   });
 
   it("rollbackTo 幂等：已回滚 ⇒ already_applied 拒绝，不重复追加事件", async () => {
     const store = makeStore();
     const { draft: v1 } = await persistActiveV1(store);
     const v2Failed = await persistFailedV2(store, v1);
-    const stable = await store.getStableByRevision(v1.procedureRevision);
-    const target = rollbackTargetOf(v2Failed, stable!);
-    await store.rollbackTo(v2Failed, target, { trigger: "tool" });
+    await store.rollbackTo(v2Failed, v1.procedureRevision, { trigger: "tool" });
     const eventCount = (await store.listEvents(v1.procedureId)).length;
     await assert.rejects(
-      store.rollbackTo(v2Failed, target, { trigger: "tool" }),
+      store.rollbackTo(v2Failed, v1.procedureRevision, { trigger: "tool" }),
       /procedure_store_rollback_already_applied/,
     );
     assert.equal((await store.listEvents(v1.procedureId)).length, eventCount, "不重复追加事件");
   });
 
-  it("rollbackTo stable unavailable：stable 被 retire ⇒ 拒绝（re-validation fail-closed）", async () => {
+  it("rollbackTo stable unavailable：stable 被 retire ⇒ 拒绝（stable_now fail-closed）", async () => {
     const store = makeStore();
     const { draft: v1, active } = await persistActiveV1(store);
     const retired = transitionPhase3ProcedureRetire(active as never, { decision: "retired", reason: REASON });
     await store.transition(active, retired, { trigger: "user" });
     const v2Failed = await persistFailedV2(store, v1);
     assert.equal(await store.getStableByRevision(v1.procedureRevision), undefined, "retired 不可作 stable");
-    // 手工构造 active target（绕过 rollbackProcedure）直接测 seam 的 stable re-validation。
-    const forgedTarget = { ...v1, status: "active" } as CompiledProcedure;
     await assert.rejects(
-      store.rollbackTo(v2Failed, forgedTarget, { trigger: "tool" }),
+      store.rollbackTo(v2Failed, v1.procedureRevision, { trigger: "tool" }),
       /procedure_store_rollback_stable_unavailable/,
     );
   });

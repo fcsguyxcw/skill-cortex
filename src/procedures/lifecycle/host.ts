@@ -55,8 +55,10 @@ export interface HostLifecycleResult {
 
 /**
  * 真实事件源的一次 lifecycle 收敛（最小接线）：
- * 1. dependency drift（current 指纹 diff → suspend 命中者）；
- * 2. skill identity（完整 installed 快照 → 旧 parent suspend）；
+ * 1. skill identity（完整 installed 快照 → 旧 parent suspend）——先于 drift：uninstall 的
+ *    parent 若先被 drift 处理会落成 current_unavailable 原因（MEDIUM 修复：identity 先判定，
+ *    drift 步跳过已 suspended 的终态/非可失效状态）；
+ * 2. dependency drift（current 指纹 diff → suspend 命中者）；
  * 3. evidence cascade（真实 invalidatedEventIds → 依赖者 suspend）。
  * 各步骤独立 fail-closed；无相关变化 ⇒ 无影响。
  */
@@ -65,14 +67,14 @@ export async function runHostLifecycle(options: {
   sources: HostLifecycleSources;
 }): Promise<HostLifecycleResult> {
   const { store, sources } = options;
-  const drift = await suspendDriftedProcedures({
-    store,
-    currentFor: sources.currentFingerprintFor,
-    trigger: sources.trigger,
-  });
   const missingSkills = await suspendProceduresForMissingSkills({
     store,
     currentInstalledSkillIds: sources.installedSkillIds,
+    trigger: sources.trigger,
+  });
+  const drift = await suspendDriftedProcedures({
+    store,
+    currentFor: sources.currentFingerprintFor,
     trigger: sources.trigger,
   });
   const cascade =

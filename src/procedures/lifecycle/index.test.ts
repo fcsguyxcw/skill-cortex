@@ -330,26 +330,6 @@ describe("lifecycle pipeline：Evidence cascade", () => {
 });
 
 describe("lifecycle pipeline：Rollback（dependencyRevalidated 硬约束）", () => {
-  /** v2 = 同 procedureId 新 revision 的 suspended current（内存；previousStableRevision 指向 v1）。 */
-  function failedV2(previousStableRevision: string): CompiledProcedure {
-    const v2Active = buildActive(REFERENCE_V2, [EVIDENCE_A, EVIDENCE_B], previousStableRevision);
-    return transitionPhase3ProcedureSuspend(v2Active as Phase3InvalidatableProcedure, {
-      decision: "suspended",
-      reason: `${SUSPEND_REASON_DEPENDENCY_DRIFT_PREFIX}tool`,
-      suspendKind: "dependency_drift",
-    });
-  }
-
-  /** 模拟「新 revision R2 晋升后失效」落盘：persistActive 后直写 current 为 v2 suspended。
-   * 本 slice 无 revision save seam，跨 revision 状态须直写 current 构造。 */
-  async function persistFailedV2(store: ProcedureStore, previousStableRevision: string): Promise<CompiledProcedure> {
-    const v2Suspended = failedV2(previousStableRevision);
-    const currentDir = path.join(store.tenantDir, "current");
-    const file = readdirSync(currentDir).find((f) => f.endsWith(".json"))!;
-    writeFileSync(path.join(currentDir, file), JSON.stringify(v2Suspended), "utf8");
-    return v2Suspended;
-  }
-
   it("stable match ⇒ 落盘切回 previousStableRevision + reload 保持 active", async () => {
     const store = makeStore();
     const v1 = await persistActive(store); // release[v1]=active（stable 候选）
@@ -416,9 +396,10 @@ describe("lifecycle pipeline：Rollback（dependencyRevalidated 硬约束）", (
     const v1 = await persistActive(store);
     // v1 被 drift suspend（release[v1]=suspended-from-active+drift），但 current 已恢复匹配（重验通过）。
     await applyDependencyDrift(v1, driftedCurrent(v1, { sourceHash: `sha256:${"a".repeat(64)}` }), store, "tool");
+    const v2Failed = await persistFailedV2(store, v1.procedureRevision);
     const result = await rollbackToPreviousStable({
       store,
-      failedProcedure: failedV2(v1.procedureRevision),
+      failedProcedure: v2Failed,
       current: matchingCurrent(v1), // 与 stable 一致 ⇒ 真实 diff 无命中 ⇒ revalidated=true
       trigger: "tool",
     });
@@ -585,8 +566,27 @@ describe("lifecycle pipeline：uninstall / scope / move-rename 矩阵（完整 i
   });
 });
 
-describe("lifecycle pipeline：E2E 持久化与 reload", () => {
-  it("store reload（新实例读同一目录）⇒ lifecycle 状态与 stable lookup 保持", async () => {
+/** v2 = 同 procedureId 新 revision 的 suspended current（内存；previousStableRevision 指向 v1）。 */
+function failedV2(previousStableRevision: string): CompiledProcedure {
+  const v2Active = buildActive(REFERENCE_V2, [EVIDENCE_A, EVIDENCE_B], previousStableRevision);
+  return transitionPhase3ProcedureSuspend(v2Active as Phase3InvalidatableProcedure, {
+    decision: "suspended",
+    reason: `${SUSPEND_REASON_DEPENDENCY_DRIFT_PREFIX}tool`,
+    suspendKind: "dependency_drift",
+  });
+}
+
+/** 模拟「新 revision R2 晋升后失效」落盘：persistActive 后直写 current 为 v2 suspended。
+ * 本 slice 无 revision save seam，跨 revision 状态须直写 current 构造。 */
+async function persistFailedV2(store: ProcedureStore, previousStableRevision: string): Promise<CompiledProcedure> {
+  const v2Suspended = failedV2(previousStableRevision);
+  const currentDir = path.join(store.tenantDir, "current");
+  const file = readdirSync(currentDir).find((f) => f.endsWith(".json"))!;
+  writeFileSync(path.join(currentDir, file), JSON.stringify(v2Suspended), "utf8");
+  return v2Suspended;
+}
+
+describe("lifecycle pipeline：E2E 持久化与 reload", () => {  it("store reload（新实例读同一目录）⇒ lifecycle 状态与 stable lookup 保持", async () => {
     const store = makeStore();
     const v1 = await persistActive(store);
     // v1 因 source drift 失效（落盘 suspended-from-active + dependency_drift）。
@@ -611,15 +611,10 @@ describe("lifecycle pipeline：E2E 持久化与 reload", () => {
     assert.equal(events.filter((e) => e.toStatus === "suspended").length, 1, "审计事件保持");
 
     // reload 后 rollback 判定仍工作：current 匹配 stable（真实 diff）⇒ 允许恢复。
-    const v2Active = buildActive(REFERENCE_V2, [EVIDENCE_A, EVIDENCE_B], v1.procedureRevision);
-    const v2Suspended = transitionPhase3ProcedureSuspend(v2Active as Phase3InvalidatableProcedure, {
-      decision: "suspended",
-      reason: `${SUSPEND_REASON_DEPENDENCY_DRIFT_PREFIX}tool`,
-      suspendKind: "dependency_drift",
-    });
+    const v2Failed = await persistFailedV2(reloaded, v1.procedureRevision);
     const result = await rollbackToPreviousStable({
       store: reloaded,
-      failedProcedure: v2Suspended,
+      failedProcedure: v2Failed,
       current: matchingCurrent(v1),
       trigger: "tool",
     });

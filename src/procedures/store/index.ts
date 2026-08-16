@@ -161,6 +161,62 @@ function assertValidStatus(value: unknown): asserts value is CompiledProcedure["
   }
 }
 
+/** 递归深比较（对象 key 顺序无关；数组有序）。 */
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) {
+    if (a.length !== (b as unknown[]).length) return false;
+    return a.every((value, index) => deepEqual(value, (b as unknown[])[index]));
+  }
+  const aKeys = Object.keys(a).sort();
+  const bKeys = Object.keys(b).sort();
+  if (aKeys.length !== bKeys.length) return false;
+  for (let i = 0; i < aKeys.length; i++) {
+    if (aKeys[i] !== bKeys[i]) return false;
+    if (!deepEqual((a as Record<string, unknown>)[aKeys[i]!], (b as Record<string, unknown>)[bKeys[i]!])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * HIGH 2：immutable 内容投影字段（同 revision 下禁止变化——不允许 active artifact 原地修改，
+ * 修订必须产生新 revision）。transition 只允许改：status / validationReportId / canaryReportId /
+ * activeReportId / evidenceIds（canary replay 追加）/ suspendedFrom / suspendKind /
+ * lifecycleReason / previousStableRevision。其余字段逐字段比较，任一 diff ⇒ 拒绝。
+ */
+const IMMUTABLE_CONTENT_FIELDS: ReadonlyArray<keyof CompiledProcedure> = [
+  "schemaVersion",
+  "procedureRevision",
+  "parentSkillId",
+  "parentSkillRevision",
+  "dependencyFingerprint",
+  "inputSchema",
+  "preconditions",
+  "coveredSteps",
+  "forbiddenAutomationSteps",
+  "runtimeGuards",
+  "llmHoles",
+  "declaredEffects",
+  "requiredPermissions",
+  "postconditions",
+  "artifactLocator",
+  "artifactHash",
+  "createdAt",
+];
+
+/** 断言 prior → next 未偷改 immutable 内容（fail-closed；字段级错误码）。 */
+function assertImmutableContentUnchanged(prior: CompiledProcedure, next: CompiledProcedure): void {
+  for (const field of IMMUTABLE_CONTENT_FIELDS) {
+    if (!deepEqual(prior[field], next[field])) {
+      throw new Error(`procedure_store_immutable_content_mutation: ${String(field)}`);
+    }
+  }
+}
+
 /** 持久化白名单复制（CompiledProcedure 合同字段全集；不 spread 未知键，防类型外字段落盘）。 */
 function toStoredProcedure(procedure: CompiledProcedure): CompiledProcedure {
   return {
@@ -567,6 +623,8 @@ export class ProcedureStore {
     if (prior.procedureRevision !== next.procedureRevision) {
       throw new Error("procedure_store_revision_change_requires_revalidation");
     }
+    // HIGH 2：同 revision 不得偷改 immutable 内容（artifact/依赖/权限/guard 等逐字段比较）。
+    assertImmutableContentUnchanged(prior, next);
     const currentPath = this.#currentPath(next.procedureId);
     await this.#writeProcedureFile(currentPath, next, { exclusive: false });
     await this.#writeReleaseState(next);
@@ -589,62 +647,66 @@ export class ProcedureStore {
    * - 本 seam 是唯一允许跨 revision 覆盖 current 的路径，且目标 revision 严格锁定
    *   failed.previousStableRevision（不得任意指定、不得经配置注入）。
    *
+   * HIGH 3（API 变更）：不接收 caller 构造的 target——恢复来源只认 store 自身。
+   * 调用方只传 stableRevision（严格 === failed.previousStableRevision），store 内部重新
+   * getStableByRevision() 重读 stableNow，用其 immutable 内容构造 active 恢复版本并写入。
+   * caller 无任何途径注入“身份像 stable 但内容被改”的对象。
+   *
    * 校验（全部 fail-closed，任一失败不落盘、不追加事件）：
-   * - target.status 必须 active；
-   * - failed.previousStableRevision 必须存在，且 target.procedureRevision 严格等于它；
-   * - lineage：target.procedureId / parentSkillId 必须与 failed 精确一致（防注入任意 stable）；
-   * - stale-prior/idempotency：读取 store 落盘 current，procedureId 必须一致；若 current 已
-   *   是 target（同 revision + active）⇒ 已回滚，拒绝（防重复事件、不重复覆盖）；
-   * - stable 仍合法：getStableByRevision(target.procedureRevision) 必须命中且 procedureId
-   *   一致（防 revision hash 跨 procedure 碰撞 / stable 已被 retire/remove）。
+   * - failed.previousStableRevision 必须存在，且 stableRevision 严格等于它；
+   * - HIGH 1 stale-prior：读取 store 落盘 current，procedureId + procedureRevision + status
+   *   三要素必须与 failed 完全一致（调用方拿旧 failed 期间 current 已推进 ⇒ 拒绝）；
+   * - idempotency：current 已回滚（同 revision + active）⇒ 拒绝（防重复事件）；
+   * - stable 仍合法：getStableByRevision 重读命中且 procedureId 一致（防 revision hash 跨
+   *   procedure 碰撞 / stable 已被 retire/remove）。
    *
    * 落盘（history 不可变，不覆盖失败 revision 的 immutable 快照）：
-   * current 覆盖写 target（stable revision + active）→ release[target.revision] 重写 active
-   * → append 可审计 rollback 事件（fromStatus=failed.status，toStatus=active，
-   * procedureRevision=target.procedureRevision，reason=ROLLBACK_REASON）。append-only 不丢历史。
+   * current 覆盖写 active 恢复版本（stableNow 内容 + status=active，清 suspended 元数据）
+   * → release[stableRevision] 重写 active → append 可审计 rollback 事件（fromStatus=
+   * failed.status，toStatus=active，reason=ROLLBACK_REASON）。append-only 不丢历史。
    */
   async rollbackTo(
     failed: CompiledProcedure,
-    target: CompiledProcedure,
+    stableRevision: string,
     meta: TransitionMeta,
   ): Promise<void> {
     await this.#ensureInit();
     assertValidStatus(failed.status);
-    assertValidStatus(target.status);
-    if (target.status !== "active") {
-      throw new Error("procedure_store_rollback_target_not_active");
-    }
     const previous = failed.previousStableRevision;
     if (previous === undefined) {
       throw new Error("procedure_store_rollback_no_stable_version");
     }
     // 目标 revision 严格锁定 previousStableRevision（不猜任意历史 revision）。
-    if (target.procedureRevision !== previous) {
+    if (stableRevision !== previous) {
       throw new Error("procedure_store_rollback_target_revision_mismatch");
     }
-    // lineage：procedureId / parentSkillId 精确一致（防跨 lineage 注入）。
-    if (target.procedureId !== failed.procedureId) {
-      throw new Error("procedure_store_rollback_lineage_mismatch");
-    }
-    if (target.parentSkillId !== failed.parentSkillId) {
-      throw new Error("procedure_store_rollback_lineage_mismatch");
-    }
-    // stale-prior/idempotency：读取真实落盘 current（不信任调用者传入的 failed 身份）。
+    // idempotency（先于 stale-prior）：current 已回滚（stable revision + active）⇒ 拒绝重复。
     const stored = await this.getProcedure(failed.procedureId);
     if (stored === undefined) {
       throw new Error("procedure_store_missing_prior");
     }
-    if (stored.procedureId !== failed.procedureId) {
-      throw new Error("procedure_store_rollback_procedure_id_mismatch");
-    }
-    if (stored.procedureRevision === target.procedureRevision && stored.status === "active") {
+    if (stored.procedureRevision === previous && stored.status === "active") {
       throw new Error("procedure_store_rollback_already_applied");
     }
-    // stable 仍合法：仍须为合法 stable target（未被 retire/remove，且非 revision hash 碰撞）。
+    // HIGH 1 stale-prior：真实落盘 current 三要素与 failed 完全一致（不信任调用者传入身份）。
+    if (
+      stored.procedureId !== failed.procedureId ||
+      stored.procedureRevision !== failed.procedureRevision ||
+      stored.status !== failed.status
+    ) {
+      throw new Error("procedure_store_rollback_stale_prior");
+    }
+    // HIGH 3：stable 恢复来源只认 store 自身重读（不接受 caller 内容）。
     const stableNow = await this.getStableByRevision(previous);
     if (stableNow === undefined || stableNow.procedureId !== failed.procedureId) {
       throw new Error("procedure_store_rollback_stable_unavailable");
     }
+    // 用 stableNow 的 immutable 内容构造 active 恢复版本（清 suspended 元数据，与 rollback 语义一致）。
+    const { lifecycleReason: _reason, suspendedFrom: _from, suspendKind: _kind, ...rest } = stableNow;
+    void _reason;
+    void _from;
+    void _kind;
+    const target = { ...rest, status: "active" as const } as CompiledProcedure;
     await this.#writeProcedureFile(this.#currentPath(target.procedureId), target, {
       exclusive: false,
     });
@@ -653,7 +715,7 @@ export class ProcedureStore {
       target.procedureId,
       target.procedureRevision,
       failed.status,
-      target.status,
+      "active",
       meta.trigger,
       { reason: ROLLBACK_REASON },
     );
