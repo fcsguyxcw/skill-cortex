@@ -27,7 +27,7 @@ ADR 的架构决定；当 implementation plan 的阶段状态与本文的更新�
 | Phase 2：Practice Store 与证据治理 | Store、policy、分区、脱敏、删除已实现 | 已接真实 Practice observer（隔离 + --no-session 真实会话） | 已通过 Gate P2 | **Complete** |
 | Phase 3：离线部分编译与晋升 | detector、draft、verifier、induction seam、成本 benchmark、formal runner、envelope 已实现 | 默认 project-local Store 的真实 PracticeEvent 经 induction 产生 draft 并绑定 evidence | Gate P3 纠偏后重新 11/11 PASS，procedure `validated` | **Complete（validated，未 canary/active）** |
 | Phase 4：Execution Resolver 与安全回退 | resolveExecution/guard/fallback/executor 已按 ADR-0012 实现；project-local shadow replay 已通过 | 已接真实 Pi tool_call/tool_result/agent_settled（shadow entry + ExtensionRunner E2E）；per-call current 来源 + drift fail-closed | shadow_replay 链路 E2E + Gate P4 project-local canary（validated→canary 晋升 + canary 上下文三栏指标）通过 | **Complete（Gate P4 通过）；生产入口接线与真实宿主部署未启动** |
-| Phase 5：生命周期、失效与回滚 | 未开始 | 未开始 | 未开始 | **Not started** |
+| Phase 5：生命周期、失效与回滚 | 状态机（active/suspended/retired + 29 非法边 fail-closed）、dependency diff、rollback、evidence cascade 纯函数已实现 | 未接真实宿主（调用方管道未接线） | 未完成 | **Component implemented；host integration / E2E incomplete** |
 | Phase 6：Activation Memory | 未开始 | 未开始 | 未开始 | **Not started** |
 | Phase 7：系统验证与交接 | 只有前序阶段的局部评测工具 | 未开始 | 未开始 | **Not started** |
 
