@@ -32,6 +32,7 @@ import path from "node:path";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
+import { deriveDiscoverySourceHashes } from "../../adapters/pi/core.ts";
 import { registerSkillCortex } from "../../adapters/pi/index.ts";
 import {
   createDiscoverySnapshotSource,
@@ -224,8 +225,11 @@ export default function hostIntegrationEntry(pi: ExtensionAPI): void {
   const source = createDiscoverySnapshotSource();
   // 当次 discovery 候选表（skillId → 候选卡 revision）；per-call current 来源（MED）。
   // 与 observer 的快照消费并行维护（observer takeRouteSnapshot 一次取走，这里保留
-  // 只读副本供工具 execute 时按 skillId 查询；settled 后由下一轮 before_agent_start 覆盖）。
+  // 只读副本供工具 execute 时按 skillId 查询；settled 时清空防跨 run 串扰）。
   let latestCandidates = new Map<string, string>();
+  // Point A：当次 discovery 真实内容指纹（skillId → sourceHash，deriveDiscoverySourceHashes
+  // 与 catalog 同一 buildSkillRecord 逻辑，键与候选卡一致）；settled 时一并清空。
+  let latestSourceHashes = new Map<string, string>();
 
   registerSkillCortex(pi, {
     mode: "inject",
@@ -237,6 +241,20 @@ export default function hostIntegrationEntry(pi: ExtensionAPI): void {
       latestCandidates = map;
       source.push(result);
     },
+  });
+
+  // Point A 接线：before_agent_start 时从当次宿主 skills 派生 sourceHash 表（只读，
+  // 不落盘、不进 prompt）。注册于 cortex 之后（同一次广播内 await 完成，execute 前可用）。
+  pi.on("before_agent_start", async (event) => {
+    latestSourceHashes = new Map(
+      await deriveDiscoverySourceHashes(event.systemPromptOptions?.skills ?? []),
+    );
+  });
+  // 跨 run 串扰防护：settled 后清空候选/指纹表（下一轮 before_agent_start 重新填充；
+  // 若某 run 无 discovery，provider 不再消费上一轮 stale 值）。
+  pi.on("agent_settled", async () => {
+    latestCandidates = new Map();
+    latestSourceHashes = new Map();
   });
 
   registerPracticeObserver(pi, {
@@ -252,20 +270,24 @@ export default function hostIntegrationEntry(pi: ExtensionAPI): void {
     },
   });
 
-  // per-call current 来源（HIGH 1 + MED）：真实 runner 不再 register-time self-match。
-  // - currentSkillRevision 严格来自当次 discovery 候选卡（候选含该 skill 时用候选 revision；
-  //   不含时回退 self-match，不臆造失配——归因/既有 E2E 行为保持不变）；
-  // - currentDependencyFingerprint 以 procedure 绑定为基准（sourceHash/toolSchemaHash 绑定）；
-  //   当次验证来源（load_skill details.source_hash / discovery 重算）当前无 seam 可用，
-  //   指纹 drift 验证由注入 provider 的测试层完成（见报告：未接线项）；
-  // - guard：source-and-dependency-match 由候选匹配状态派生（恒 true；bounded-supported-sql
+  // per-call current 来源（HIGH 1 + MED + Point A/B）：真实 runner 不再 register-time self-match。
+  // - currentSkillRevision：当次 discovery 候选卡 revision（候选缺失 ⇒ undefined ⇒ fail-closed）；
+  // - currentDependencyFingerprint.sourceHash：当次 discovery 真实内容指纹（deriveDiscoverySourceHashes），
+  //   toolSchemaHash/permissionPolicyHash 保持 procedure 绑定（宿主工具 schema 无独立当次来源）；
+  // - guard：source-and-dependency-match 恒 true（resolver e/f 是 drift 主防线；bounded-supported-sql
   //   恒由 adapter 注入）。
+  // Point B：候选缺失（revision 或 sourceHash 任一不在当次表）⇒ 返回 undefined ⇒ adapter
+  // fail-closed（resolver 拒绝 ⇒ slow_path），绝不回退 procedure self-match。
   const currentProvider: PilotCurrentProvider = (lookup) => {
     const candidateRevision = latestCandidates.get(lookup.skillId);
-    if (candidateRevision === undefined) return undefined;
+    const sourceHash = latestSourceHashes.get(lookup.skillId);
+    if (candidateRevision === undefined || sourceHash === undefined) return undefined;
     return {
       currentSkillRevision: candidateRevision,
-      currentDependencyFingerprint: { ...lookup.procedure.dependencyFingerprint },
+      currentDependencyFingerprint: {
+        ...lookup.procedure.dependencyFingerprint,
+        sourceHash,
+      },
       guardObservations: [
         { predicateId: "source-and-dependency-match", phase: "runtime", result: true },
       ],

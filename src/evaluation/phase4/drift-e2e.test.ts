@@ -9,12 +9,15 @@
  *      revision_mismatch ⇒ slow_path（decision.mode=skill_md），不得 fast_path；
  *   b. 注入失配 currentDependencyFingerprint（≠ procedure fingerprint）⇒ resolver f 分支
  *      dependency_mismatch ⇒ slow_path；
- *   c. HIGH 2：slow_path 属 pre-execution 拒绝（compiled procedure 未执行），
- *      decodePilotDetailsToEvidence fail-closed 返回 undefined ⇒ observer 不产生
- *      compiled 事件 ⇒ 即使候选快照身份匹配（P3_GATE_FROZEN ∈ 快照、preflight 放行），
- *      settle 后 store 也无 shadow/verified 事件；
- *   d. 对照：provider 返回匹配 current 值 ⇒ fast_path 仍可落盘（注入链路本身可用，
- *      非整体失效）。
+ *   c. 对照：provider 返回匹配 current 值 ⇒ fast_path 仍可落盘（注入链路本身可用，
+ *      非整体失效）；
+ *   d. Point B：provider 注册但候选缺失（drift-miss- 前缀 ⇒ provider 返回 undefined）
+ *      ⇒ fail-closed slow_path（不 self-match）⇒ 不落 verified 事件。
+ *
+ * HIGH 2：slow_path 属 pre-execution 拒绝（compiled procedure 未执行），
+ * decodePilotDetailsToEvidence fail-closed 返回 undefined ⇒ observer 不产生
+ * compiled 事件 ⇒ 即使候选快照身份匹配（P3_GATE_FROZEN ∈ 快照、preflight 放行），
+ * settle 后 store 也无 shadow/verified 事件。
  *
  * 隔离：真实 runner 用 --no-session 等价隔离（ExtensionRunner 内存 runner + fixture）；
  * store 落在 <fixture>/.skill-cortex/practice（project-local），不写用户环境。
@@ -275,6 +278,22 @@ describe("drift E2E：注入失配候选 current 值 ⇒ resolver drift ⇒ slow
     await runner.emit({ type: "agent_settled" });
     const events = await store.listProvenance(defaultTenantScope(fixtureRoot), "shadow");
     assert.equal(events.length, 0, "依赖指纹失配不得产生 compiled/verified 事件");
+    assert.equal(decodePilotDetailsToEvidence(details), undefined);
+  });
+
+  it("d. Point B：provider 注册但候选缺失（drift-miss- 前缀）⇒ fail-closed slow_path（不 self-match）⇒ 0 事件", async () => {
+    await startRun();
+    const details = await driftCall("drift-miss-1");
+    // 候选缺失 ⇒ provider 返回 undefined ⇒ adapter fail-closed（不得回退 procedure self-match）。
+    assert.equal(details.outcome, "slow_path");
+    assert.equal(details.decision.mode, "skill_md");
+    assert.equal(details.decision.reason, "revision_mismatch", "current source 缺失 ⇒ resolver e 分支 fail-closed");
+    assert.equal(details.fallback?.mode, "load_parent_skill");
+    assert.deepEqual(details.step_summaries, [], "未执行 artifact");
+
+    await runner.emit({ type: "agent_settled" });
+    const events = await store.listProvenance(defaultTenantScope(fixtureRoot), "shadow");
+    assert.equal(events.length, 0, "候选缺失不得产生 compiled/verified 事件");
     assert.equal(decodePilotDetailsToEvidence(details), undefined);
   });
 

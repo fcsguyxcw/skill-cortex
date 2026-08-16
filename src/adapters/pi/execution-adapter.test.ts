@@ -395,17 +395,22 @@ describe("execution adapter：per-call current provider（MED：避免 register-
     assert.equal(result.details.decision.reason, "dependency_mismatch");
   });
 
-  it("provider 返回 undefined ⇒ 回退 self-match ⇒ fast_path（不臆造失配）", async () => {
-    preflight("tc-prov-none", baseParams());
+  it("provider 注册但返回 undefined ⇒ fail-closed（current source 缺失 ⇒ slow_path，不 self-match）", async () => {
+    preflight("tc-prov-missing", baseParams());
     const result = await executePaginationDetect({
-      toolCallId: "tc-prov-none",
+      toolCallId: "tc-prov-missing",
       params: baseParams(),
       store,
       procedure: PROCEDURE,
       currentProvider: () => undefined,
     });
-    assert.equal(result.details.outcome, "fast_path");
-    assert.equal(result.details.decision.reason, "eligible_procedure");
+    // Point B：真实 host 在 current source 缺失时必须 fail-closed，不得回退 procedure self-match。
+    assert.equal(result.details.outcome, "slow_path");
+    assert.equal(result.details.decision.mode, "skill_md");
+    // resolver e 分支 fail-closed（D2）：验证来源缺失即视为 revision 无法证明匹配。
+    assert.equal(result.details.decision.reason, "revision_mismatch");
+    assert.equal(result.details.fallback?.mode, "load_parent_skill");
+    assert.deepEqual(result.details.step_summaries, [], "未执行 artifact");
   });
 
   it("provider 匹配值 ⇒ fast_path（per-call 链路可用；lookup 携带当次身份与 procedure 绑定）", async () => {

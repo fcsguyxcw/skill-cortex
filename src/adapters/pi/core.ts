@@ -91,6 +91,42 @@ export interface DiscoveryResult {
 export const INGEST_ERROR_CATEGORY = "skill_ingest_failed";
 
 /**
+ * 从当次宿主 skills 派生 skillId → sourceHash 表（per-call current source 的 Point A 接线）。
+ *
+ * 契约边界：
+ * - 与 catalog 摄入用同一 buildSkillRecord 逻辑（同一输入 ⇒ 同一 skillId/sourceHash），
+ *   保证与 onDiscovery 候选卡的 skillId 键一致；
+ * - 只暴露内容指纹（sha256），不落盘、不进 prompt、不暴露路径/正文；
+ * - disabled/摄入失败项跳过 ⇒ 缺失项由调用方 fail-closed（不臆造匹配）；
+ * - 只读：不修改任何 Skill 文件。
+ */
+export async function deriveDiscoverySourceHashes(
+  skills: readonly HostSkillLike[],
+): Promise<ReadonlyMap<string, string>> {
+  const map = new Map<string, string>();
+  for (const skill of skills) {
+    if (skill.disableModelInvocation === true) continue;
+    try {
+      const record = await buildSkillRecord({
+        name: skill.name,
+        description: skill.description,
+        scope: skill.sourceInfo.scope,
+        baseDir: skill.baseDir,
+        skillMdPath: skill.filePath,
+        disableModelInvocation: skill.disableModelInvocation,
+        declaredAliases: [],
+        declaredPermissions: [],
+        declaredEffects: [],
+      });
+      map.set(record.skillId, record.sourceHash);
+    } catch {
+      // 摄入失败的 skill 不在 catalog ⇒ 也不在本表（缺失 ⇒ 调用方 fail-closed）。
+    }
+  }
+  return map;
+}
+
+/**
  * load_skill 单次返回的 SKILL.md 正文大小上限（字节，安全常量，非统计/门阈值）。
  * 256 KiB 对合法 instruction 文件（含内嵌示例）足够宽松，同时保证慢路径单次读取
  * 不会把无界内容注入模型上下文。超限一律拒绝。

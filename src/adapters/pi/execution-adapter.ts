@@ -374,12 +374,15 @@ function contentOf(details: PilotToolDetails): string {
 
 /**
  * per-call current 值查找结果（来源：当次 discovery 快照候选卡 / 宿主验证来源）。
- * 返回 undefined ⇒ 调用方回退 procedure 自身值（self-match，保持既有兼容）。
+ *
+ * Point B 语义：provider 已注册但返回 undefined ⇒ current source 缺失 ⇒ 调用方
+ * fail-closed（resolver 拒绝 ⇒ slow_path，绝不 self-match）。未注册 provider 才回退
+ * procedure 自身值（unit/canary 确定性 self-match）。
  */
 export interface PilotCurrentContext {
   /** 当次候选卡/验证来源的父 Skill revision（resolver e 分支）。 */
   currentSkillRevision: string;
-  /** 当次依赖指纹（resolver f 分支）。 */
+  /** 当次依赖指纹（resolver f 分支；sourceHash 应为当次 discovery 真实内容指纹）。 */
   currentDependencyFingerprint: DependencyFingerprint;
   /**
    * 除 bounded-supported-sql 之外的 runtime guard 观察（bounded-supported-sql 恒由
@@ -393,14 +396,14 @@ export interface PilotCurrentLookup {
   /** 工具参数中的 skill_id（preflight 已核对 = procedure.parentSkillId）。 */
   skillId: string;
   skillRevision: string;
-  /** procedure 绑定值（fingerprint 派生基准：source/toolSchema 绑定）。 */
+  /** procedure 绑定值（fingerprint 派生基准：toolSchemaHash 等绑定）。 */
   procedure: CompiledProcedure;
 }
 
 /**
  * per-call 当次来源查找（MED：每次 execute 从当次 discovery 快照/验证来源取值，
  * 避免 register-time 固定值在多轮 discovery 后 stale）。
- * 候选不匹配/无可用来源 ⇒ 返回 undefined（回退 self-match，不臆造失配）。
+ * 返回 undefined（当前 source 缺失）⇒ 调用方 fail-closed，绝不 self-match（Point B）。
  */
 export type PilotCurrentProvider = (
   lookup: PilotCurrentLookup,
@@ -412,8 +415,10 @@ export interface ExecutePaginationDetectInput {
   store: ReceiptStore;
   procedure: CompiledProcedure;
   /**
-   * per-call 当次来源查找（MED）：优先级高于下方 static 注入字段；返回 undefined
-   * 时继续按 static 字段 → procedure 自身值回退。真实宿主：当次 discovery 快照候选卡。
+   * per-call 当次来源查找（MED）。Point B 优先级：
+   * - provider 返回明确值 → 用；
+   * - provider 注册但返回 undefined → fail-closed（resolver 拒绝 ⇒ slow_path，不 self-match）；
+   * - 未注册 provider → static 注入字段 → procedure 自身值（unit/canary 确定性）。
    */
   currentProvider?: PilotCurrentProvider;
   /**
@@ -454,23 +459,32 @@ export async function executePaginationDetect(
   // precondition 只查类型；runtime guard 查完整有界（非空 + ≤ 上限）——guard 是独立运行期防线。
   const sqlOk = sqlTypeOk && sql.length > 0 && sql.length <= PILOT_SQL_MAX_LENGTH;
   // per-call 当次来源（MED）：每次 execute 时查找，避免 register-time 值在多轮 discovery 后 stale。
-  // 优先级：provider（当次 discovery/验证来源）→ static 注入字段 → procedure 自身值（self-match 兼容）。
-  const provided = input.currentProvider?.({
-    toolCallId,
-    skillId: params.skill_id,
-    skillRevision: params.skill_revision,
-    procedure,
-  });
+  // Point B 优先级：provider 明确值 → 用；provider 注册但 undefined → fail-closed（current
+  // source 缺失，resolver e/f 分支缺失即失配 ⇒ slow_path，绝不 self-match）；
+  // 未注册 provider → static 注入字段 → procedure 自身值（unit/canary 确定性 self-match）。
+  const hasProvider = input.currentProvider !== undefined;
+  const provided = hasProvider
+    ? input.currentProvider!({
+        toolCallId,
+        skillId: params.skill_id,
+        skillRevision: params.skill_revision,
+        procedure,
+      })
+    : undefined;
   const currentSkillRevision =
-    provided?.currentSkillRevision ?? input.currentSkillRevision ?? procedure.parentSkillRevision;
+    provided?.currentSkillRevision ??
+    (hasProvider ? undefined : (input.currentSkillRevision ?? procedure.parentSkillRevision));
   const currentDependencyFingerprint =
     provided?.currentDependencyFingerprint ??
-    input.currentDependencyFingerprint ??
-    procedure.dependencyFingerprint;
+    (hasProvider
+      ? undefined
+      : (input.currentDependencyFingerprint ?? procedure.dependencyFingerprint));
   // guard：bounded-supported-sql 恒由 adapter 注入（值=sqlOk，独立运行期防线，注入方不可覆盖）；
   // 其余 guard 观察由 provider/注入字段提供；未注入 ⇒ 默认 source-and-dependency-match=true。
   // checkGuards fail-closed：声明 guard 恒被覆盖，不会因缺失合成 unknown。
-  const injectedGuards = provided?.guardObservations ?? input.guardObservations;
+  // （provider 注册但 undefined ⇒ slow_path，executor 不评估 guard，观察值不参与。）
+  const injectedGuards =
+    provided?.guardObservations ?? (hasProvider ? undefined : input.guardObservations);
   const fallbackGuard: GuardObservation = {
     predicateId: "source-and-dependency-match",
     phase: "runtime",

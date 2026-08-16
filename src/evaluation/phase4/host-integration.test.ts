@@ -12,14 +12,14 @@
  *   b. 被 block 的调用不产生 extension 的 tool_result 事件（agent-loop.js:419-428 block
  *      路径只产合成 error result，不触发 tool_result 事件；observer 因此无证据，
  *      settle 后 store 无事件）。注意：不断言"会话无 tool result"（host 会产合成错误）。
- *   c. skill_id/revision 匹配 ⇒ preflight 放行；工具执行 fast_path。sideEffectCount=0 由
- *      executor safety_stop 门保证（非 0 不会 fast_path），并用真实 runner 独立复现
- *      detectPagination 确定性输出（detector 纯只读纯函数，输出仅由输入决定）作为零 I/O
- *      间接证据——只写"纯只读函数复现一致"，不宣称"已证明零 I/O"。
+ *   c. skill_id/revision 匹配 ⇒ preflight 放行；但目标 skill（P3_GATE_FROZEN）不在当次
+ *      discovery 候选（fixture 只有 docx-a/pdf）⇒ Point B：current source 缺失 ⇒ fail-closed
+ *      （provider 注册但候选缺失，绝不回退 procedure self-match）⇒ resolver e 分支拒绝 ⇒
+ *      slow_path（revision_mismatch），不执行 artifact、不产 compiled 事件。
  *
- * 范围边界（如实报告）：本 slice 只验证 preflight 身份检查；execution-adapter 闭包把
- * currentSkillRevision/currentDependencyFingerprint 写死为 procedure 自身值，resolver 的
- * revision/dependency 检查退化恒通过——依赖漂移失配未验证。
+ * 范围边界（如实报告）：本 slice 验证 preflight 身份检查与 Point B fail-closed；真实候选
+ * 匹配下的 fast_path 证据链由 attribution-e2e.check.ts（真实 skill ∈ 快照）覆盖；drift 注入
+ * 失配由 drift-e2e.test.ts 覆盖。
  *
  * 隔离：真实 runner 用 --no-session 等价隔离（ExtensionRunner 内存 runner + fixture）；
  * store 落在 <fixture>/.skill-cortex/practice（project-local），不写用户环境。
@@ -52,9 +52,7 @@ import {
   type PilotToolDetails,
 } from "../../adapters/pi/execution-adapter.ts";
 import { defaultTenantScope } from "../../adapters/pi/practice-observer.ts";
-import { PAGINATION_VERIFIER_ID } from "../../adapters/pi/practice-pagination-hook.ts";
 import { PracticeStore } from "../../practice/store/index.ts";
-import { detectPagination } from "../../procedures/phase3/detector.ts";
 import { buildCanaryValidatedProcedure } from "./canary.ts";
 
 const PROJECT_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
@@ -195,8 +193,11 @@ describe("Phase 4 host integration（真实 ExtensionRunner 加载 host-integrat
         terminate: true,
       }, `失配 ${index} 必须 block`);
 
-      // a. "发生在工具执行前" 的纵深证据：blocked 调用未生成 receipt，
-      //    宿主即使错误地继续执行工具也必须 executor auth denied（绝不无条件 approved）。
+      // a. "发生在工具执行前" 的纵深证据：blocked 调用未生成 receipt。
+      //    Point B（closure-blocker）：blocked 调用参数身份失配 + 目标不在当次候选
+      //    （fixture 候选只有 docx-a/pdf）⇒ current source 缺失 ⇒ resolver 先于授权 gate
+      //    fail-closed ⇒ slow_path。契约"宿主即使错误执行也绝不无条件 approved"仍满足：
+      //    未执行 artifact、未 approved（authorization_results 为空）。
       const def = runner.getToolDefinition(PILOT_TOOL_NAME)!;
       const executed = await def.execute(
         toolCallId,
@@ -205,9 +206,11 @@ describe("Phase 4 host integration（真实 ExtensionRunner 加载 host-integrat
         undefined,
         runner.createContext(),
       );
-      const deniedDetails = executed.details as PilotToolDetails;
-      assert.equal(deniedDetails.outcome, "denied", "blocked 调用无 receipt ⇒ denied");
-      assert.equal(deniedDetails.failure, "authorization_missing_or_replayed");
+      const rejectedDetails = executed.details as PilotToolDetails;
+      assert.equal(rejectedDetails.outcome, "slow_path", "blocked 调用无 receipt + 候选缺失 ⇒ fail-closed slow_path");
+      assert.equal(rejectedDetails.decision.reason, "revision_mismatch");
+      assert.deepEqual(rejectedDetails.authorization_results, [], "resolver 拒绝 ⇒ 未调授权 gate（绝不无条件 approved）");
+      assert.deepEqual(rejectedDetails.step_summaries, [], "未执行 artifact");
     }
 
     // b. 被 block 的调用不产生 extension tool_result 事件（agent-loop.js:419-428 block
@@ -218,19 +221,16 @@ describe("Phase 4 host integration（真实 ExtensionRunner 加载 host-integrat
     assert.equal(events.length, 0, "blocked 调用无 tool_result ⇒ observer 不产生任何事件");
   });
 
-  it("c. 身份匹配 ⇒ preflight 放行；工具执行 fast_path；独立复现 detector 确定性输出", async () => {
+  it("c. 身份匹配 ⇒ preflight 放行；Point B：目标 skill 不在当次候选 ⇒ current source 缺失 ⇒ fail-closed slow_path", async () => {
     await startRun();
-    const cases = [
-      { sql: OFFSET_SQL, expectedClass: "uses_offset" },
-      { sql: KEYSET_SQL, expectedClass: "uses_keyset" },
-    ] as const;
+    const cases = [OFFSET_SQL, KEYSET_SQL];
 
-    for (const [index, case_] of cases.entries()) {
+    for (const [index, sql] of cases.entries()) {
       const toolCallId = `fast-${index}`;
-      const params = pilotParams(case_.sql);
+      const params = pilotParams(sql);
 
       const preflight = await runner.emitToolCall(pilotToolCall(toolCallId, params));
-      assert.equal(preflight, undefined, "身份匹配必须放行");
+      assert.equal(preflight, undefined, "身份匹配必须放行（preflight 只比 params vs procedure）");
 
       const def = runner.getToolDefinition(PILOT_TOOL_NAME)!;
       const result = await def.execute(
@@ -242,36 +242,21 @@ describe("Phase 4 host integration（真实 ExtensionRunner 加载 host-integrat
       );
       const details = result.details as PilotToolDetails;
 
-      // fast path + 结构化 disposition。
-      assert.equal(details.outcome, "fast_path", `case ${index} 必须 fast_path`);
-      assert.equal(details.finding_class, case_.expectedClass);
+      // Point B（closure-blocker）：fixture 候选（docx-a/pdf）不含 P3_GATE_FROZEN ⇒
+      // entry provider 返回 undefined ⇒ fail-closed（不得回退 procedure self-match）⇒
+      // resolver e 分支拒绝（current source 缺失 = 无法证明 revision 匹配）⇒ slow_path。
+      assert.equal(details.outcome, "slow_path", `case ${index} 必须 slow_path（current source 缺失）`);
+      assert.equal(details.decision.mode, "skill_md");
+      assert.equal(details.decision.reason, "revision_mismatch");
       assert.equal(details.decision.execution_context, "shadow_replay", "executionContext 恒 shadow_replay");
-      assert.equal(details.decision.mode, "compiled_procedure");
-
-      // 零 I/O 间接证据：detector 是纯只读纯函数——用真实 runner 独立复现
-      // detectPagination(sql) 的输出，与工具输出一致（输出仅由输入决定，无外部状态依赖）。
-      // sideEffectCount=0 另由 executor safety_stop 门保证（非 0 不会 fast_path）。
-      assert.equal(details.finding_class, detectPagination(case_.sql).class, "detector 确定性复现必须一致");
-
-      // 授权/guard/verifier 全链：receipt gate approved；guard 全 pass；verifier pass。
-      assert.deepEqual(details.authorization_results, [
-        { gate_id: "pilot_receipt", result: "approved" },
-      ]);
-      assert.ok(details.guard_results.length > 0, "必须有 guard 观察");
-      assert.ok(details.guard_results.every((g) => g.result === "pass"), "guard 必须全 pass");
-      assert.ok(details.verifier_results.length > 0, "必须有 verifier 结果");
-      assert.equal(details.verifier_results[0]!.verifier_id, PAGINATION_VERIFIER_ID);
-      assert.equal(details.verifier_results[0]!.result, "pass");
-      assert.ok(
-        details.step_summaries.some((s) => s.operation_class === "detect-offset-pagination" && s.outcome === "ok"),
-        "必须如实记录已执行的 detect 步骤",
-      );
+      assert.deepEqual(details.authorization_results, [], "resolver 拒绝 ⇒ 不调授权 gate");
+      assert.deepEqual(details.guard_results, [], "未执行 ⇒ 无 guard 评估");
+      assert.deepEqual(details.step_summaries, [], "未执行 artifact");
 
       // 有界输出：details/content 不得泄漏原始 SQL。
-      assert.ok(!JSON.stringify(details).includes(case_.sql), "details 不得含原始 SQL");
-      assert.ok(!JSON.stringify(result.content).includes(case_.sql), "content 不得含原始 SQL");
+      assert.ok(!JSON.stringify(details).includes(sql), "details 不得含原始 SQL");
+      assert.ok(!JSON.stringify(result.content).includes(sql), "content 不得含原始 SQL");
 
-      // 真实 tool_result → observer compiledTool seam 解码。
       await runner.emitToolResult({
         type: "tool_result",
         toolCallId,
@@ -284,13 +269,15 @@ describe("Phase 4 host integration（真实 ExtensionRunner 加载 host-integrat
     }
 
     await runner.emit({ type: "agent_settled" });
-    // 归因 fail-closed：P3_GATE_FROZEN skill 不在当次 discovery 快照（fixture skills）⇒
-    // 不归因、不产生 provenance=shadow 事件（快路径证据只有在身份可归因时才落盘）。
+    // Point B + HIGH 2：slow_path 属 pre-execution 拒绝 ⇒ decoder fail-closed ⇒ 无 shadow 事件；
+    // 无 load_skill ⇒ 无 real 事件。
+    const shadow = await store.listProvenance(defaultTenantScope(fixtureRoot), "shadow");
+    assert.equal(shadow.length, 0, "current source 缺失不得产生 compiled/verified 事件");
     const events = await store.queryEvidence(defaultTenantScope(fixtureRoot));
-    assert.equal(events.length, 0, "快照身份失配 ⇒ observer 不归因（fail-closed）");
+    assert.equal(events.length, 0, "不产生 real 事件");
   });
 
-  it("纵深：无 preflight（无 receipt）直接 execute ⇒ executor auth denied", async () => {
+  it("纵深：无 preflight（无 receipt）直接 execute ⇒ fail-closed 拒绝（slow_path，不执行 artifact）", async () => {
     const def = runner.getToolDefinition(PILOT_TOOL_NAME)!;
     const result = await def.execute(
       "no-preflight",
@@ -300,11 +287,14 @@ describe("Phase 4 host integration（真实 ExtensionRunner 加载 host-integrat
       runner.createContext(),
     );
     const details = result.details as PilotToolDetails;
-    assert.equal(details.outcome, "denied");
-    assert.equal(details.failure, "authorization_missing_or_replayed");
-    assert.deepEqual(details.authorization_results, [
-      { gate_id: "pilot_receipt", result: "denied" },
-    ]);
+    // Point B：provider 注册（host entry）但目标不在当次候选 ⇒ current source 缺失 ⇒
+    // resolver e 分支 fail-closed ⇒ slow_path（先于授权 gate）。"无 receipt 绝不无条件
+    // approved" 契约仍满足（未执行 artifact、authorization_results 为空）。
+    // 注：executor 授权 denied 分支（无 provider/self-match 场景）由 execution-adapter.test.ts
+    // 单测覆盖（未注册 provider ⇒ resolver 通过 ⇒ 授权 gate 拒绝）。
+    assert.equal(details.outcome, "slow_path");
+    assert.equal(details.decision.reason, "revision_mismatch");
+    assert.deepEqual(details.authorization_results, []);
     assert.equal(details.decision.execution_context, "shadow_replay");
   });
 
