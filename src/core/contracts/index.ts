@@ -145,6 +145,8 @@ export interface CompiledProcedure {
   artifactHash: string;
   evidenceIds: string[];
   validationReportId: string;
+  /** canary 晋升绑定的 shadow replay 报告 ID（仅 canary 及以上状态写入；validated 无此字段）。 */
+  canaryReportId?: string;
   previousStableRevision?: string;
   createdAt: string;
 }

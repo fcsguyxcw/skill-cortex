@@ -12,6 +12,8 @@ const SKILL_ID_PATTERN = /^skill:[0-9a-f]{64}$/u;
 const SKILL_REVISION_PATTERN = /^rev:[0-9a-f]{64}$/u;
 const ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?(?:Z|[+-]\d{2}:\d{2})$/u;
 const VALIDATION_REPORT_ID_PATTERN = /^validation:[A-Za-z0-9][A-Za-z0-9._-]{0,95}$/u;
+/** canary 晋升报告 ID："canary:" + 受控字符（与 validation report 同风格，独立前缀防串用）。 */
+const CANARY_REPORT_ID_PATTERN = /^canary:[A-Za-z0-9][A-Za-z0-9._-]{0,95}$/u;
 
 /** 已知旧占位 `sha256:4f…`（ADR-0011 §2/§4：格式合法但不是真实 policy 指纹，必须拒绝）。 */
 export const LEGACY_PLACEHOLDER_POLICY_HASH = `sha256:${"4f".repeat(32)}`;
@@ -32,6 +34,11 @@ export interface Phase3ProcedureDraft extends Omit<CompiledProcedure, "status"> 
 
 export interface Phase3ValidatedProcedure extends Omit<CompiledProcedure, "status"> {
   status: "validated";
+  sourceBindings: ProcedureSourceBindings;
+}
+
+export interface Phase3CanaryProcedure extends Omit<CompiledProcedure, "status"> {
+  status: "canary";
   sourceBindings: ProcedureSourceBindings;
 }
 
@@ -345,5 +352,52 @@ export function transitionPhase3ProcedureValidation(
     ...draft,
     status: "validated",
     validationReportId: transition.validationReportId,
+  };
+}
+
+export interface CanaryTransition {
+  decision: "canary";
+  /** shadow replay 通过报告 ID（must 绑定，审计可追溯）。 */
+  canaryReportId: string;
+  /** 晋升时补强的 replay 证据 ID（可选；validated.evidenceIds 必须已非空）。 */
+  replayEvidenceIds?: string[];
+}
+
+/**
+ * Pure transition: validated → canary（Gate P4 显式发布动作，ADR-0012 §2：转换必须先发生）。
+ *
+ * 硬约束（ADR-0008/ADR-0012）：
+ * - 输入必须已 validated；draft/canary/active 输入一律拒绝（含运行期防御，不靠类型擦除）；
+ * - 必须绑定 shadow replay 通过的证据：validated.evidenceIds 非空（真实验证事件）+ canaryReportId
+ *   （shadow replay 报告）；无证据 ⇒ 拒绝，canary 不能跳过独立验证；
+ * - 不接收 executionContext：shadow_replay 是执行上下文（验证方法），不是 procedure 状态，
+ *   不得在此混入；canary 晋升是发布动作，与本次调用在哪个上下文执行无关；
+ * - 只改 status/canaryReportId，其余字段（procedureRevision/artifactHash/evidenceIds/
+ *   validationReportId）原样保留，不做任何自我修改或回滚语义（rollback 属 Phase 5）。
+ */
+export function transitionPhase3ProcedureCanary(
+  validated: Phase3ValidatedProcedure,
+  transition: CanaryTransition,
+): Phase3CanaryProcedure {
+  // 运行期防御：类型层已约束 Phase3ValidatedProcedure，但防直接构造非法对象/cast。
+  if (validated.status !== "validated") {
+    throw new Error("canary_transition_requires_validated_procedure");
+  }
+  if (transition.decision !== "canary") {
+    throw new Error("canary_transition_requires_canary_decision");
+  }
+  if (!CANARY_REPORT_ID_PATTERN.test(transition.canaryReportId)) {
+    throw new TypeError("canary_report_id_invalid");
+  }
+  if (validated.evidenceIds.length === 0) {
+    throw new Error("canary_transition_requires_evidence");
+  }
+  return {
+    ...validated,
+    status: "canary",
+    canaryReportId: transition.canaryReportId,
+    ...(transition.replayEvidenceIds !== undefined
+      ? { evidenceIds: [...validated.evidenceIds, ...transition.replayEvidenceIds] }
+      : {}),
   };
 }
