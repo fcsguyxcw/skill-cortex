@@ -440,28 +440,18 @@ function requireLifecycleReason(value: string): string {
 }
 
 /**
- * 失效暂停受控 reason（resume/rollback 的恢复语义判定依据）。
+ * 失效暂停受控 reason（lifecycleReason 人类可读审计文本；**不作恢复判定**）。
  * dependency-diff 用 "dependency drift: <dims>"（前缀）；evidence cascade 用精确值。
- * manual（可逆）暂停必须使用其他文本（不得伪装成失效暂停；反之亦然）。
+ * 恢复资格由显式字段 suspendedFrom/suspendKind 判定，不依赖此文本。
  */
 export const SUSPEND_REASON_DEPENDENCY_DRIFT_PREFIX = "dependency drift: " as const;
 export const SUSPEND_REASON_EVIDENCE_CASCADE = "evidence_cascade_deletion" as const;
 
-/** 暂停类别：可逆暂停（manual）vs 失效暂停（dependency drift / evidence cascade）。 */
+/** 受控暂停类别（suspended 时显式保存；resume/rollback 恢复资格判定依据）。 */
 export type SuspendKind = "manual" | "dependency_drift" | "evidence_cascade";
 
-/**
- * 暂停类别判定（HIGH 1 恢复语义依据）：
- * - dependency_drift / evidence_cascade = 失效暂停 ⇒ 不得直接 resume，必须回退重验路径；
- * - 其他（manual）= 可逆暂停 ⇒ 允许 resume。
- */
-export function suspendKindOf(reason: string | undefined): SuspendKind {
-  if (reason === SUSPEND_REASON_EVIDENCE_CASCADE) return "evidence_cascade";
-  if (reason !== undefined && reason.startsWith(SUSPEND_REASON_DEPENDENCY_DRIFT_PREFIX)) {
-    return "dependency_drift";
-  }
-  return "manual";
-}
+/** 受控暂停类别全集（运行期防御）。 */
+const SUSPEND_KINDS: readonly SuspendKind[] = ["manual", "dependency_drift", "evidence_cascade"];
 
 export interface ActiveTransition {
   decision: "active";
@@ -523,17 +513,27 @@ export type Phase3InvalidatableProcedure =
 
 export interface SuspendTransition {
   decision: "suspended";
-  /** 失效/降级原因（必填，可审计）。 */
+  /** 失效/降级原因（必填，仅人类可读审计；不作恢复判定）。 */
   reason: string;
+  /**
+   * 受控暂停类别（恢复资格判定依据）。
+   * 缺失（undefined，旧调用方/未同步 store）⇒ suspended 仍可写，但 resume 判定
+   * suspendKind !== "manual" ⇒ 无法直接恢复（fail-closed，须重验）；由 leader 同步
+   * store 持久化后所有 suspend 调用应显式传值。
+   */
+  suspendKind?: SuspendKind;
 }
 
 /**
- * Pure transition: validated | canary | active → suspended（失效/降级；reason 必填）。不可变。
+ * Pure transition: validated | canary | active → suspended（失效/降级）。不可变。
  *
- * Phase 5 slice 2 扩展：dependency diff 命中相关维度时，非终态 procedure 均可被 suspend
- * （不限于 active）。draft 不经状态机路径（必须先 validated）；终态 suspended/retired
- * 不重复 suspend（fail-closed）。审计字段（validation/canary/active 报告与证据链）随
- * spread 原样保留，可追溯降级原因。
+ * HIGH（显式恢复资格元数据）：suspended 时显式保存
+ * - suspendedFrom = 输入 procedure.status（自动派生，不可伪造）；
+ * - suspendKind = transition.suspendKind（受控枚举，不靠 reason 文本推断）；
+ * - lifecycleReason 仅人类可读审计，不参与恢复判定。
+ *
+ * draft 不经状态机路径（必须先 validated）；终态 suspended/retired 不重复 suspend
+ * （fail-closed）。审计字段（validation/canary/active 报告与证据链）随 spread 保留。
  */
 export function transitionPhase3ProcedureSuspend(
   procedure: Phase3InvalidatableProcedure,
@@ -550,9 +550,15 @@ export function transitionPhase3ProcedureSuspend(
     throw new Error("suspend_transition_requires_suspended_decision");
   }
   requireLifecycleReason(transition.reason);
+  if (transition.suspendKind !== undefined && !SUSPEND_KINDS.includes(transition.suspendKind)) {
+    throw new Error("suspend_transition_requires_controlled_suspend_kind");
+  }
   return {
     ...procedure,
     status: "suspended",
+    // 显式保存恢复资格元数据（suspendedFrom 自动派生自输入 status）。
+    suspendedFrom: procedure.status,
+    suspendKind: transition.suspendKind,
     lifecycleReason: transition.reason,
   };
 }
@@ -561,7 +567,7 @@ export interface ResumeTransition {
   decision: "active";
 }
 
-/** Pure transition: suspended → active（resume，仅原 suspended 允许；恢复发布级，非重新晋升）。 */
+/** Pure transition: suspended → active（resume；仅原 suspended 允许；恢复发布级，非重新晋升）。 */
 export function transitionPhase3ProcedureResume(
   suspended: Phase3SuspendedProcedure,
   transition: ResumeTransition,
@@ -572,17 +578,20 @@ export function transitionPhase3ProcedureResume(
   if (transition.decision !== "active") {
     throw new Error("resume_transition_requires_active_decision");
   }
-  // HIGH 1：失效暂停（dependency drift / evidence cascade）不得直接 resume active——
-  // validated/canary→suspended→active 会绕过 canary/active promotion gate。
-  // 失效暂停必须回退到重验路径（新修订重新走 promotion gate），fail-closed。
-  // 仅可逆暂停（manual）允许 resume（恢复原发布级，不是晋升）。
-  if (suspendKindOf(suspended.lifecycleReason) !== "manual") {
+  // HIGH：恢复资格由显式字段判定，不靠自由文本 reason。
+  // - suspendedFrom=active（曾发布为 active）且 suspendKind=manual（可逆暂停）⇒ 允许直接 resume；
+  // - suspendedFrom=validated/canary ⇒ 必须回对应重验/晋升路径（不得绕过 promotion gate）；
+  // - suspendKind=drift/evidence ⇒ 必须重新验证；
+  // - 任一字段缺失（旧数据）⇒ fail-closed 拒绝（不乐观放行）。
+  if (suspended.suspendedFrom !== "active" || suspended.suspendKind !== "manual") {
     throw new Error("resume_blocked_requires_revalidation");
   }
-  // resume 恢复原发布状态：清除失效原因（原 suspended 必已写 reason，防御性丢弃）；
+  // resume 恢复原发布状态：清除 suspended 元数据（lifecycleReason/suspendedFrom/suspendKind）；
   // 不产生新报告（resume 不是晋升）。
-  const { lifecycleReason: _dropped, ...rest } = suspended;
-  void _dropped;
+  const { lifecycleReason: _reason, suspendedFrom: _from, suspendKind: _kind, ...rest } = suspended;
+  void _reason;
+  void _from;
+  void _kind;
   return { ...rest, status: "active" };
 }
 
@@ -691,19 +700,25 @@ export function rollbackProcedure(input: RollbackInput): RollbackResult {
   ) {
     return { ok: false, reason: "invalid_stable_version" };
   }
-  // HIGH 2：suspended 失效 target（drift/cascade）恢复 active 必须已重验；
-  // manual suspended / active target 不受门约束（superseded / 已发布语义）。
-  if (
-    stable.status === "suspended" &&
-    suspendKindOf(stable.lifecycleReason) !== "manual" &&
-    input.dependencyRevalidated !== true
-  ) {
-    return { ok: false, reason: "requires_revalidation" };
+  // HIGH：suspended target 的恢复资格由显式字段判定（不靠 reason 文本）：
+  // - suspendedFrom=active（曾发布为 active）才是稳定版本；validated/canary 来源的
+  //   suspended（从未 active）不是稳定版本 ⇒ invalid_stable_version；
+  // - suspendKind 非 manual（drift/cascade，或字段缺失的旧数据）⇒ 必须已重验，
+  //   否则 requires_revalidation（不复活失效版本）。
+  if (stable.status === "suspended") {
+    if (stable.suspendedFrom !== "active") {
+      return { ok: false, reason: "invalid_stable_version" };
+    }
+    if (stable.suspendKind !== "manual" && input.dependencyRevalidated !== true) {
+      return { ok: false, reason: "requires_revalidation" };
+    }
   }
   // 恢复为 active 发布状态（不可变：不改 stable 原对象，返回新副本）；
-  // 清除 suspended 遗留的失效原因（rollback 是显式恢复动作，与 resume 语义一致）。
-  const { lifecycleReason: _dropped, ...rest } = stable;
-  void _dropped;
+  // 清除 suspended 元数据（lifecycleReason/suspendedFrom/suspendKind）。
+  const { lifecycleReason: _reason, suspendedFrom: _from, suspendKind: _kind, ...rest } = stable;
+  void _reason;
+  void _from;
+  void _kind;
   return {
     ok: true,
     rollbackTo: { ...rest, status: "active" },

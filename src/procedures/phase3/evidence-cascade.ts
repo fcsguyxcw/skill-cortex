@@ -107,6 +107,7 @@ export function suspendProceduresForEvidenceDeletion(
       transitionPhase3ProcedureSuspend(procedure, {
         decision: "suspended",
         reason: SUSPEND_REASON_EVIDENCE_CASCADE,
+        suspendKind: "evidence_cascade",
       }),
     );
   }

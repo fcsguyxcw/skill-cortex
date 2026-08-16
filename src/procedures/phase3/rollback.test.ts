@@ -72,6 +72,7 @@ function stableAndCurrent(): { stable: Phase3ActiveProcedure; current: CompiledP
   const suspended = transitionPhase3ProcedureSuspend(currentV2, {
     decision: "suspended",
     reason: "dependency drift",
+    suspendKind: "manual",
   });
   return { stable, current: suspended };
 }
@@ -177,6 +178,7 @@ describe("Phase 5 slice 3：一键回滚（rollbackProcedure 纯函数）", () =
     const suspendedStable = transitionPhase3ProcedureSuspend(stable, {
       decision: "suspended",
       reason: "superseded by v2",
+      suspendKind: "manual",
     });
     const { current } = stableAndCurrent();
     const result = rollbackProcedure({
@@ -188,6 +190,8 @@ describe("Phase 5 slice 3：一键回滚（rollbackProcedure 纯函数）", () =
       assert.equal(result.rollbackTo.status, "active", "回滚恢复为 active");
       assert.equal(result.rollbackTo.procedureRevision, stable.procedureRevision);
       assert.equal(result.rollbackTo.lifecycleReason, undefined, "回滚副本不残留失效原因");
+      assert.equal(result.rollbackTo.suspendedFrom, undefined, "回滚副本不残留 suspended 元数据");
+      assert.equal(result.rollbackTo.suspendKind, undefined);
     }
   });
 
@@ -246,6 +250,7 @@ describe("Phase 5 slice 3：一键回滚（rollbackProcedure 纯函数）", () =
     const driftSuspended = transitionPhase3ProcedureSuspend(stable, {
       decision: "suspended",
       reason: `${SUSPEND_REASON_DEPENDENCY_DRIFT_PREFIX}source`,
+      suspendKind: "dependency_drift",
     });
     const blocked = rollbackProcedure({
       current,
@@ -257,6 +262,7 @@ describe("Phase 5 slice 3：一键回滚（rollbackProcedure 纯函数）", () =
     const cascadeSuspended = transitionPhase3ProcedureSuspend(stable, {
       decision: "suspended",
       reason: SUSPEND_REASON_EVIDENCE_CASCADE,
+      suspendKind: "evidence_cascade",
     });
     const cascadeBlocked = rollbackProcedure({
       current,
@@ -272,6 +278,7 @@ describe("Phase 5 slice 3：一键回滚（rollbackProcedure 纯函数）", () =
     const driftSuspended = transitionPhase3ProcedureSuspend(stable, {
       decision: "suspended",
       reason: `${SUSPEND_REASON_DEPENDENCY_DRIFT_PREFIX}source`,
+      suspendKind: "dependency_drift",
     });
     const result = rollbackProcedure({
       current,

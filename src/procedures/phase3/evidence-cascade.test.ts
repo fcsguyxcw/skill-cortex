@@ -78,6 +78,7 @@ function suspendedOf(evidenceIds = [EVIDENCE_A, EVIDENCE_B]) {
   return transitionPhase3ProcedureSuspend(activeOf(evidenceIds), {
     decision: "suspended",
     reason: REASON,
+    suspendKind: "manual",
   });
 }
 

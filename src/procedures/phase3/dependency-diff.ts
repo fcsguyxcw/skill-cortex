@@ -102,13 +102,14 @@ export function invalidateOnDependencyDrift(
 ): InvalidationResult {
   const diff = diffProcedureDependencies(procedure, current);
   if (!diff.shouldInvalidate) return { diff };
-  // 受控 reason（draft.ts 常量）：resume/rollback 恢复语义据此区分失效暂停 vs manual。
+  // 受控 reason（审计文本）+ 显式 suspendKind（恢复资格判定；不靠 reason 推断）。
   const reason = `${SUSPEND_REASON_DEPENDENCY_DRIFT_PREFIX}${[...diff.impactedDimensions].join(",")}`;
   return {
     diff,
     suspended: transitionPhase3ProcedureSuspend(procedure, {
       decision: "suspended",
       reason,
+      suspendKind: "dependency_drift",
     }),
   };
 }

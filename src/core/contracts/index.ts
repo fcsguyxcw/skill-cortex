@@ -149,7 +149,18 @@ export interface CompiledProcedure {
   canaryReportId?: string;
   /** active 晋升绑定的 canary→active 发布报告 ID（仅 active 及以上状态写入）。 */
   activeReportId?: string;
-  /** suspended/retired 的失效/废弃原因（reason 必填转换时写入；resume 清除）。 */
+  /**
+   * suspended 的来源发布状态（suspended 时必填，显式保存，不靠自由文本推断）：
+   * validated/canary/active 之一（suspend 输入 status 自动派生，不可伪造）。
+   * 恢复资格判定依据：resume 仅允许 suspendedFrom="active"（曾发布为 active）。
+   */
+  suspendedFrom?: "validated" | "canary" | "active";
+  /**
+   * 受控暂停类别（suspended 时必填）：manual（可逆）/ dependency_drift / evidence_cascade。
+   * 恢复资格判定依据：drift/evidence 暂停必须重新验证，不得直接 resume。
+   */
+  suspendKind?: "manual" | "dependency_drift" | "evidence_cascade";
+  /** suspended/retired 的失效/废弃原因（仅人类可读审计，不作恢复判定）。 */
   lifecycleReason?: string;
   previousStableRevision?: string;
   createdAt: string;

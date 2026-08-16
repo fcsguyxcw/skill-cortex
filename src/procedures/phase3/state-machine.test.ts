@@ -77,6 +77,7 @@ function suspendedOf() {
   return transitionPhase3ProcedureSuspend(activeOf(), {
     decision: "suspended",
     reason: REASON,
+    suspendKind: "manual",
   });
 }
 
@@ -129,6 +130,7 @@ function dispatch(from: Status, to: Status, instance: CompiledProcedure): Compil
       return transitionPhase3ProcedureSuspend(instance as never, {
         decision: "suspended",
         reason: REASON,
+        suspendKind: "manual",
       });
     case "retired":
       return transitionPhase3ProcedureRetire(instance as never, {
@@ -199,6 +201,8 @@ describe("Phase 5 状态机：合法转换", () => {
     const suspended = suspendedOf();
     assert.equal(suspended.status, "suspended");
     assert.equal(suspended.lifecycleReason, REASON);
+    assert.equal(suspended.suspendedFrom, "active", "显式保存来源（自动派生自输入 status）");
+    assert.equal(suspended.suspendKind, "manual", "显式保存受控类别（不靠 reason 推断）");
     assert.equal(suspended.activeReportId, ACTIVE_REPORT, "active 报告保留");
 
     const resumed = transitionPhase3ProcedureResume(suspended, { decision: "active" });
@@ -278,9 +282,12 @@ describe("Phase 5 状态机：单转换 fail-closed", () => {
       const result = transitionPhase3ProcedureSuspend(instanceOf(from) as never, {
         decision: "suspended",
         reason: REASON,
+        suspendKind: "manual",
       });
       assert.equal(result.status, "suspended", `from=${from} 必须可 suspend`);
       assert.equal(result.lifecycleReason, REASON);
+      assert.equal(result.suspendedFrom, from, "suspendedFrom 必须显式保存来源（自动派生）");
+      assert.equal(result.suspendKind, "manual");
     }
     // draft（不经状态机路径）+ 终态（suspended/retired 不重复 suspend）拒绝。
     for (const from of ["draft", "suspended", "retired"] as const) {
@@ -289,6 +296,7 @@ describe("Phase 5 状态机：单转换 fail-closed", () => {
           transitionPhase3ProcedureSuspend(instanceOf(from) as never, {
             decision: "suspended",
             reason: REASON,
+            suspendKind: "manual",
           }),
         /suspend_transition_requires_non_terminal_procedure/,
         `from=${from} 必须拒绝`,
@@ -302,7 +310,7 @@ describe("Phase 5 状态机：单转换 fail-closed", () => {
     );
     for (const bad of ["", "   ", "x".repeat(201)]) {
       assert.throws(
-        () => transitionPhase3ProcedureSuspend(active, { decision: "suspended", reason: bad }),
+        () => transitionPhase3ProcedureSuspend(active, { decision: "suspended", reason: bad, suspendKind: "manual" }),
         /lifecycle_reason_/,
         `reason=${JSON.stringify(bad.slice(0, 12))}… 必须拒绝`,
       );
@@ -328,6 +336,7 @@ describe("Phase 5 状态机：单转换 fail-closed", () => {
     const driftSuspended = transitionPhase3ProcedureSuspend(validatedOf(), {
       decision: "suspended",
       reason: `${SUSPEND_REASON_DEPENDENCY_DRIFT_PREFIX}source`,
+      suspendKind: "dependency_drift",
     });
     assert.throws(
       () => transitionPhase3ProcedureResume(driftSuspended, { decision: "active" }),
@@ -338,6 +347,7 @@ describe("Phase 5 状态机：单转换 fail-closed", () => {
     const cascadeSuspended = transitionPhase3ProcedureSuspend(canaryOf(), {
       decision: "suspended",
       reason: SUSPEND_REASON_EVIDENCE_CASCADE,
+      suspendKind: "evidence_cascade",
     });
     assert.throws(
       () => transitionPhase3ProcedureResume(cascadeSuspended, { decision: "active" }),
@@ -348,6 +358,7 @@ describe("Phase 5 状态机：单转换 fail-closed", () => {
     const activeDrift = transitionPhase3ProcedureSuspend(activeOf(), {
       decision: "suspended",
       reason: `${SUSPEND_REASON_DEPENDENCY_DRIFT_PREFIX}tool`,
+      suspendKind: "dependency_drift",
     });
     assert.throws(
       () => transitionPhase3ProcedureResume(activeDrift, { decision: "active" }),
@@ -360,10 +371,41 @@ describe("Phase 5 状态机：单转换 fail-closed", () => {
     const manual = transitionPhase3ProcedureSuspend(activeOf(), {
       decision: "suspended",
       reason: "operator maintenance pause",
+      suspendKind: "manual",
     });
     const resumed = transitionPhase3ProcedureResume(manual, { decision: "active" });
     assert.equal(resumed.status, "active");
     assert.equal(resumed.lifecycleReason, undefined, "resume 清除可逆暂停原因");
+    assert.equal(resumed.suspendedFrom, undefined, "resume 清除 suspended 元数据");
+    assert.equal(resumed.suspendKind, undefined, "resume 清除 suspended 元数据");
+  });
+
+  it("HIGH：validated/canary 即使 manual suspend 也不得直接 resume active（绕过 promotion gate 封堵）", () => {
+    // validated → suspended(manual) → active：resume 要求 suspendedFrom=active，拒绝。
+    const validatedManual = transitionPhase3ProcedureSuspend(validatedOf(), {
+      decision: "suspended",
+      reason: "operator pause before promotion",
+      suspendKind: "manual",
+    });
+    assert.equal(validatedManual.suspendedFrom, "validated");
+    assert.equal(validatedManual.suspendKind, "manual");
+    assert.throws(
+      () => transitionPhase3ProcedureResume(validatedManual, { decision: "active" }),
+      /resume_blocked_requires_revalidation/,
+      "validated manual suspend 不得直接 resume active",
+    );
+    // canary → suspended(manual) → active：同样拒绝（须回 promotion gate）。
+    const canaryManual = transitionPhase3ProcedureSuspend(canaryOf(), {
+      decision: "suspended",
+      reason: "operator pause before promotion",
+      suspendKind: "manual",
+    });
+    assert.equal(canaryManual.suspendedFrom, "canary");
+    assert.throws(
+      () => transitionPhase3ProcedureResume(canaryManual, { decision: "active" }),
+      /resume_blocked_requires_revalidation/,
+      "canary manual suspend 不得直接 resume active",
+    );
   });
 
   it("active|suspended→retired：draft/validated/canary/retired 输入拒绝；reason 必填", () => {
@@ -406,8 +448,8 @@ describe("Phase 5 状态机：单转换 fail-closed", () => {
       transitionPhase3ProcedureActive(canaryOf(), { decision: "active", activeReportId: ACTIVE_REPORT }),
     );
     assert.deepEqual(
-      transitionPhase3ProcedureSuspend(activeOf(), { decision: "suspended", reason: REASON }),
-      transitionPhase3ProcedureSuspend(activeOf(), { decision: "suspended", reason: REASON }),
+      transitionPhase3ProcedureSuspend(activeOf(), { decision: "suspended", reason: REASON, suspendKind: "manual" }),
+      transitionPhase3ProcedureSuspend(activeOf(), { decision: "suspended", reason: REASON, suspendKind: "manual" }),
     );
   });
 });

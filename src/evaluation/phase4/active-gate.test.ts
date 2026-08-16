@@ -64,6 +64,7 @@ function procedureOf(status: "active" | "suspended" | "retired"): CompiledProced
   const suspended = transitionPhase3ProcedureSuspend(active, {
     decision: "suspended",
     reason: SUSPEND_REASON,
+    suspendKind: "manual",
   });
   if (status === "suspended") return suspended;
   return transitionPhase3ProcedureRetire(suspended, {
@@ -167,6 +168,7 @@ describe("Phase 5 slice 1：active gate（执行上下文 × 状态矩阵）", (
     const suspended = transitionPhase3ProcedureSuspend(active as never, {
       decision: "suspended",
       reason: SUSPEND_REASON,
+      suspendKind: "manual",
     });
     assert.equal((await execute(gateInput("active", suspended))).outcome, "slow_path", "挂起后不可执行");
 
