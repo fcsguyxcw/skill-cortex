@@ -105,26 +105,38 @@ function failStep(detail: string): StepOutcome {
 /**
  * 正式闭环：真实事件 → induction → evidence → cost → replay → bindings → judgePromotion
  * → transition。确定性（同一 store 状态 + 冻结输入 → 同一结果）；任何前置失败 → draft。
+ *
+ * 可注入（测试/隔离用）：传入 `store`/`tenantScope`/`eventIds` 时覆盖冻结值；不传时
+ * 保持真实事件行为（.skill-cortex/practice + P3_GATE_FROZEN）。CLI --write-report 仍用真实事件。
  */
 export async function runP3GateValidation(options?: {
   storeRootDir?: string;
   costBenchmarkReportPath?: string;
+  /** 注入 PracticeStore（如临时目录测试 store）；缺省从 storeRootDir 构造。 */
+  store?: PracticeStore;
+  /** 覆盖冻结 tenantScope。 */
+  tenantScope?: string;
+  /** 覆盖冻结 eventIds。 */
+  eventIds?: readonly string[];
 }): Promise<P3GateResult> {
-  const storeRootDir = path.resolve(
-    PROJECT_ROOT,
-    options?.storeRootDir ?? P3_GATE_FROZEN.storeRootDir,
-  );
+  const tenantScope = options?.tenantScope ?? P3_GATE_FROZEN.tenantScope;
+  const eventIds = options?.eventIds ?? P3_GATE_FROZEN.eventIds;
+  const store =
+    options?.store ??
+    new PracticeStore({
+      rootDir: path.resolve(PROJECT_ROOT, options?.storeRootDir ?? P3_GATE_FROZEN.storeRootDir),
+      projectRoot: PROJECT_ROOT,
+    });
   const costReportPath = path.resolve(
     PROJECT_ROOT,
     options?.costBenchmarkReportPath ?? P3_GATE_FROZEN.costBenchmarkReportPath,
   );
-  const store = new PracticeStore({ rootDir: storeRootDir, projectRoot: PROJECT_ROOT });
 
   // 1. 读 2 条真实事件。
   const events: PracticeEvent[] = [];
   const missingIds: string[] = [];
-  for (const eventId of P3_GATE_FROZEN.eventIds) {
-    const event = await store.getEvent(P3_GATE_FROZEN.tenantScope, eventId);
+  for (const eventId of eventIds) {
+    const event = await store.getEvent(tenantScope, eventId);
     if (event === undefined) {
       missingIds.push(eventId);
     } else {
@@ -133,8 +145,8 @@ export async function runP3GateValidation(options?: {
   }
   const readRealEvents: StepOutcome =
     missingIds.length === 0
-      ? okStep(`读取 ${events.length} 条真实事件（${P3_GATE_FROZEN.eventIds.join(", ")}）`)
-      : failStep(`真实事件缺失: ${missingIds.join(", ")}`);
+      ? okStep(`读取 ${events.length} 条事件（${eventIds.join(", ")}）`)
+      : failStep(`事件缺失: ${missingIds.join(", ")}`);
 
   // 2. induction + 冻结绑定确认。
   let draft: Phase3ProcedureDraft | undefined;
@@ -170,8 +182,8 @@ export async function runP3GateValidation(options?: {
   if (readRealEvents.ok) {
     evidenceAssessment = await resolvePracticeEvidence({
       store,
-      tenantScope: P3_GATE_FROZEN.tenantScope,
-      eventIds: P3_GATE_FROZEN.eventIds,
+      tenantScope,
+      eventIds,
       expectedParentSkillId: P3_GATE_FROZEN.parentSkillId,
       expectedParentSkillRevision: P3_GATE_FROZEN.parentSkillRevision,
       expectedSourceHash: P3_GATE_FROZEN.sourceHash,
