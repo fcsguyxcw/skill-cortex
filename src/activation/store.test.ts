@@ -27,12 +27,11 @@ import {
   transitionProfileToSuspended,
 } from "./index.ts";
 
-const PROJECT_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
+const PROJECT_ROOT = path.resolve(import.meta.dirname, "..", "..");
 const SKILL_ID = "skill:670b8f65dca2ceda3de0d70e92ccd8b5cb832e7c4fd2e5d845b58b19e230cbe2";
 const SKILL_REV = "rev:ce271d3393e3f1ee836ab48419f33e4337098ecf809e936b969a8ea8af2a8dec";
 
 let tempRoot = "";
-let tempDirs: string[] = [];
 let storeSeq = 0;
 
 function makeStore(overrides: { tenantScope?: string } = {}): ActivationProfileStore {
@@ -124,10 +123,7 @@ before(() => {
 });
 
 after(async () => {
-  for (const dir of tempDirs) {
-    await rm(dir, { recursive: true, force: true });
-  }
-  tempDirs = [];
+  await rm(tempRoot, { recursive: true, force: true });
 });
 
 describe("ActivationProfileStore：save 与 round-trip", () => {

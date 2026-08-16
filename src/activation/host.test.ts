@@ -44,7 +44,7 @@ import {
   FINAL_HELDOUT_SKILL_REV,
 } from "./index.ts";
 
-const PROJECT_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
+const PROJECT_ROOT = path.resolve(import.meta.dirname, "..", "..");
 const SKILL_ID = "skill:670b8f65dca2ceda3de0d70e92ccd8b5cb832e7c4fd2e5d845b58b19e230cbe2";
 const SKILL_REV = "rev:ce271d3393e3f1ee836ab48419f33e4337098ecf809e936b969a8ea8af2a8dec";
 const SOURCE_HASH = "sha256:8e5a86aa92990a706512a6454e3a6a6345a950b454e75a11d048210d0a2ca830";
