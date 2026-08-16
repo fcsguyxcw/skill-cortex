@@ -42,6 +42,7 @@ import type {
 
 import type { PracticeEvent } from "../../core/contracts/index.ts";
 import { sha256Hex } from "../../core/registry/index.ts";
+import { resolveAttribution } from "../../practice/policy/index.ts";
 import { PracticeStore } from "../../practice/store/index.ts";
 import type { DiscoveryResult } from "./core.ts";
 
@@ -66,6 +67,36 @@ export interface ObserverStatus {
 export interface RouteSnapshotSkill {
   skillId: string;
   skillRevision: string;
+}
+
+/**
+ * compiled execution 证据（通用，不硬编码具体 procedure/工具名）。
+ *
+ * 由 options.compiledTool.decode(details) 从宿主 artifact 工具 tool_result.details
+ * 严格解码产生；任何形状/身份/内容校验失败返回 undefined ⇒ fail closed（不产生事件）。
+ * failureClass / firstAttributableFailureStepId 只在有证据时写入；attribution 由
+ * policy resolveAttribution 规则在事件构建后重算，绝不硬写 unknown。
+ */
+export interface CompiledExecutionEvidence {
+  procedureId: string;
+  dependencyFingerprint?: PracticeEvent["dependencyFingerprint"];
+  authorizationResults: PracticeEvent["authorizationResults"];
+  guardResults: PracticeEvent["guardResults"];
+  verifierResults: PracticeEvent["verifierResults"];
+  stepSummaries: PracticeEvent["stepSummaries"];
+  failureClass?: PracticeEvent["failureClass"];
+  firstAttributableFailureStepId?: string;
+}
+
+/** compiled execution 证据 seam 配置（通用工具名 + 严格解码器）。 */
+export interface CompiledToolOptions {
+  /** 宿主 artifact 工具名（如 skill_cortex_pagination_detect）；observer 不硬编码任何具体工具。 */
+  toolName: string;
+  /**
+   * 严格解码 tool_result.details → CompiledExecutionEvidence；
+   * 任何形状/身份/内容校验失败返回 undefined（fail closed）。
+   */
+  decode(details: unknown): CompiledExecutionEvidence | undefined;
 }
 
 /**
@@ -122,6 +153,11 @@ export interface PracticeObserverOptions {
   verifyLoadResult?: (details: unknown, snapshot: RouteSnapshotSkill) => boolean;
   /** 通用证据钩子（B4+）：注入 verifier/步骤证据；observer 不硬编码任何具体 verifier。 */
   evidenceHook?: EvidenceHook;
+  /**
+   * compiled execution 证据 seam（通用工具名 + 严格解码器）；未提供 ⇒ 无 compiled 事件，
+   * 只观察 load_skill 慢路径。shadow_replay 快路径证据经此进入 provenance=shadow 事件。
+   */
+  compiledTool?: CompiledToolOptions;
   /** 观察/落盘错误回调（fail open，不阻断主 Agent）。 */
   onError?: (error: unknown, phase: ObserverPhase) => void;
   /** 每个成功落盘事件的观察回调（测试/审计）。 */
@@ -181,6 +217,17 @@ export interface LoadEvidence {
   skillRevision?: string;
   outcome: "ok" | "failed" | "unknown";
   /** load_skill tool_result 的 details（phase12 seam 后含 source_hash）。 */
+  details?: unknown;
+}
+
+/** compiled 工具调用的观察证据（tool_call 记录，成功 tool_result 后才保存 evidence）。 */
+interface CompiledCallEvidence {
+  toolCallId: string;
+  skillId?: string;
+  skillRevision?: string;
+  outcome: "ok" | "failed" | "unknown";
+  /** 成功 tool_result 且严格解码通过后保存；blocked/解码失败/形状非法 ⇒ undefined（fail closed）。 */
+  evidence?: CompiledExecutionEvidence;
   details?: unknown;
 }
 
@@ -245,6 +292,9 @@ export class RunCollector {
   readonly steps: ObservedStep[] = [];
   readonly loadEvidenceByCallId = new Map<string, LoadEvidence>();
   readonly loadedSkillIds = new Set<string>();
+  /** compiled 工具调用证据（仅在对应成功 tool_result 后保存 evidence）。 */
+  readonly compiledEvidenceByCallId = new Map<string, CompiledCallEvidence>();
+  readonly compiledTool?: CompiledToolOptions;
   #stepSeq = 0;
 
   constructor(options: {
@@ -256,6 +306,8 @@ export class RunCollector {
     prompt: string;
     snapshot?: RouteSnapshot;
     snapshotRejectReason?: ObserverStatus["reason"];
+    /** compiled execution 证据 seam（可选；未提供 ⇒ 不观察 compiled 工具）。 */
+    compiledTool?: CompiledToolOptions;
   }) {
     this.runKey = options.runKey;
     this.sessionId = options.sessionId;
@@ -265,25 +317,44 @@ export class RunCollector {
     this.prompt = options.prompt;
     this.snapshot = options.snapshot;
     this.snapshotRejectReason = options.snapshotRejectReason;
+    this.compiledTool = options.compiledTool;
   }
 
-  /** tool_call：记录 load_skill 调用（参数级证据；不判定候选性）。 */
+  /** tool_call：记录 load_skill 与 compiled 工具调用（参数级证据；不判定候选性）。 */
   onToolCall(event: ToolCallEvent): void {
-    if (event.toolName !== "load_skill") return;
-    const input = event.input;
-    const skillId = typeof input.skill_id === "string" ? input.skill_id : undefined;
-    const skillRevision =
-      typeof input.skill_revision === "string" ? input.skill_revision : undefined;
-    if (skillId === undefined || skillRevision === undefined) return;
-    this.loadEvidenceByCallId.set(event.toolCallId, {
-      toolCallId: event.toolCallId,
-      skillId,
-      skillRevision,
-      outcome: "unknown",
-    });
+    if (event.toolName === "load_skill") {
+      const input = event.input;
+      const skillId = typeof input.skill_id === "string" ? input.skill_id : undefined;
+      const skillRevision =
+        typeof input.skill_revision === "string" ? input.skill_revision : undefined;
+      if (skillId === undefined || skillRevision === undefined) return;
+      this.loadEvidenceByCallId.set(event.toolCallId, {
+        toolCallId: event.toolCallId,
+        skillId,
+        skillRevision,
+        outcome: "unknown",
+      });
+      return;
+    }
+    if (this.compiledTool !== undefined && event.toolName === this.compiledTool.toolName) {
+      // compiled 工具名是注入字符串（非字面量），无法对宿主事件联合做字面量收窄；
+      // 与 details 同型 cast（自定义工具 input 恒为 Record<string, unknown>）。
+      const input = (event as { input: Record<string, unknown> }).input;
+      const skillId = typeof input.skill_id === "string" ? input.skill_id : undefined;
+      const skillRevision =
+        typeof input.skill_revision === "string" ? input.skill_revision : undefined;
+      if (skillId === undefined || skillRevision === undefined) return;
+      this.compiledEvidenceByCallId.set(event.toolCallId, {
+        toolCallId: event.toolCallId,
+        skillId,
+        skillRevision,
+        outcome: "unknown",
+      });
+      return;
+    }
   }
 
-  /** tool_result：确认工具结果并保存 details；候选校验留待 settled。 */
+  /** tool_result：确认工具结果并保存 details；compiled 证据只在成功 result 后解码保存。 */
   onToolResult(event: ToolResultEvent): void {
     const evidence = this.loadEvidenceByCallId.get(event.toolCallId);
     if (evidence !== undefined) {
@@ -294,6 +365,25 @@ export class RunCollector {
       if (ok && evidence.skillId !== undefined) {
         this.loadedSkillIds.add(evidence.skillId);
       }
+      return;
+    }
+    const compiled = this.compiledEvidenceByCallId.get(event.toolCallId);
+    if (compiled !== undefined) {
+      const details = (event as { details?: unknown }).details;
+      compiled.details = details;
+      if (event.isError) {
+        // 工具失败：不产证据（fail closed）。
+        compiled.outcome = "failed";
+        this.#recordStep(event.toolName, "failed");
+        return;
+      }
+      // 成功 tool_result 后才解码；blocked（无 tool_result）自然不产证据。
+      // 解码返回 undefined 或形状非法 ⇒ 不保存 evidence（fail closed）。
+      compiled.outcome = "ok";
+      const decoded = this.compiledTool?.decode(details);
+      compiled.evidence =
+        decoded !== undefined && isValidCompiledEvidence(decoded) ? decoded : undefined;
+      this.#recordStep(event.toolName, "ok");
       return;
     }
     this.#recordStep(event.toolName, event.isError ? "failed" : "ok");
@@ -375,6 +465,20 @@ function isLoadSkillOk(event: ToolResultEvent): boolean {
 }
 
 /**
+ * 轻量防御校验：decoder 返回的 evidence 至少具备契约必需字段（procedureId + 五个数组）。
+ * 任一缺失/类型错 ⇒ 视为解码失败（fail closed，不产生 compiled 事件）。
+ * 细粒度字段（predicateId/verifierId/枚举/有界数组）由 policy gate 在 append 时兜底。
+ */
+function isValidCompiledEvidence(evidence: CompiledExecutionEvidence): boolean {
+  if (typeof evidence.procedureId !== "string" || evidence.procedureId === "") return false;
+  if (!Array.isArray(evidence.authorizationResults)) return false;
+  if (!Array.isArray(evidence.guardResults)) return false;
+  if (!Array.isArray(evidence.verifierResults)) return false;
+  if (!Array.isArray(evidence.stepSummaries)) return false;
+  return true;
+}
+
+/**
  * 用 run 采集结果 + 候选快照合成单个 PracticeEvent。
  * 无 verifier/guard/authorization 可观察 ⇒ 空/unknown（policy 会把 attribution 重算为
  * unknown，verified_skill_effect 永远不会由本路径产生）。
@@ -391,8 +495,21 @@ export function buildPracticeEvent(
     selectedCount: number;
     /** evidenceHook 注入的步骤/verifier（可选；无则保持无 verifier）。 */
     hookEvidence?: HookEvidence;
+    /** compiled execution 证据（可选）；存在 ⇒ 生成 provenance=shadow 的 compiled_procedure 事件。 */
+    compiledEvidence?: CompiledExecutionEvidence;
   },
 ): PracticeEvent {
+  if (options.compiledEvidence !== undefined) {
+    // 显式收窄：compiledEvidence 已在上方 if 判定为非 undefined。
+    return buildCompiledPracticeEvent(run, selection, {
+      now: options.now,
+      routeDecisionId: options.routeDecisionId,
+      candidateSkillIds: options.candidateSkillIds,
+      candidateCount: options.candidateCount,
+      selectedCount: options.selectedCount,
+      compiledEvidence: options.compiledEvidence,
+    });
+  }
   // 统一 stepId 编号：宿主工具步骤在前，hook 注入步骤续后（stepId 全局唯一）。
   const stepSummaries: PracticeEvent["stepSummaries"] = [];
   for (const step of run.steps) {
@@ -459,11 +576,126 @@ export function buildPracticeEvent(
 }
 
 /**
+ * compiled execution 事件构建（通用；只消费已严格解码 + 快照身份校验的 evidence）。
+ *
+ * 合同字段：provenance=shadow（shadow_replay 观察式执行，仅靠 provenance 隔离生产证据）；
+ * executionMode=compiled_procedure；procedureId/dependencyFingerprint/authorizationResults/
+ * guardResults/verifierResults 全部来自 evidence；stepSummaries = 宿主工具步骤（tool-step-*
+ * 独立前缀，避免与证据步骤 ID 冲突）+ 证据步骤（保留原 stepId，供 firstAttributableFailureStepId
+ * 引用）；failureClass/firstAttributableFailureStepId 只在 evidence 提供时写入。
+ * attribution 由 policy resolveAttribution 规则对构建后事件重算（绝不硬写 unknown 作为最终值）。
+ */
+function buildCompiledPracticeEvent(
+  run: RunCollector,
+  selection: AttributableSelection,
+  options: {
+    now: () => Date;
+    routeDecisionId: string;
+    candidateSkillIds: string[];
+    candidateCount: number;
+    selectedCount: number;
+    compiledEvidence: CompiledExecutionEvidence;
+  },
+): PracticeEvent {
+  const evidence = options.compiledEvidence;
+  const stepSummaries: PracticeEvent["stepSummaries"] = [];
+  for (const step of run.steps) {
+    const operationClass = sanitizeOperationClass(`tool:${step.toolName}`);
+    if (operationClass === "") continue;
+    stepSummaries.push({
+      stepId: `tool-step-${stepSummaries.length + 1}`,
+      actor: "tool",
+      operationClass,
+      outcome: step.outcome,
+    });
+  }
+  for (const step of evidence.stepSummaries) {
+    const operationClass = sanitizeOperationClass(step.operationClass);
+    if (operationClass === "") continue;
+    stepSummaries.push({ ...step, operationClass });
+  }
+
+  const event: PracticeEvent = {
+    schemaVersion: 1,
+    eventId: deriveEventId(run.runKey, selection.skillId),
+    occurredAt: options.now().toISOString(),
+    tenantScope: run.tenantScope,
+    provenance: "shadow",
+    parentSkillId: selection.skillId,
+    parentSkillRevision: selection.skillRevision,
+    sourceHash: selection.sourceHash,
+    routeDecisionId: options.routeDecisionId,
+    candidateSkillIds: options.candidateSkillIds,
+    selectedSkillIds: [selection.skillId],
+    executionMode: "compiled_procedure",
+    procedureId: evidence.procedureId,
+    redactedTaskFeatures: [
+      `prompt-hash:${run.taskHash}`,
+      `candidate-count:${options.candidateCount}`,
+      `selected-count:${options.selectedCount}`,
+    ],
+    dependencyFingerprint: evidence.dependencyFingerprint ?? { sourceHash: selection.sourceHash },
+    stepSummaries,
+    authorizationResults: evidence.authorizationResults,
+    guardResults: evidence.guardResults,
+    verifierResults: evidence.verifierResults,
+    attribution: "unknown", // 占位；下方由 policy resolveAttribution 重算（不硬写 unknown 作为最终值）
+    sensitivity: "none",
+    retentionClass: "project_manual",
+    ...(evidence.failureClass !== undefined ? { failureClass: evidence.failureClass } : {}),
+    ...(evidence.firstAttributableFailureStepId !== undefined
+      ? { firstAttributableFailureStepId: evidence.firstAttributableFailureStepId }
+      : {}),
+  };
+  event.attribution = resolveAttribution(event);
+  return event;
+}
+
+/**
  * 用快照过滤出本次 run 可归因的选中 Skill；任一校验失败即排除（不产生事件）：
  * 1. outcome 必须 ok；2. skillId ∈ 当次候选快照；3. revision 精确匹配；
  * 4. 自定义 verifyLoadResult（默认放行）；5. details.source_hash 必须存在且严格 sha256
  *   （缺失/格式坏 ⇒ fail-closed，不把无 source binding 的加载当作可用证据）。
  */
+/** compiled 选中项：evidence 已严格解码 + 通过快照身份/sourceHash 校验。 */
+export interface CompiledSelection extends AttributableSelection {
+  evidence: CompiledExecutionEvidence;
+}
+
+/**
+ * 用快照过滤出本次 run 可归因的 compiled 选中项（与 load 路径同规则，fail-closed）：
+ * 1. outcome 必须 ok 且 evidence 已保存；2. skillId ∈ 当次候选快照；
+ * 3. revision 精确匹配；4. details.source_hash 必须存在且严格 sha256。
+ */
+export function selectCompiledSelections(
+  run: RunCollector,
+  snapshot: RouteSnapshot,
+): CompiledSelection[] {
+  const bySkillId = new Map<string, RouteSnapshotSkill>();
+  for (const skill of snapshot.candidateSkills) bySkillId.set(skill.skillId, skill);
+  const seen = new Set<string>();
+  const selected: CompiledSelection[] = [];
+  for (const evidence of run.compiledEvidenceByCallId.values()) {
+    if (evidence.outcome !== "ok" || evidence.evidence === undefined || evidence.skillId === undefined) {
+      continue;
+    }
+    if (seen.has(evidence.skillId)) continue;
+    const snapshotSkill = bySkillId.get(evidence.skillId);
+    if (snapshotSkill === undefined) continue; // 不在当次候选快照 ⇒ 不可归因
+    if (evidence.skillRevision !== snapshotSkill.skillRevision) continue; // 版本失配
+    const sourceHash = extractSourceHash(evidence.details);
+    if (sourceHash === undefined) continue; // 缺 source_hash ⇒ fail-closed
+    seen.add(evidence.skillId);
+    selected.push({
+      skillId: evidence.skillId,
+      skillRevision: snapshotSkill.skillRevision,
+      sourceHash,
+      evidence: evidence.evidence,
+    });
+  }
+  return selected;
+}
+
 export function selectAttributableSkills(
   run: RunCollector,
   snapshot: RouteSnapshot,
@@ -552,6 +784,7 @@ export function registerPracticeObserver(
         prompt: event.prompt,
         snapshot,
         snapshotRejectReason,
+        compiledTool: options.compiledTool,
       });
       currentRunBySession.set(sessionId, run);
     } catch (error) {
@@ -600,14 +833,32 @@ export function registerPracticeObserver(
       }
 
       const selected = selectAttributableSkills(run, snapshot, verifyLoadResult);
-      if (selected.length === 0) {
+      const compiled = selectCompiledSelections(run, snapshot);
+      // compiled 对同 skill 优先：被 compiled 覆盖的 load 选中不重复生成事件。
+      const compiledBySkill = new Map(compiled.map((s) => [s.skillId, s] as const));
+      const loadOnly = selected.filter((s) => !compiledBySkill.has(s.skillId));
+      if (compiled.length === 0 && loadOnly.length === 0) {
         onStatus?.({ wired: true, reason: "ok", appendedEvents: 0 });
         return; // 无选中证据 ⇒ 不产生事件
       }
 
       const routeDecisionId = deriveRouteDecisionId(run.runKey);
+      const totalSelected = compiled.length + loadOnly.length;
       let appended = 0;
-      for (const selection of selected) {
+      for (const selection of compiled) {
+        const event = buildPracticeEvent(run, selection, {
+          now,
+          routeDecisionId,
+          candidateSkillIds: snapshot.candidateSkills.map((s) => s.skillId),
+          candidateCount: snapshot.candidateSkills.length,
+          selectedCount: totalSelected,
+          compiledEvidence: selection.evidence,
+        });
+        await options.store.append(event);
+        appended += 1;
+        onEvent?.(event);
+      }
+      for (const selection of loadOnly) {
         // 通用证据钩子：注入额外步骤/verifier（B4+）；返回 undefined 则不注入。
         // 钩子抛错 ⇒ fail-closed：该事件不落盘，走 onError(finalize)。
         let hookEvidence: HookEvidence | undefined;
@@ -619,7 +870,7 @@ export function registerPracticeObserver(
           routeDecisionId,
           candidateSkillIds: snapshot.candidateSkills.map((s) => s.skillId),
           candidateCount: snapshot.candidateSkills.length,
-          selectedCount: selected.length,
+          selectedCount: totalSelected,
           hookEvidence,
         });
         await options.store.append(event);

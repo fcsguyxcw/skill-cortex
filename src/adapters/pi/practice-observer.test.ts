@@ -27,10 +27,90 @@ import {
   deriveEventId,
   deriveRouteDecisionId,
   registerPracticeObserver,
+  type CompiledExecutionEvidence,
+  type CompiledToolOptions,
   type ObserverStatus,
   type RouteSnapshot,
   type RouteSnapshotSkill,
 } from "./practice-observer.ts";
+
+/** 通用 compiled artifact 工具名（observer 不硬编码；由 options.compiledTool 注入）。 */
+const COMPILED_TOOL_NAME = "skill_cortex_pagination_detect";
+
+function compiledToolCall(toolCallId: string, skill: RouteSnapshotSkill): ToolCallEvent {
+  return {
+    type: "tool_call",
+    toolCallId,
+    toolName: COMPILED_TOOL_NAME,
+    input: { skill_id: skill.skillId, skill_revision: skill.skillRevision },
+  } as ToolCallEvent;
+}
+
+function compiledToolResult(
+  toolCallId: string,
+  skill: RouteSnapshotSkill,
+  details: Record<string, unknown>,
+  isError = false,
+): ToolResultEvent {
+  return {
+    type: "tool_result",
+    toolCallId,
+    toolName: COMPILED_TOOL_NAME,
+    input: { skill_id: skill.skillId, skill_revision: skill.skillRevision },
+    content: [{ type: "text", text: "done" }],
+    isError,
+    details,
+  } as ToolResultEvent;
+}
+
+/**
+ * 严格解码器（模拟 adapter 侧 execution-hook 的实现契约）：任何形状/身份校验失败返回
+ * undefined ⇒ fail closed。故意不校验 source_hash——observer 侧的 extractSourceHash 必须
+ * 独立 fail-closed（双层防御，测试分别覆盖）。
+ */
+function strictCompiledDecoder(details: unknown): CompiledExecutionEvidence | undefined {
+  if (typeof details !== "object" || details === null) return undefined;
+  const d = details as Record<string, unknown>;
+  if (typeof d.procedure_id !== "string" || d.procedure_id === "") return undefined;
+  if (!Array.isArray(d.authorization_results)) return undefined;
+  if (!Array.isArray(d.guard_results)) return undefined;
+  if (!Array.isArray(d.verifier_results)) return undefined;
+  if (!Array.isArray(d.steps)) return undefined;
+  return {
+    procedureId: d.procedure_id,
+    dependencyFingerprint: d.dependency_fingerprint as
+      | CompiledExecutionEvidence["dependencyFingerprint"]
+      | undefined,
+    authorizationResults: d.authorization_results as CompiledExecutionEvidence["authorizationResults"],
+    guardResults: d.guard_results as CompiledExecutionEvidence["guardResults"],
+    verifierResults: d.verifier_results as CompiledExecutionEvidence["verifierResults"],
+    stepSummaries: d.steps as CompiledExecutionEvidence["stepSummaries"],
+    failureClass: d.failure_class as CompiledExecutionEvidence["failureClass"],
+    firstAttributableFailureStepId: d.first_failure_step as
+      | CompiledExecutionEvidence["firstAttributableFailureStepId"]
+      | undefined,
+  };
+}
+
+/** 有界、policy-valid 的 compiled tool_result details（含 snake_case 字段）。 */
+function compiledDetails(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    category: "ok",
+    source_hash: `sha256:${HASH_64}`,
+    procedure_id: "procedure:phase3-pagination:test",
+    authorization_results: [{ gateId: "host-tool-call", result: "approved" }],
+    guard_results: [{ predicateId: "bounded-sql-input", phase: "precondition", result: "pass" }],
+    verifier_results: [{ verifierId: "phase3-pagination-structured-finding", result: "pass" }],
+    steps: [
+      { stepId: "detect-offset-pagination", actor: "procedure", operationClass: "detect-offset-pagination", outcome: "ok" },
+    ],
+    ...overrides,
+  };
+}
+
+function compiledToolConfig(): CompiledToolOptions {
+  return { toolName: COMPILED_TOOL_NAME, decode: strictCompiledDecoder };
+}
 
 const PROJECT_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
 const tempDirs: string[] = [];
@@ -165,6 +245,7 @@ async function createHarness(options: {
   snapshot?: RouteSnapshot;
   source?: FakeSnapshotSource;
   verifyLoadResult?: (details: unknown, snapshot: RouteSnapshotSkill) => boolean;
+  compiledTool?: CompiledToolOptions;
 }): Promise<ObserverHarness> {
   const projectRoot = makeTempProject();
   const store = await makeStore(projectRoot);
@@ -180,6 +261,7 @@ async function createHarness(options: {
     projectRoot,
     routeSnapshotSource: source,
     verifyLoadResult: options.verifyLoadResult,
+    compiledTool: options.compiledTool,
     onEvent: (event) => events.push(event),
     onStatus: (status) => statuses.push(status),
     onError: (error, phase) => errors.push({ error, phase }),
@@ -213,6 +295,20 @@ async function createHarness(options: {
       await handler({ type: "agent_settled" }, makeCtx(sessionId));
     },
   };
+}
+
+/** compiled run 事件序列：候选被成功 compiled 工具调用（单工具，无 load）。 */
+async function runWithCompiled(
+  harness: ObserverHarness,
+  sessionId: string,
+  skill: RouteSnapshotSkill,
+  details: Record<string, unknown>,
+  prompt = "detect pagination",
+): Promise<void> {
+  await harness.emitBeforeAgentStart(prompt, sessionId);
+  await harness.emitToolCall(compiledToolCall("c1", skill), sessionId);
+  await harness.emitToolResult(compiledToolResult("c1", skill, details), sessionId);
+  await harness.emitAgentSettled(sessionId);
 }
 
 /** 完整 run 事件序列：候选被成功 load + 一个无关工具步骤。 */
@@ -564,6 +660,192 @@ describe("registerPracticeObserver", () => {
     const event = harness.events[0]!;
     assert.match(event.stepSummaries[1]!.operationClass, /^tool:weird_tool_path$/);
     assert.equal(validatePracticeEvent(event).ok, true);
+  });
+});
+
+describe("registerPracticeObserver（compiled execution evidence seam）", () => {
+  it("compiled 全链：exposed 快照 + compiled 工具成功 ⇒ 1 个 shadow compiled_procedure 事件，attribution 由 policy 规则计算", async () => {
+    const skill = makeSkill(3);
+    const harness = await createHarness({
+      snapshot: { exposedToAgent: true, candidateSkills: [skill] },
+      compiledTool: compiledToolConfig(),
+    });
+    await runWithCompiled(harness, "sess-1", skill, compiledDetails());
+
+    assert.equal(harness.events.length, 1);
+    const event = harness.events[0]!;
+    assert.equal(event.provenance, "shadow", "shadow_replay 观察式执行必须 provenance=shadow");
+    assert.equal(event.executionMode, "compiled_procedure");
+    assert.equal(event.procedureId, "procedure:phase3-pagination:test");
+    assert.equal(event.parentSkillId, skill.skillId);
+    assert.equal(event.parentSkillRevision, skill.skillRevision);
+    assert.equal(event.sourceHash, `sha256:${HASH_64}`);
+    assert.deepEqual(event.authorizationResults, [{ gateId: "host-tool-call", result: "approved" }]);
+    assert.deepEqual(event.guardResults, [{ predicateId: "bounded-sql-input", phase: "precondition", result: "pass" }]);
+    assert.deepEqual(event.verifierResults, [{ verifierId: "phase3-pagination-structured-finding", result: "pass" }]);
+    // stepSummaries = 工具步骤（独立前缀）+ 证据步骤（保留原 stepId）。
+    assert.equal(event.stepSummaries.length, 2);
+    assert.equal(event.stepSummaries[0]!.actor, "tool");
+    assert.equal(event.stepSummaries[0]!.operationClass, `tool:${COMPILED_TOOL_NAME}`);
+    assert.equal(event.stepSummaries[1]!.actor, "procedure");
+    assert.equal(event.stepSummaries[1]!.stepId, "detect-offset-pagination", "证据步骤保留原 stepId");
+    // attribution 必须由 policy resolveAttribution 规则计算，不能硬写 unknown。
+    assert.equal(event.attribution, "verified_skill_effect");
+    assert.equal(event.failureClass, undefined, "无失败证据不写 failureClass");
+    assert.equal(event.dependencyFingerprint?.sourceHash, `sha256:${HASH_64}`);
+    assert.equal(event.retentionClass, "project_manual");
+
+    const policyResult = validatePracticeEvent(event);
+    assert.equal(policyResult.ok, true);
+    assert.equal(policyResult.attribution, "verified_skill_effect");
+    const persisted = await harness.store.getEvent(event.tenantScope, event.eventId);
+    assert.deepEqual(persisted, event);
+    const shadowListed = await harness.store.listProvenance(event.tenantScope, "shadow");
+    assert.equal(shadowListed.length, 1);
+    const realQueried = await harness.store.queryEvidence(event.tenantScope);
+    assert.equal(realQueried.length, 0, "shadow 事件不得进入 production evidence（queryEvidence 只读 real 分区）");
+  });
+
+  it("compiled blocked（tool_call 无对应 tool_result）⇒ 不产证据：0 事件", async () => {
+    const skill = makeSkill(3);
+    const harness = await createHarness({
+      snapshot: { exposedToAgent: true, candidateSkills: [skill] },
+      compiledTool: compiledToolConfig(),
+    });
+    await harness.emitBeforeAgentStart("detect pagination", "sess-1");
+    await harness.emitToolCall(compiledToolCall("c1", skill), "sess-1");
+    // blocked：宿主不发射 tool_result ⇒ 不得产生证据。
+    await harness.emitAgentSettled("sess-1");
+    assert.equal(harness.events.length, 0);
+    assert.equal(harness.statuses.at(-1)?.wired, true);
+    assert.equal(harness.statuses.at(-1)?.appendedEvents, 0);
+  });
+
+  it("compiled 对同 skill 优先于 load：两者并存 ⇒ 只生成 compiled_procedure 事件", async () => {
+    const skill = makeSkill(3);
+    const harness = await createHarness({
+      snapshot: { exposedToAgent: true, candidateSkills: [skill] },
+      compiledTool: compiledToolConfig(),
+    });
+    await harness.emitBeforeAgentStart("detect pagination", "sess-1");
+    await harness.emitToolCall(loadSkillCall("c1", skill), "sess-1");
+    await harness.emitToolResult(loadSkillResult("c1", skill, okLoadDetails(`sha256:${HASH_64}`)), "sess-1");
+    await harness.emitToolCall(compiledToolCall("c2", skill), "sess-1");
+    await harness.emitToolResult(compiledToolResult("c2", skill, compiledDetails()), "sess-1");
+    await harness.emitAgentSettled("sess-1");
+    assert.equal(harness.events.length, 1, "同 skill 只出一条事件");
+    assert.equal(harness.events[0]!.executionMode, "compiled_procedure");
+    assert.equal(harness.events[0]!.provenance, "shadow");
+  });
+
+  it("decoder 失败（返回 undefined / 形状非法）⇒ fail closed：0 事件", async () => {
+    const skill = makeSkill(3);
+    const harness = await createHarness({
+      snapshot: { exposedToAgent: true, candidateSkills: [skill] },
+      compiledTool: compiledToolConfig(),
+    });
+    // procedure_id 非字符串 ⇒ 严格解码器拒绝。
+    await runWithCompiled(harness, "sess-1", skill, compiledDetails({ procedure_id: 123 }));
+    assert.equal(harness.events.length, 0, "解码失败不得产生事件");
+
+    // 解码器本身恒返回 undefined。
+    const harness2 = await createHarness({
+      snapshot: { exposedToAgent: true, candidateSkills: [skill] },
+      compiledTool: { toolName: COMPILED_TOOL_NAME, decode: () => undefined },
+    });
+    await runWithCompiled(harness2, "sess-1", skill, compiledDetails());
+    assert.equal(harness2.events.length, 0);
+  });
+
+  it("compiled 身份失配 fail closed：候选外 / revision 失配 / sourceHash 缺失或格式坏 ⇒ 0 事件", async () => {
+    const skill = makeSkill(3);
+    const outside = makeSkill(7);
+    const base = {
+      snapshot: { exposedToAgent: true, candidateSkills: [skill] },
+      compiledTool: compiledToolConfig(),
+    };
+
+    // 候选外 skillId。
+    const h1 = await createHarness({ ...base });
+    await runWithCompiled(h1, "sess-1", outside, compiledDetails());
+    assert.equal(h1.events.length, 0);
+
+    // revision 失配（tool_call 参数 revision ≠ 快照）。
+    const h2 = await createHarness({ ...base });
+    await h2.emitBeforeAgentStart("detect pagination", "sess-1");
+    await h2.emitToolCall(
+      {
+        ...compiledToolCall("c1", skill),
+        input: { skill_id: skill.skillId, skill_revision: "rev:WRONG" },
+      } as ToolCallEvent,
+      "sess-1",
+    );
+    await h2.emitToolResult(compiledToolResult("c1", skill, compiledDetails()), "sess-1");
+    await h2.emitAgentSettled("sess-1");
+    assert.equal(h2.events.length, 0);
+
+    // source_hash 缺失 ⇒ observer 侧 extractSourceHash fail-closed。
+    const h3 = await createHarness({ ...base });
+    await runWithCompiled(h3, "sess-1", skill, compiledDetails({ source_hash: undefined }));
+    assert.equal(h3.events.length, 0, "缺失 source_hash 不得产生事件");
+
+    // source_hash 格式坏。
+    const h4 = await createHarness({ ...base });
+    await runWithCompiled(h4, "sess-1", skill, compiledDetails({ source_hash: "not-a-hash" }));
+    assert.equal(h4.events.length, 0, "格式坏的 source_hash 不得产生事件");
+  });
+
+  it("compiled tool_result isError ⇒ 不产证据：0 事件", async () => {
+    const skill = makeSkill(3);
+    const harness = await createHarness({
+      snapshot: { exposedToAgent: true, candidateSkills: [skill] },
+      compiledTool: compiledToolConfig(),
+    });
+    await harness.emitBeforeAgentStart("detect pagination", "sess-1");
+    await harness.emitToolCall(compiledToolCall("c1", skill), "sess-1");
+    await harness.emitToolResult(compiledToolResult("c1", skill, compiledDetails(), true), "sess-1");
+    await harness.emitAgentSettled("sess-1");
+    assert.equal(harness.events.length, 0, "失败 tool_result 不得产生证据");
+  });
+
+  it("compiled verifier fail ⇒ attribution=mixed（policy 规则重算，非硬写）", async () => {
+    const skill = makeSkill(3);
+    const harness = await createHarness({
+      snapshot: { exposedToAgent: true, candidateSkills: [skill] },
+      compiledTool: compiledToolConfig(),
+    });
+    await runWithCompiled(harness, "sess-1", skill, compiledDetails({
+      verifier_results: [{ verifierId: "phase3-pagination-structured-finding", result: "fail" }],
+    }));
+    assert.equal(harness.events.length, 1);
+    const event = harness.events[0]!;
+    assert.equal(event.attribution, "mixed", "verifier fail ⇒ mixed（resolveAttribution）");
+    assert.equal(validatePracticeEvent(event).ok, true);
+  });
+
+  it("compiled 证据含 failureClass/firstAttributableFailureStepId ⇒ 事件写入（引用当次 failed 步骤）", async () => {
+    const skill = makeSkill(3);
+    const harness = await createHarness({
+      snapshot: { exposedToAgent: true, candidateSkills: [skill] },
+      compiledTool: compiledToolConfig(),
+    });
+    await runWithCompiled(harness, "sess-1", skill, compiledDetails({
+      guard_results: [{ predicateId: "guard-bounded", phase: "runtime", result: "fail" }],
+      verifier_results: [],
+      steps: [
+        { stepId: "step-detect", actor: "procedure", operationClass: "detect-offset-pagination", outcome: "failed" },
+      ],
+      failure_class: "runtime_guard_failure",
+      first_failure_step: "step-detect",
+    }));
+    assert.equal(harness.events.length, 1);
+    const event = harness.events[0]!;
+    assert.equal(event.failureClass, "runtime_guard_failure", "有证据才写 failureClass");
+    assert.equal(event.firstAttributableFailureStepId, "step-detect");
+    assert.equal(event.attribution, "unknown", "无 verifier ⇒ attribution unknown");
+    const policyResult = validatePracticeEvent(event);
+    assert.equal(policyResult.ok, true);
+    assert.equal(policyResult.failureClass, "runtime_guard_failure");
   });
 });
 
