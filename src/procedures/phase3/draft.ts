@@ -443,6 +443,11 @@ export interface ActiveTransition {
   decision: "active";
   /** canary→active 发布报告 ID（must 绑定，审计可追溯）。 */
   activeReportId: string;
+  /**
+   * 上一稳定版本 revision 引用（数据合同 §6.2：rollback 指向 previousStableRevision，非快照）。
+   * 首次发布/无稳定版本时省略 ⇒ 回滚返回 no_stable_version，调用方走父 Skill 慢路径。
+   */
+  previousStableRevision?: string;
 }
 
 /**
@@ -470,10 +475,19 @@ export function transitionPhase3ProcedureActive(
   if (canary.evidenceIds.length === 0) {
     throw new Error("active_transition_requires_evidence");
   }
+  if (
+    transition.previousStableRevision !== undefined &&
+    !STABLE_REVISION_PATTERN.test(transition.previousStableRevision)
+  ) {
+    throw new TypeError("previous_stable_revision_invalid");
+  }
   return {
     ...canary,
     status: "active",
     activeReportId: transition.activeReportId,
+    ...(transition.previousStableRevision !== undefined
+      ? { previousStableRevision: transition.previousStableRevision }
+      : {}),
   };
 }
 
@@ -567,5 +581,68 @@ export function transitionPhase3ProcedureRetire(
     ...procedure,
     status: "retired",
     lifecycleReason: transition.reason,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5 slice 3：rollback + previous stable revision（纯函数，project-local）
+//
+// 数据合同 §6.2：rollback 指向 previousStableRevision（procedureRevision 字符串引用，
+// 不是快照）；不存在稳定版本时走父 Skill 慢路径（不猜测、不伪造回滚）。
+// 本模块不持有版本 registry：stableLookup 由调用方（发布管道）注入；纯函数只做判定。
+// ---------------------------------------------------------------------------
+
+/** procedureRevision 引用格式（"rev:" + 64 hex；与 buildPhase3ProcedureDraft 生成一致）。 */
+const STABLE_REVISION_PATTERN = /^rev:[0-9a-f]{64}$/u;
+
+/** 可作为 rollback 目标的稳定版本：仅已发布状态（active/suspended 视为可恢复的稳定版本）。 */
+const ROLLBACK_STABLE_STATUSES: readonly CompiledProcedure["status"][] = ["active", "suspended"];
+
+export type RollbackFailureReason =
+  | "no_stable_version"
+  | "invalid_stable_version";
+
+export type RollbackResult =
+  | { ok: true; rollbackTo: CompiledProcedure & { status: "active" } }
+  | { ok: false; reason: RollbackFailureReason };
+
+export interface RollbackInput {
+  /** 待回滚的失效版本（active 晋升时记录了 previousStableRevision 的发布版本）。 */
+  current: CompiledProcedure;
+  /** 按 procedureRevision 查找稳定版本的注入查找（纯函数不持有 registry）。 */
+  stableLookup: (procedureRevision: string) => CompiledProcedure | undefined;
+}
+
+/**
+ * 一键回滚（纯函数不可变）：
+ * - current.previousStableRevision 缺失 ⇒ no_stable_version（调用方走父 Skill 慢路径）；
+ * - stableLookup 找不到该 revision ⇒ no_stable_version（不猜测、不伪造）；
+ * - 找到的版本不是已发布稳定状态（draft/validated/canary/retired）⇒ invalid_stable_version
+ *   （不能回滚到未发布或已废弃版本）；
+ * - 命中 ⇒ 返回该稳定版本以 active 状态恢复的副本（rollbackTo），不改 current/stable 原对象。
+ */
+export function rollbackProcedure(input: RollbackInput): RollbackResult {
+  const previous = input.current.previousStableRevision;
+  if (previous === undefined) {
+    return { ok: false, reason: "no_stable_version" };
+  }
+  if (!STABLE_REVISION_PATTERN.test(previous)) {
+    // 防御：格式非法的引用视为“无可用稳定版本”（fail-closed，不当作有效引用）。
+    return { ok: false, reason: "invalid_stable_version" };
+  }
+  const stable = input.stableLookup(previous);
+  if (stable === undefined) {
+    return { ok: false, reason: "no_stable_version" };
+  }
+  if (!ROLLBACK_STABLE_STATUSES.includes(stable.status)) {
+    return { ok: false, reason: "invalid_stable_version" };
+  }
+  // 恢复为 active 发布状态（不可变：不改 stable 原对象，返回新副本）；
+  // 清除 suspended 遗留的失效原因（rollback 是显式恢复动作，与 resume 语义一致）。
+  const { lifecycleReason: _dropped, ...rest } = stable;
+  void _dropped;
+  return {
+    ok: true,
+    rollbackTo: { ...rest, status: "active" },
   };
 }
