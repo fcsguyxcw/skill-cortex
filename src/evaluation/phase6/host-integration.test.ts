@@ -36,7 +36,7 @@ import type { ActivationProfile, SkillRecord } from "../../core/contracts/index.
 import { buildSkillRecord } from "../../core/registry/index.ts";
 import { createDiscoveryServices } from "../../adapters/pi/core.ts";
 import { phase6ActivationStore } from "./host-integration-entry.ts";
-import { evaluateProfileForPromotion, promoteProfileIfEligible, transitionProfileToShadow } from "../../activation/index.ts";
+import { promoteProfileIfEligible, transitionProfileToShadow } from "../../activation/index.ts";
 
 const PROJECT_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
 const ENTRY = path.join(PROJECT_ROOT, "src", "evaluation", "phase6", "host-integration-entry.ts");
@@ -130,7 +130,7 @@ async function startRun(prompt: string): Promise<void> {
 }
 
 describe("Phase 6 host integration（真实 ExtensionRunner）", () => {
-  it("真实链路：load_skill 选中 + pagination 证据钩子 ⇒ induction ⇒ shadow；real skill 受控 promotion 拒绝（不 trivial 晋升）", async () => {
+  it("真实链路：load_skill 选中 + pagination 证据钩子 ⇒ induction ⇒ 冻结评估 promotion ⇒ active", async () => {
     // Run 0：预摄入（observer 无快照，不产事件）。
     await startRun("detect pagination");
     const { skillId, skillRevision, details } = await realLoad("pagination");
@@ -165,8 +165,8 @@ describe("Phase 6 host integration（真实 ExtensionRunner）", () => {
     const profile = profiles[0]!;
     assert.equal(profile.parentSkillId, skillId);
     assert.equal(profile.parentSkillRevision, skillRevision);
-    // real skill 父不在冻结 FINAL_HELDOUT 集 ⇒ 受控 promotion 拒绝 ⇒ 保持 shadow（不 trivial 晋升）。
-    assert.equal(profile.status, "shadow");
+    // Seam 3：冻结 real-skill 评估 provider 对真实 skill（confuser pdf 区分）判门通过 ⇒ active。
+    assert.equal(profile.status, "active");
     assert.ok(profile.positiveExamples.length > 0, "induction 必须从 verified 事件产出 positiveExamples");
   });
 });
@@ -219,7 +219,7 @@ describe("Phase 6 discovery overlay seam（createDiscoveryServices）", () => {
     assert.ok(!staleGold.evidence.some((e) => e.kind === "learned_cue"), "revision 失配不得生效");
   });
 
-  it("受控 promotion：seed active profile 经 promoteProfileIfEligible（父在评估集内）⇒ active 落盘", async () => {
+  it("受控 promotion：seed active profile 经 promoteProfileIfEligible（冻结评估集）⇒ active 落盘", async () => {
     const store = phase6ActivationStore(fixtureRoot);
     const draft = {
       schemaVersion: 1 as const,
@@ -238,27 +238,20 @@ describe("Phase 6 discovery overlay seam（createDiscoveryServices）", () => {
     const shadow = transitionProfileToShadow(draft, { decision: "shadow", shadowReportId: "shadow:seed-001" });
     await store.transition(draft, shadow, { trigger: "procedure", reportId: "shadow:seed-001" });
 
-    // 最小合成评估集（父 = 当前 gold；四栏各 1 例）。
-    const goldId = paginationRecord.skillId;
-    const cases = [
-      { id: "hc", column: "hard_confuser" as const, query: "pagination sql", expectedSkillIds: [goldId] },
-      { id: "ns", column: "no_skill" as const, query: "cook pasta dinner", expectedSkillIds: [] },
-      { id: "ms", column: "multi_skill" as const, query: "pagination", expectedSkillIds: [goldId] },
-      { id: "cl", column: "cross_language" as const, query: "分页 pagination", expectedSkillIds: [goldId] },
-    ];
+    // Seam 3：promotion 只接受 catalogRecords（冻结 real-skill 评估 provider 内部构造四栏）。
     const result = await promoteProfileIfEligible(
       store,
       shadow,
-      cases,
       [paginationRecord],
-      { ...OVERLAY },
       "promotion:seed-001",
     );
     assert.equal(result.ok, true, JSON.stringify(result));
     assert.equal((await store.getProfile("profile:seed-promotion"))!.status, "active");
 
-    // 受控 evaluator 一致性：report 来自 evaluateProfileForPromotion（evaluateOverlay）。
-    const report = evaluateProfileForPromotion(shadow, cases, [paginationRecord], { ...OVERLAY });
-    assert.equal(report.nonInferior, true);
+    // 受控 evaluator 一致性：report 来自冻结评估 provider（buildFrozenEvaluation）四栏。
+    if (result.ok) {
+      assert.equal(result.report.learnedColumns.length, 4, "冻结评估集必须四栏");
+      assert.equal(result.report.nonInferior, true);
+    }
   });
 });

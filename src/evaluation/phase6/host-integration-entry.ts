@@ -31,11 +31,7 @@ import {
 } from "../../adapters/pi/practice-observer.ts";
 import { createPaginationEvidenceHook } from "../../adapters/pi/practice-pagination-hook.ts";
 import {
-  FINAL_HELDOUT_CASES,
-  FINAL_HELDOUT_OVERLAY_OPTIONS,
-  FINAL_HELDOUT_RECORDS,
-} from "../../activation/final-heldout.ts";
-import {
+  FROZEN_PROMOTION_OVERLAY,
   induceAndStoreShadow,
   promoteProfileIfEligible,
 } from "../../activation/host.ts";
@@ -82,7 +78,7 @@ export default function phase6HostIntegrationEntry(pi: ExtensionAPI): void {
       catalogRecords = records;
     },
     overlayProfiles: () => activeProfiles,
-    overlayOptions: { ...FINAL_HELDOUT_OVERLAY_OPTIONS },
+    overlayOptions: { ...FROZEN_PROMOTION_OVERLAY },
   });
 
   registerPracticeObserver(pi, {
@@ -115,13 +111,12 @@ export default function phase6HostIntegrationEntry(pi: ExtensionAPI): void {
       if (!induced.ok || induced.status !== "shadow") continue;
       const profile = await activationStore.getProfile(induced.profileId);
       if (profile === undefined || profile.status !== "shadow") continue;
-      // 受控 promotion：report 只能来自 evaluateProfileForPromotion（evaluateOverlay）对冻结集重算。
+      // 受控 promotion：report 只能来自冻结 real-skill 评估 provider（buildFrozenEvaluation）
+      // + evaluateProfileForPromotion 重算，caller 无法注入手搓评估集/report。
       await promoteProfileIfEligible(
         activationStore,
         profile as ShadowActivationProfile,
-        FINAL_HELDOUT_CASES,
-        FINAL_HELDOUT_RECORDS,
-        FINAL_HELDOUT_OVERLAY_OPTIONS,
+        catalogRecords,
         PHASE6_PROMOTION_REPORT_ID,
       );
     }

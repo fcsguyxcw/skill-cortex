@@ -68,25 +68,121 @@ export type PromoteResult =
   | { ok: false; reason: "store_error"; error: string };
 
 /**
- * 受控 promotion：report 由 evaluateProfileForPromotion 重算 → evaluateProfilePromotion
- * 判门 → 通过才 transition shadow→active。caller 只提供 shadow profile + 冻结评估集 +
- * reportId，无法注入手搓 report/verdict；store 内部再重算 verdict 兜底。
+ * Phase 7 Seam 3 —— 冻结 real-skill 评估 provider（promotion 不接受任意 caller 自定义评估集）。
+ *
+ * - `FROZEN_PROMOTION_OVERLAY`：冻结 overlay 参数（与 final-heldout 一致，定值）。
+ * - `buildFrozenEvaluation`：唯一评估集来源——由 (profile, catalogRecords) 确定性构造
+ *   四栏评估集（父 Skill 自身 name/description 作 hard_confuser/multi_skill 查询、
+ *   冻结无关 no_skill、learned 中文 alias（或冻结中文后缀回退）作 cross_language；
+ *   父不在 catalog ⇒ 空 case 集 ⇒ promotion 拒绝）。
+ * - `promoteProfileIfEligible` 只接受 (store, shadow, catalogRecords, reportId, trigger)，
+ *   内部走 buildFrozenEvaluation + evaluateProfileForPromotion，caller 无法注入手搓
+ *   评估集/report/verdict。
+ */
+
+/** 冻结 promotion overlay 参数（定值，与 final-heldout 阈值校准一致）。 */
+export const FROZEN_PROMOTION_OVERLAY: EvaluateOptions = {
+  aliasBoost: 5,
+  positiveBoost: 3,
+  nearMissPenalty: 10,
+} as const;
+
+/** 冻结 no_skill 查询（与 dev/calibration/final-heldout 均不重叠的无关主题）。 */
+const FROZEN_NO_SKILL_QUERIES: readonly string[] = [
+  "how to bake sourdough bread",
+  "best coffee shops in portland",
+  "translate this poem to french",
+];
+
+/** 冻结 cross_language 中文后缀（父无 learned 中文 alias 时的回退，保证四栏覆盖）。 */
+const FROZEN_CROSS_LANGUAGE_SUFFIX = "分页检测";
+
+const CJK_RE = /[一-鿿]/u;
+
+export interface FrozenEvaluation {
+  cases: readonly EvaluationCase[];
+  records: readonly SkillRecord[];
+}
+
+/**
+ * 冻结 real-skill 评估集（唯一来源）：父 Skill 自身 metadata + 冻结无关查询 + learned 中文
+ * alias 构成四栏。父（skillId+revision 匹配）不在 catalog ⇒ cases 为空 ⇒ 调用方拒绝晋升。
+ * 说明：real-skill 无独立 ground-truth verifier（Phase 7 全系统验证另做更强压力测试），
+ * 此处评估 non-inferiority（overlay 对父自身查询不劣于静态），不替代 final-heldout 门槛校准。
+ */
+export function buildFrozenEvaluation(
+  profile: ActivationProfile,
+  catalogRecords: readonly SkillRecord[],
+): FrozenEvaluation {
+  const parent = catalogRecords.find(
+    (record) =>
+      record.skillId === profile.parentSkillId &&
+      record.skillRevision === profile.parentSkillRevision,
+  );
+  if (parent === undefined) {
+    return { cases: [], records: catalogRecords };
+  }
+  const gold = parent.skillId;
+  const others = catalogRecords
+    .filter((record) => record.skillId !== gold)
+    .sort((a, b) => (a.skillId < b.skillId ? -1 : 1));
+  const confuserIds = others.length > 0 ? [others[0]!.skillId] : [];
+
+  const chineseAliases = profile.learnedAliases.filter((alias) => CJK_RE.test(alias.text));
+  const crossLanguageQueries =
+    chineseAliases.length > 0
+      ? chineseAliases.map((alias) => `${alias.text} ${parent.name}`)
+      : [`${parent.name} ${FROZEN_CROSS_LANGUAGE_SUFFIX}`];
+
+  const cases: EvaluationCase[] = [
+    {
+      id: "hc-name",
+      column: "hard_confuser",
+      query: parent.name,
+      expectedSkillIds: [gold],
+      ...(confuserIds.length > 0 ? { confuserSkillIds: confuserIds } : {}),
+    },
+    {
+      id: "hc-desc",
+      column: "hard_confuser",
+      query: parent.description,
+      expectedSkillIds: [gold],
+      ...(confuserIds.length > 0 ? { confuserSkillIds: confuserIds } : {}),
+    },
+    ...FROZEN_NO_SKILL_QUERIES.map((query, index) => ({
+      id: `ns-${index}`,
+      column: "no_skill" as const,
+      query,
+      expectedSkillIds: [] as string[],
+    })),
+    { id: "ms-name", column: "multi_skill", query: parent.name, expectedSkillIds: [gold] },
+    { id: "ms-desc", column: "multi_skill", query: parent.description, expectedSkillIds: [gold] },
+    ...crossLanguageQueries.map((query, index) => ({
+      id: `cl-${index}`,
+      column: "cross_language" as const,
+      query,
+      expectedSkillIds: [gold],
+    })),
+  ];
+  return { cases, records: catalogRecords };
+}
+
+/**
+ * 受控 promotion（冻结评估集）：report 只能由 buildFrozenEvaluation + evaluateProfileForPromotion
+ * 重算，caller 无法注入手搓评估集/report/verdict；store 内部再重算 verdict 兜底。
  */
 export async function promoteProfileIfEligible(
   store: ActivationProfileStore,
   shadow: ShadowActivationProfile,
-  cases: readonly EvaluationCase[],
-  records: readonly SkillRecord[],
-  options: EvaluateOptions,
+  catalogRecords: readonly SkillRecord[],
   promotionReportId: string,
   trigger: TriggerSource = "procedure",
 ): Promise<PromoteResult> {
-  // 受控评估集必须包含父 Skill（否则 overlay 无意义地 no-op，非劣 trivially 通过）。
-  // real-skill 评估集属 Phase 7；此守卫防止"任何 profile 都能 trivial 晋升"。
-  if (!records.some((record) => record.skillId === shadow.parentSkillId)) {
+  const { cases } = buildFrozenEvaluation(shadow, catalogRecords);
+  if (cases.length === 0) {
     return { ok: false, reason: "promotion_gate_failed", reasons: ["parent_not_in_evaluation_set"] };
   }
-  const report = evaluateProfileForPromotion(shadow, cases, records, options);
+  const report = evaluateProfileForPromotion(shadow, cases, catalogRecords, FROZEN_PROMOTION_OVERLAY);
   const verdict = evaluateProfilePromotion(report);
   if (!verdict.ok) {
     return { ok: false, reason: "promotion_gate_failed", reasons: verdict.reasons };
