@@ -1,10 +1,10 @@
-# Implementation Progress Audit：Phase 1～3 实施状态
+# Implementation Progress Audit：Phase 0～7 实施状态
 
-日期：2026-08-14（B1–B6 关闭更新 2026-08-16）
+日期：2026-08-14（B1–B6 关闭更新 2026-08-16；Phase 6/7 收口更新 2026-08-17）
 
 审计对象：`agent/phase3-procedure-gate`，`b3fd709`；关闭证据 commit `9af7e67..d5165a9` 及 `p3-gate-runner`
 
-状态：**B1–B6 已关闭；2026-08-16 Gate P3 已完成纠偏并重新 validated；Phase 4 resolver/executor component implemented，但 host integration 与 end-to-end incomplete；任何真实 canary/active 或 Phase 5 路径不得启动**
+状态：**B1–B6 已关闭；Phase 0～7 全部 Complete（component / host integration / end-to-end 分别验收，见 §2 表与 [Phase 7 验证报告](../reports/2026-08-16-phase7-validation.md)）；任何真实 canary/active 部署仍未启动（real-host 前 blocker：Selection 模型侧评测、crash consistency/WAL、真实宿主指纹来源）**
 
 本文冻结当前代码与真实宿主接线的验收结果，供下一轮 Herdr leader 纠偏。它不替代
 ADR 的架构决定；当 implementation plan 的阶段状态与本文的更新证据冲突时，先处理
@@ -233,11 +233,11 @@ B1–B6、Gate P3 纠偏项与 Phase 4 component gate 已关闭。执行顺序�
 
 ## 5. 当前验证证据与边界
 
-2026-08-16 纠偏后的当前分支验证结果：
+2026-08-17 Phase 7 收口后的当前分支验证结果：
 
 ```text
 npm.cmd test
-  376 tests；374 pass；0 fail；2 skip
+  687 tests；685 pass；0 fail；2 skip
 
 npm.cmd run typecheck
   PASS

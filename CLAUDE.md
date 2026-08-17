@@ -35,7 +35,7 @@ ADR-0001～0004 与带 historical/superseded 标记的文档只用于理解决�
 | 6 Activation Memory | Complete（Gate P6 held-out PASS + host integration E2E：observer→induction→store→受控 promotion→active overlay） |
 | 7 系统验证与交接 | Complete（三 seam 关闭：search_skills overlay / host lifecycle cascade / 冻结 real-skill 评估 provider；六层验证见 [Phase 7 报告](../docs/reports/2026-08-16-phase7-validation.md)） |
 
-硬规则：上游 gate 未通过不得启动下游 active path。Phase 4 host integration（shadow）已接真实 Pi tool 事件并经隔离 E2E 验收（block / fast_path / 归因 / 漂移 fail-closed）；生产入口（.pi/extensions/skill-cortex/index.ts）接线与 canary/active 未启动，此前不得进入 Phase 5 active path。关闭 blocker 必须附测试、复现或真实端到端证据。
+硬规则：上游 gate 未通过不得启动下游 active path。Phase 0～7 的 component / host integration（shadow）/ end-to-end 均已验收关闭；生产入口（.pi/extensions/skill-cortex/index.ts）接线与真实 canary/active 部署仍未启动（real-host 前 blocker：Selection 模型侧评测、crash consistency/WAL、真实宿主指纹来源）。关闭 blocker 必须附测试、复现或真实端到端证据。
 
 ## 4. 版本漂移边界（2026-08-15 决策，重要）
 

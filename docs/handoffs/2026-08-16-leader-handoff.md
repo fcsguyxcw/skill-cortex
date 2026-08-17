@@ -1,5 +1,7 @@
 # Leader Handoff — 2026-08-16
 
+> **已过期（superseded，2026-08-17）**：本文是 2026-08-16 接管时的快照（HEAD `96f9215`，Phase 4 host integration 尚未完成）。当前真实状态：**Phase 0～7 全部 Complete**，见 `docs/reviews/2026-08-14-implementation-progress-audit.md` §2 与 `docs/reports/2026-08-16-phase7-validation.md`。真实 canary/active 部署仍未启动。本文以下内容仅作历史记录。
+
 ## 1. 当前前沿
 
 - 分支：`agent/phase3-procedure-gate`
