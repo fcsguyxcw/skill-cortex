@@ -248,9 +248,15 @@ describe("Phase 6 discovery overlay seam（createDiscoveryServices）", () => {
     assert.equal(result.ok, true, JSON.stringify(result));
     assert.equal((await store.getProfile("profile:seed-promotion"))!.status, "active");
 
-    // 受控 evaluator 一致性：report 来自冻结评估 provider（buildFrozenEvaluation）四栏。
+    // 受控 evaluator 一致性：report 来自冻结评估 provider（buildFrozenEvaluation）。
+    // 降级：real-skill 冻结 gate 只真实验证 hard_confuser + no_skill 两栏；multi_skill /
+    // cross_language 无法真实验证 ⇒ caseCount=0（不造假）。
     if (result.ok) {
-      assert.equal(result.report.learnedColumns.length, 4, "冻结评估集必须四栏");
+      const byColumn = new Map(result.report.learnedColumns.map((c) => [c.column, c.caseCount]));
+      assert.ok(byColumn.get("hard_confuser")! > 0, "hard_confuser 必须真实验证");
+      assert.ok(byColumn.get("no_skill")! > 0, "no_skill 必须真实验证");
+      assert.equal(byColumn.get("multi_skill"), 0, "multi_skill 降级（无法真实验证）");
+      assert.equal(byColumn.get("cross_language"), 0, "cross_language 降级（无法真实验证）");
       assert.equal(result.report.nonInferior, true);
     }
   });

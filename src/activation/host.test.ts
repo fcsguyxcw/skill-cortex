@@ -242,16 +242,21 @@ describe("evaluateProfileForPromotion：受控 evaluator", () => {
 });
 
 describe("buildFrozenEvaluation（Seam 3）：冻结 real-skill 评估 provider", () => {
-  it("父在 catalog ⇒ 四栏各 ≥1 例（含冻结 no_skill + cross_language 回退）", () => {
+  it("父在 catalog ⇒ 真实验证 hard_confuser + no_skill；multi_skill/cross_language 降级不产出", () => {
     const { cases, records } = buildFrozenEvaluation(
       shadowProfile(GOLD),
       [GOLD, CONFUSER_DISTINCT],
     );
     assert.equal(records.length, 2);
     const columns = new Set(cases.map((c) => c.column));
-    for (const column of ["hard_confuser", "no_skill", "multi_skill", "cross_language"] as const) {
+    for (const column of ["hard_confuser", "no_skill"] as const) {
       assert.ok(columns.has(column), `缺 ${column} 栏`);
       assert.ok(cases.some((c) => c.column === column), `${column} 栏必须有 case`);
+    }
+    // 降级：real-skill 冻结 provider 不产出伪 multi_skill（单-gold）或含 parent.name 的伪
+    // cross_language——这两栏无法真实验证，如实降级由合成 held-out 单独验证。
+    for (const column of ["multi_skill", "cross_language"] as const) {
+      assert.ok(!columns.has(column), `${column} 栏不得产出（无法真实验证，如实降级）`);
     }
   });
 

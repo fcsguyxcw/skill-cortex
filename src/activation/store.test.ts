@@ -21,10 +21,12 @@ import type { OverlayEvaluationReport } from "./evaluate.ts";
 import {
   applyEvidenceDeletionCascade,
   ActivationProfileStore,
+  computeProfileContentHash,
   evaluateProfilePromotion,
   transitionProfileToActive,
   transitionProfileToShadow,
   transitionProfileToSuspended,
+  type ShadowActivationProfile,
 } from "./index.ts";
 
 const PROJECT_ROOT = path.resolve(import.meta.dirname, "..", "..");
@@ -108,14 +110,25 @@ function passingReport(): OverlayEvaluationReport {
   };
 }
 
-/** 构造 promotion 边需要的结构化 evidence（BLOCKER 2 fixture：只带 report + reportId）。 */
+/** 构造与默认 draftProfile 绑定的 promotion binding（Issue 2：profileId/revision/content hash）。 */
+function promotionBinding(profile: ActivationProfile = draftProfile()) {
+  return {
+    profileId: profile.profileId,
+    parentSkillRevision: profile.parentSkillRevision,
+    profileContentHash: computeProfileContentHash(profile),
+    evaluationSetHash: "e".repeat(64),
+    evaluationConfigHash: "f".repeat(64),
+  };
+}
+
+/** 构造 promotion 边需要的结构化 evidence（BLOCKER 2 fixture：report + reportId + binding）。 */
 function promotionMeta(
   report: OverlayEvaluationReport = passingReport(),
   promotionReportId = "promotion:phase6-gate-001",
 ) {
   const verdict = evaluateProfilePromotion(report);
   if (verdict.ok !== true) throw new Error("fixture verdict must pass");
-  return { promotion: { report, promotionReportId } };
+  return { promotion: { report, promotionReportId, binding: promotionBinding() } };
 }
 
 before(() => {
@@ -456,11 +469,11 @@ describe("BLOCKER 2：promotion trust boundary + save draft-only", () => {
     };
 
     const cases: Array<[string, Parameters<typeof store.transition>[2]]> = [
-      ["activation_store_promotion_verdict_not_passed", { trigger: "agent", promotion: { report: nonInferiorFail, promotionReportId: "promotion:phase6-gate-001" } }],
-      ["activation_store_promotion_verdict_not_passed", { trigger: "agent", promotion: { report: emptyColumns, promotionReportId: "promotion:phase6-gate-001" } }],
-      ["activation_store_promotion_verdict_not_passed", { trigger: "agent", promotion: { report: missingColumn, promotionReportId: "promotion:phase6-gate-001" } }],
-      ["activation_store_promotion_verdict_not_passed", { trigger: "agent", promotion: { report: belowThreshold, promotionReportId: "promotion:phase6-gate-001" } }],
-      ["activation_store_promotion_report_id_invalid", { trigger: "agent", promotion: { report: passingReport(), promotionReportId: "not-a-promotion-report" } }],
+      ["activation_store_promotion_verdict_not_passed", { trigger: "agent", promotion: { report: nonInferiorFail, promotionReportId: "promotion:phase6-gate-001", binding: promotionBinding() } }],
+      ["activation_store_promotion_verdict_not_passed", { trigger: "agent", promotion: { report: emptyColumns, promotionReportId: "promotion:phase6-gate-001", binding: promotionBinding() } }],
+      ["activation_store_promotion_verdict_not_passed", { trigger: "agent", promotion: { report: missingColumn, promotionReportId: "promotion:phase6-gate-001", binding: promotionBinding() } }],
+      ["activation_store_promotion_verdict_not_passed", { trigger: "agent", promotion: { report: belowThreshold, promotionReportId: "promotion:phase6-gate-001", binding: promotionBinding() } }],
+      ["activation_store_promotion_report_id_invalid", { trigger: "agent", promotion: { report: passingReport(), promotionReportId: "not-a-promotion-report", binding: promotionBinding() } }],
     ];
     for (const [expected, meta] of cases) {
       await assert.rejects(
@@ -493,5 +506,180 @@ describe("BLOCKER 2：promotion trust boundary + save draft-only", () => {
     const events = await store.listEvents("profile:test1");
     assert.equal(events[2]!.toStatus, "active");
     assert.equal(events[2]!.reportId, "promotion:phase6-gate-001");
+  });
+});
+
+/** 故障注入：手工写某 profile 的事件文件（模拟「事件已 append 但 current 未提交」的崩溃态）。 */
+async function writeEvent(
+  store: ActivationProfileStore,
+  profileId: string,
+  seq: number,
+  event: Record<string, unknown>,
+): Promise<void> {
+  const { createHash } = await import("node:crypto");
+  const tenantHash = createHash("sha256").update(store.tenantScope, "utf8").digest("hex").slice(0, 32);
+  const pidHash = createHash("sha256").update(profileId, "utf8").digest("hex").slice(0, 40);
+  const dir = path.join(store.rootDir, tenantHash, "events", pidHash);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(path.join(dir, `${String(seq).padStart(6, "0")}.json`), JSON.stringify(event), "utf8");
+}
+
+/** 落盘一个 draft→shadow 的 profile（返回 draft 与 shadow 对象）。 */
+async function seedShadow(
+  store: ActivationProfileStore,
+  id: string,
+  overrides: Partial<ActivationProfile> = {},
+): Promise<{ draft: ActivationProfile; shadow: ShadowActivationProfile }> {
+  const draft = draftProfile(id, overrides);
+  const reportId = `shadow:${id.replace("profile:", "")}`;
+  await store.save(draft, { trigger: "procedure" });
+  const shadow = transitionProfileToShadow(draft as never, {
+    decision: "shadow",
+    shadowReportId: reportId,
+  });
+  await store.transition(draft, shadow, { trigger: "agent", reportId });
+  return { draft, shadow };
+}
+
+describe("并发与 crash 恢复（Issue 1）", () => {
+  it("并发 transition（同一 prior）⇒ 恰好一个 writer 成功，另一个 stale_prior 拒绝", async () => {
+    const store = makeStore();
+    const draft = draftProfile();
+    await store.save(draft, { trigger: "procedure" });
+    const shadow = transitionProfileToShadow(draft as never, {
+      decision: "shadow",
+      shadowReportId: "shadow:phase6-replay-001",
+    });
+    const results = await Promise.allSettled([
+      store.transition(draft, shadow, { trigger: "agent", reportId: "shadow:phase6-replay-001" }),
+      store.transition(draft, shadow, { trigger: "agent", reportId: "shadow:phase6-replay-001" }),
+    ]);
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter((r) => r.status === "rejected");
+    assert.equal(fulfilled.length, 1, "恰好一个 writer 成功");
+    assert.equal(rejected.length, 1, "另一个 writer 拒绝");
+    const reason = (rejected[0] as PromiseRejectedResult).reason as Error;
+    assert.match(reason.message, /activation_store_stale_prior/);
+    assert.equal((await store.getProfile("profile:test1"))!.status, "shadow");
+    assert.equal((await store.listEvents("profile:test1")).length, 2, "save + 1 次成功 transition = 2 事件");
+  });
+
+  it("crash 恢复：transition 悬挂事件（事件已写 current 未提交）⇒ 读时确定性回滚", async () => {
+    const store = makeStore();
+    const draft = draftProfile();
+    await store.save(draft, { trigger: "procedure" });
+    await writeEvent(store, "profile:test1", 2, {
+      schemaVersion: 1,
+      eventId: "evt-dangling",
+      seq: 2,
+      profileId: "profile:test1",
+      fromStatus: "draft",
+      toStatus: "shadow",
+      reportId: "shadow:phase6-replay-001",
+      trigger: "agent",
+      occurredAt: "2026-08-20T00:00:00.000Z",
+    });
+    assert.equal((await store.getProfile("profile:test1"))!.status, "draft", "current 保持 draft");
+    const events = await store.listEvents("profile:test1");
+    assert.deepEqual(events.map((e) => e.toStatus), ["draft"], "悬挂 shadow 事件被回滚");
+  });
+
+  it("crash 恢复：save 悬挂事件（无 current 但有事件）⇒ 读时删除全部悬挂", async () => {
+    const store = makeStore();
+    await writeEvent(store, "profile:crash", 1, {
+      schemaVersion: 1,
+      eventId: "evt-save-dangling",
+      seq: 1,
+      profileId: "profile:crash",
+      fromStatus: undefined,
+      toStatus: "draft",
+      trigger: "procedure",
+      occurredAt: "2026-08-20T00:00:00.000Z",
+    });
+    assert.equal(await store.getProfile("profile:crash"), undefined, "save 未提交 ⇒ 无 current");
+    assert.deepEqual(await store.listEvents("profile:crash"), [], "悬挂事件被清理");
+  });
+});
+
+describe("Issue 2：promotion binding（PASS report 不得跨 Profile 复用）", () => {
+  it("Profile A 的 PASS report + binding 用于 Profile B ⇒ profileId 失配拒绝", async () => {
+    const store = makeStore();
+    const a = await seedShadow(store, "profile:a");
+    const b = await seedShadow(store, "profile:b", {
+      learnedAliases: [{ cueId: "cue:b1", text: "z-query", evidenceIds: ["obs-b"] }],
+      positiveExamples: [],
+      nearMissExamples: [],
+      environmentCues: [],
+    });
+    const aBinding = promotionBinding(a.shadow);
+    const bActive = transitionProfileToActive(b.shadow, {
+      decision: "active",
+      promotionReportId: "promotion:b",
+    });
+    await assert.rejects(
+      store.transition(b.shadow, bActive, {
+        trigger: "agent",
+        promotion: { report: passingReport(), promotionReportId: "promotion:b", binding: aBinding },
+      }),
+      /activation_store_promotion_binding_profile_mismatch/,
+    );
+    assert.equal((await store.getProfile("profile:b"))!.status, "shadow", "B 不得晋升");
+  });
+
+  it("binding profileContentHash 与落盘内容不一致（cue 被偷改）⇒ 拒绝", async () => {
+    const store = makeStore();
+    const b = await seedShadow(store, "profile:b");
+    const tamperedHash = computeProfileContentHash(
+      draftProfile("profile:b", {
+        learnedAliases: [{ cueId: "cue:hacked", text: "hacked", evidenceIds: ["obs-h"] }],
+      }),
+    );
+    const binding = { ...promotionBinding(b.shadow), profileContentHash: tamperedHash };
+    const bActive = transitionProfileToActive(b.shadow, {
+      decision: "active",
+      promotionReportId: "promotion:b",
+    });
+    await assert.rejects(
+      store.transition(b.shadow, bActive, {
+        trigger: "agent",
+        promotion: { report: passingReport(), promotionReportId: "promotion:b", binding },
+      }),
+      /activation_store_promotion_binding_content_hash_mismatch/,
+    );
+    assert.equal((await store.getProfile("profile:b"))!.status, "shadow");
+  });
+
+  it("binding parentSkillRevision 与落盘不一致 ⇒ 拒绝", async () => {
+    const store = makeStore();
+    const b = await seedShadow(store, "profile:b");
+    const binding = { ...promotionBinding(b.shadow), parentSkillRevision: "rev:" + "9".repeat(64) };
+    const bActive = transitionProfileToActive(b.shadow, {
+      decision: "active",
+      promotionReportId: "promotion:b",
+    });
+    await assert.rejects(
+      store.transition(b.shadow, bActive, {
+        trigger: "agent",
+        promotion: { report: passingReport(), promotionReportId: "promotion:b", binding },
+      }),
+      /activation_store_promotion_binding_revision_mismatch/,
+    );
+  });
+
+  it("binding eval set hash 非 64-hex ⇒ 拒绝", async () => {
+    const store = makeStore();
+    const b = await seedShadow(store, "profile:b");
+    const binding = { ...promotionBinding(b.shadow), evaluationSetHash: "not-a-hash" };
+    const bActive = transitionProfileToActive(b.shadow, {
+      decision: "active",
+      promotionReportId: "promotion:b",
+    });
+    await assert.rejects(
+      store.transition(b.shadow, bActive, {
+        trigger: "agent",
+        promotion: { report: passingReport(), promotionReportId: "promotion:b", binding },
+      }),
+      /activation_store_promotion_binding_eval_set_hash_invalid/,
+    );
   });
 });

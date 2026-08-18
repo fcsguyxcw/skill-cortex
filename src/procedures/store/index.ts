@@ -23,14 +23,15 @@
  *
  * 边界：不实现 transition 纯函数（draft.ts）；不接 host 事件（下一 slice）；不写用户环境。
  *
- * crash consistency（记录，real-host deployment 前 blocker / tech debt）：
- * transition 的 current 覆盖写入与 event append 之间无原子性——进程中途崩溃可能留下
- * “current 已更新但事件未追加”（或反之）的不一致状态。本 slice 不做 WAL/事务（最小修复
- * 控制 scope）；真实宿主部署前必须引入原子提交（如事件先写、current 以 rename 替换，
- * 或 WAL），届时再处理回放/修复。
+ * crash consistency（2026-08-18 收口）：
+ * 提交协议 = 事件先写（意图，原子 rename）→ history（原子 rename，幂等）→ current（原子
+ * rename）→ release（原子 rename）；每个文件经 <path>.tmp + rename 原子替换，崩溃不截断。
+ * 唯一崩溃产物是「事件已 append 但 current 未提交」的悬挂事件尾；读/写路径在每 entity
+ * 进程内互斥锁内调用 #recoverLocked，确定性回滚悬挂事件尾（见 #recoverLocked）。同一 entity
+ * 的并发 writer 由锁串行化（后到者 re-read 后 stale-prior 拒绝），杜绝双 writer 双成功。
  */
 import { createHash } from "node:crypto";
-import { lstat, mkdir, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { CompiledProcedure } from "../../core/contracts/index.ts";
@@ -363,6 +364,7 @@ export class ProcedureStore {
   readonly projectRoot: string;
   readonly tenantScope: string;
   #initialized = false;
+  #locks = new Map<string, Promise<void>>();
 
   constructor(options: ProcedureStoreOptions) {
     const projectRoot = path.resolve(options.projectRoot ?? process.cwd());
@@ -393,6 +395,30 @@ export class ProcedureStore {
     }
     await mkdir(this.rootDir, { recursive: true });
     this.#initialized = true;
+  }
+
+  /** 每 entity 进程内互斥（FIFO 异步链）：同一 procedure 的写/恢复串行化，杜绝并发 writer 双成功。 */
+  async #withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    const prev = this.#locks.get(key) ?? Promise.resolve();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.#locks.set(key, prev.then(() => gate));
+    await prev;
+    try {
+      return await fn();
+    } finally {
+      release();
+    }
+  }
+
+  /** 原子写：先写 <path>.tmp 再 rename（同卷 rename 原子，崩溃不留截断文件）。 */
+  async #writeFileAtomic(filePath: string, body: string): Promise<void> {
+    await mkdir(path.dirname(filePath), { recursive: true });
+    const tmp = `${filePath}.tmp`;
+    await writeFile(tmp, body, { encoding: "utf8", flag: "w" });
+    await rename(tmp, filePath);
   }
 
   #tenantDir(): string {
@@ -457,18 +483,9 @@ export class ProcedureStore {
     }
   }
 
-  async #writeProcedureFile(
-    filePath: string,
-    procedure: CompiledProcedure,
-    options: { exclusive: boolean },
-  ): Promise<void> {
-    await mkdir(path.dirname(filePath), { recursive: true });
+  async #writeProcedureFile(filePath: string, procedure: CompiledProcedure): Promise<void> {
     const body = JSON.stringify(toStoredProcedure(procedure));
-    if (options.exclusive) {
-      await writeFile(filePath, body, { encoding: "utf8", flag: "wx" });
-    } else {
-      await writeFile(filePath, body, { encoding: "utf8", flag: "w" });
-    }
+    await this.#writeFileAtomic(filePath, body);
   }
 
   /** 从 transition/save 后的 procedure 提取 release 状态记录（覆盖写：该 revision 的当前 release 状态）。
@@ -493,8 +510,7 @@ export class ProcedureStore {
       updatedAt: this.#now().toISOString(),
     };
     const filePath = this.#releasePath(procedure.procedureId, procedure.procedureRevision);
-    await mkdir(path.dirname(filePath), { recursive: true });
-    await writeFile(filePath, JSON.stringify(record), { encoding: "utf8", flag: "w" });
+    await this.#writeFileAtomic(filePath, JSON.stringify(record));
   }
 
   async #findReleaseByRevision(procedureRevision: string): Promise<ReleaseStateRecord | undefined> {
@@ -590,8 +606,7 @@ export class ProcedureStore {
       seq,
     };
     const filePath = this.#eventPath(procedureId, seq);
-    await mkdir(path.dirname(filePath), { recursive: true });
-    await writeFile(filePath, JSON.stringify(event), { encoding: "utf8", flag: "wx" });
+    await this.#writeFileAtomic(filePath, JSON.stringify(event));
   }
 
   /**
@@ -604,26 +619,29 @@ export class ProcedureStore {
     if (procedure.procedureId === "" || procedure.procedureRevision === "") {
       throw new Error("procedure_store_invalid_identity");
     }
-    const currentPath = this.#currentPath(procedure.procedureId);
-    if (await this.#fileExists(currentPath)) {
-      throw new Error("procedure_store_already_exists");
-    }
-    await this.#writeProcedureFile(currentPath, procedure, { exclusive: true });
-    await this.#writeProcedureFile(
-      this.#historyPath(procedure.procedureId, procedure.procedureRevision),
-      procedure,
-      { exclusive: true },
-    );
-    await this.#writeReleaseState(procedure);
-    const meta_ = auditMetaOf(procedure);
-    await this.#appendEvent(
-      procedure.procedureId,
-      procedure.procedureRevision,
-      undefined,
-      procedure.status,
-      meta.trigger,
-      meta_,
-    );
+    await this.#withLock(procedure.procedureId, async () => {
+      await this.#recoverLocked(procedure.procedureId);
+      const currentPath = this.#currentPath(procedure.procedureId);
+      if (await this.#fileExists(currentPath)) {
+        throw new Error("procedure_store_already_exists");
+      }
+      // 提交顺序：事件先写（意图）→ history（幂等，原子）→ current（原子 rename）→ release（原子 rename）。
+      const meta_ = auditMetaOf(procedure);
+      await this.#appendEvent(
+        procedure.procedureId,
+        procedure.procedureRevision,
+        undefined,
+        procedure.status,
+        meta.trigger,
+        meta_,
+      );
+      await this.#writeProcedureFile(
+        this.#historyPath(procedure.procedureId, procedure.procedureRevision),
+        procedure,
+      );
+      await this.#writeProcedureFile(currentPath, procedure);
+      await this.#writeReleaseState(procedure);
+    });
   }
 
   /**
@@ -651,36 +669,39 @@ export class ProcedureStore {
       throw new Error("procedure_store_transition_procedure_id_mismatch");
     }
     this.#assertLegalTransition(prior.status, next.status);
-    // HIGH 1：读取真实落盘状态，校验 prior 一致（stale/伪造 prior 拒绝）。
-    const stored = await this.getProcedure(prior.procedureId);
-    if (stored === undefined) {
-      throw new Error("procedure_store_missing_prior");
-    }
-    if (
-      stored.procedureId !== prior.procedureId ||
-      stored.procedureRevision !== prior.procedureRevision ||
-      stored.status !== prior.status
-    ) {
-      throw new Error("procedure_store_stale_prior");
-    }
-    // BLOCKER 2：revision 变化不得经普通 lifecycle transition（修订必须重新验证）。
-    if (prior.procedureRevision !== next.procedureRevision) {
-      throw new Error("procedure_store_revision_change_requires_revalidation");
-    }
-    // HIGH 2：同 revision 不得偷改 immutable 内容 + 晋升锁定字段（以落盘 stored 为权威，不信任 prior）。
-    assertAllowedDelta(stored, next);
-    const currentPath = this.#currentPath(next.procedureId);
-    await this.#writeProcedureFile(currentPath, next, { exclusive: false });
-    await this.#writeReleaseState(next);
-    const meta_ = auditMetaOf(next);
-    await this.#appendEvent(
-      next.procedureId,
-      next.procedureRevision,
-      prior.status,
-      next.status,
-      meta.trigger,
-      meta_,
-    );
+    await this.#withLock(next.procedureId, async () => {
+      await this.#recoverLocked(next.procedureId);
+      // HIGH 1：读取真实落盘状态，校验 prior 一致（stale/伪造 prior 拒绝）。
+      const stored = await this.#readCurrentLocked(prior.procedureId);
+      if (stored === undefined) {
+        throw new Error("procedure_store_missing_prior");
+      }
+      if (
+        stored.procedureId !== prior.procedureId ||
+        stored.procedureRevision !== prior.procedureRevision ||
+        stored.status !== prior.status
+      ) {
+        throw new Error("procedure_store_stale_prior");
+      }
+      // BLOCKER 2：revision 变化不得经普通 lifecycle transition（修订必须重新验证）。
+      if (prior.procedureRevision !== next.procedureRevision) {
+        throw new Error("procedure_store_revision_change_requires_revalidation");
+      }
+      // HIGH 2：同 revision 不得偷改 immutable 内容 + 晋升锁定字段（以落盘 stored 为权威，不信任 prior）。
+      assertAllowedDelta(stored, next);
+      const meta_ = auditMetaOf(next);
+      // 提交顺序：事件先写（意图）→ current（原子 rename）→ release（原子 rename）。
+      await this.#appendEvent(
+        next.procedureId,
+        next.procedureRevision,
+        prior.status,
+        next.status,
+        meta.trigger,
+        meta_,
+      );
+      await this.#writeProcedureFile(this.#currentPath(next.procedureId), next);
+      await this.#writeReleaseState(next);
+    });
   }
 
   /**
@@ -716,53 +737,55 @@ export class ProcedureStore {
   ): Promise<void> {
     await this.#ensureInit();
     assertValidStatus(failed.status);
-    const stored = await this.getProcedure(failed.procedureId);
-    if (stored === undefined) {
-      throw new Error("procedure_store_missing_prior");
-    }
-    // idempotency（先于 stale-prior）：current 已回滚到 stable（active + revision === stableRevision）。
-    if (stored.status === "active" && stored.procedureRevision === stableRevision) {
-      throw new Error("procedure_store_rollback_already_applied");
-    }
-    // HIGH 1 stale-prior：真实落盘 current 三要素与 failed 完全一致（不信任调用者传入身份）。
-    if (
-      stored.procedureId !== failed.procedureId ||
-      stored.procedureRevision !== failed.procedureRevision ||
-      stored.status !== failed.status
-    ) {
-      throw new Error("procedure_store_rollback_stale_prior");
-    }
-    // 目标 revision 权威来源 = stored.previousStableRevision（不信任 failed.previousStableRevision）。
-    const previous = stored.previousStableRevision;
-    if (previous === undefined) {
-      throw new Error("procedure_store_rollback_no_stable_version");
-    }
-    if (stableRevision !== previous) {
-      throw new Error("procedure_store_rollback_target_revision_mismatch");
-    }
-    // HIGH 3：stable 恢复来源只认 store 自身重读（不接受 caller 内容）。
-    const stableNow = await this.getStableByRevision(previous);
-    if (stableNow === undefined || stableNow.procedureId !== failed.procedureId) {
-      throw new Error("procedure_store_rollback_stable_unavailable");
-    }
-    // 用 stableNow 的 immutable 内容构造 active 恢复版本（清 suspended 元数据，与 rollback 语义一致）。
-    const { lifecycleReason: _reason, suspendedFrom: _from, suspendKind: _kind, ...rest } = stableNow;
-    void _reason;
-    void _from;
-    void _kind;
-    const target = { ...rest, status: "active" as const } as CompiledProcedure;
-    await this.#writeProcedureFile(this.#currentPath(target.procedureId), target, {
-      exclusive: false,
+    await this.#withLock(failed.procedureId, async () => {
+      await this.#recoverLocked(failed.procedureId);
+      const stored = await this.#readCurrentLocked(failed.procedureId);
+      if (stored === undefined) {
+        throw new Error("procedure_store_missing_prior");
+      }
+      // idempotency（先于 stale-prior）：current 已回滚到 stable（active + revision === stableRevision）。
+      if (stored.status === "active" && stored.procedureRevision === stableRevision) {
+        throw new Error("procedure_store_rollback_already_applied");
+      }
+      // HIGH 1 stale-prior：真实落盘 current 三要素与 failed 完全一致（不信任调用者传入身份）。
+      if (
+        stored.procedureId !== failed.procedureId ||
+        stored.procedureRevision !== failed.procedureRevision ||
+        stored.status !== failed.status
+      ) {
+        throw new Error("procedure_store_rollback_stale_prior");
+      }
+      // 目标 revision 权威来源 = stored.previousStableRevision（不信任 failed.previousStableRevision）。
+      const previous = stored.previousStableRevision;
+      if (previous === undefined) {
+        throw new Error("procedure_store_rollback_no_stable_version");
+      }
+      if (stableRevision !== previous) {
+        throw new Error("procedure_store_rollback_target_revision_mismatch");
+      }
+      // HIGH 3：stable 恢复来源只认 store 自身重读（不接受 caller 内容）。
+      const stableNow = await this.getStableByRevision(previous);
+      if (stableNow === undefined || stableNow.procedureId !== failed.procedureId) {
+        throw new Error("procedure_store_rollback_stable_unavailable");
+      }
+      // 用 stableNow 的 immutable 内容构造 active 恢复版本（清 suspended 元数据，与 rollback 语义一致）。
+      const { lifecycleReason: _reason, suspendedFrom: _from, suspendKind: _kind, ...rest } = stableNow;
+      void _reason;
+      void _from;
+      void _kind;
+      const target = { ...rest, status: "active" as const } as CompiledProcedure;
+      // 提交顺序：事件先写（意图）→ current（原子 rename）→ release（原子 rename）。
+      await this.#appendEvent(
+        target.procedureId,
+        target.procedureRevision,
+        failed.status,
+        "active",
+        meta.trigger,
+        { reason: ROLLBACK_REASON },
+      );
+      await this.#writeProcedureFile(this.#currentPath(target.procedureId), target);
+      await this.#writeReleaseState(target);
     });
-    await this.#writeReleaseState(target);
-    await this.#appendEvent(
-      target.procedureId,
-      target.procedureRevision,
-      failed.status,
-      "active",
-      meta.trigger,
-      { reason: ROLLBACK_REASON },
-    );
   }
 
   /**
@@ -771,22 +794,25 @@ export class ProcedureStore {
    */
   async remove(procedureId: string, meta: TransitionMeta): Promise<void> {
     await this.#ensureInit();
-    const currentPath = this.#currentPath(procedureId);
-    const prior = await this.getProcedure(procedureId);
-    if (prior === undefined) return; // 幂等：不存在无操作
-    const reason = prior.lifecycleReason;
-    await this.#appendEvent(
-      prior.procedureId,
-      prior.procedureRevision,
-      prior.status,
-      "deleted",
-      meta.trigger,
-      { reason },
-    );
-    await rm(currentPath, { force: true });
-    await rm(this.#historyDir(procedureId), { recursive: true, force: true });
-    await rm(this.#releaseDir(procedureId), { recursive: true, force: true });
-    await rm(this.#eventsDir(procedureId), { recursive: true, force: true });
+    await this.#withLock(procedureId, async () => {
+      await this.#recoverLocked(procedureId);
+      const currentPath = this.#currentPath(procedureId);
+      const prior = await this.#readCurrentLocked(procedureId);
+      if (prior === undefined) return; // 幂等：不存在无操作
+      const reason = prior.lifecycleReason;
+      await this.#appendEvent(
+        prior.procedureId,
+        prior.procedureRevision,
+        prior.status,
+        "deleted",
+        meta.trigger,
+        { reason },
+      );
+      await rm(currentPath, { force: true });
+      await rm(this.#historyDir(procedureId), { recursive: true, force: true });
+      await rm(this.#releaseDir(procedureId), { recursive: true, force: true });
+      await rm(this.#eventsDir(procedureId), { recursive: true, force: true });
+    });
   }
 
   async #fileExists(filePath: string): Promise<boolean> {
@@ -799,9 +825,8 @@ export class ProcedureStore {
     }
   }
 
-  /** 当前状态（按 procedureId）；不存在 ⇒ undefined。 */
-  async getProcedure(procedureId: string): Promise<CompiledProcedure | undefined> {
-    await this.#ensureInit();
+  /** 读取 current（raw；不加锁不恢复——由调用方在锁内保证）。 */
+  async #readCurrentLocked(procedureId: string): Promise<CompiledProcedure | undefined> {
     const filePath = this.#currentPath(procedureId);
     const raw = await readFile(filePath, "utf8").catch((error: unknown) => {
       if (isErrnoCode(error, "ENOENT")) return undefined;
@@ -815,6 +840,82 @@ export class ProcedureStore {
       corrupt("json_parse");
     }
     return parseStoredProcedure(parsed, procedureIdFileHash(procedureId));
+  }
+
+  /** 读取事件日志（raw；seq 升序，不加锁不恢复）。 */
+  async #readEventsLocked(procedureId: string): Promise<ProcedureTransitionEvent[]> {
+    const dir = this.#eventsDir(procedureId);
+    let names: string[] = [];
+    try {
+      names = await readdir(dir);
+    } catch (error) {
+      if (isErrnoCode(error, "ENOENT")) return [];
+      throw error;
+    }
+    const events: Array<{ seq: number; event: ProcedureTransitionEvent }> = [];
+    for (const name of names) {
+      const seq = Number(name.replace(/\.json$/u, ""));
+      if (!Number.isFinite(seq)) continue;
+      const filePath = path.join(dir, name);
+      const stat = await lstat(filePath).catch((error: unknown) => {
+        if (isErrnoCode(error, "ENOENT")) return undefined;
+        throw error;
+      });
+      if (stat === undefined || !stat.isFile()) continue;
+      const raw = await readFile(filePath, "utf8");
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        corrupt("json_parse");
+      }
+      events.push({ seq, event: parseStoredEvent(parsed, procedureIdFileHash(procedureId), seq) });
+    }
+    events.sort((a, b) => a.seq - b.seq);
+    return events.map((e) => e.event);
+  }
+
+  /**
+   * crash 恢复（fail-closed；必须在锁内调用）：事件先写 + current/release 原子 rename 的提交
+   * 协议下，崩溃只可能留下「已 append 事件但 current 未提交」的悬挂事件尾。恢复 = 确定性回滚
+   * 悬挂事件尾（不前滚、不补写）：current（原子 rename，永不截断）是权威，悬挂事件被删除。
+   * - current 缺失但事件存在（save 崩溃）⇒ 删除全部悬挂事件（首次写入未提交）。
+   * - 尾部事件 fromStatus == current.status 且 toStatus != current.status（transition/rollback
+   *   从 current 出发但未提交）⇒ 逐个删除尾部悬挂事件。
+   * - 尾部 "deleted" 事件但 current 仍在（remove 崩溃）⇒ 回滚删除意图（删除该事件，保留实体）。
+   * 非上述情形（正常提交 / current 领先事件的测试直写 seam）不动作。
+   */
+  async #recoverLocked(procedureId: string): Promise<void> {
+    const current = await this.#readCurrentLocked(procedureId);
+    let events = await this.#readEventsLocked(procedureId);
+    if (events.length === 0) return;
+    if (current === undefined) {
+      for (const event of events) await rm(this.#eventPath(procedureId, event.seq), { force: true });
+      return;
+    }
+    while (events.length > 0) {
+      const last = events[events.length - 1]!;
+      if (last.toStatus === "deleted") {
+        await rm(this.#eventPath(procedureId, last.seq), { force: true });
+        events = await this.#readEventsLocked(procedureId);
+        continue;
+      }
+      if (last.fromStatus === current.status && last.toStatus !== current.status) {
+        await rm(this.#eventPath(procedureId, last.seq), { force: true });
+        events = await this.#readEventsLocked(procedureId);
+        continue;
+      }
+      break;
+    }
+  }
+
+  /** 当前状态（按 procedureId）；不存在 ⇒ undefined。 */
+  async getProcedure(procedureId: string): Promise<CompiledProcedure | undefined> {
+    await this.#ensureInit();
+    return this.#withLock(procedureId, async () => {
+      await this.#recoverLocked(procedureId);
+      return this.#readCurrentLocked(procedureId);
+    });
   }
 
   /** 按 procedureRevision 查修订历史（rollback stableLookup 注入用）；未找到 ⇒ undefined。 */
@@ -939,34 +1040,9 @@ export class ProcedureStore {
   /** 某 procedure 的事件日志（seq 升序，审计可追溯）。 */
   async listEvents(procedureId: string): Promise<ProcedureTransitionEvent[]> {
     await this.#ensureInit();
-    const dir = this.#eventsDir(procedureId);
-    let names: string[] = [];
-    try {
-      names = await readdir(dir);
-    } catch (error) {
-      if (isErrnoCode(error, "ENOENT")) return [];
-      throw error;
-    }
-    const events: Array<{ seq: number; event: ProcedureTransitionEvent }> = [];
-    for (const name of names) {
-      const seq = Number(name.replace(/\.json$/u, ""));
-      if (!Number.isFinite(seq)) continue;
-      const filePath = path.join(dir, name);
-      const stat = await lstat(filePath).catch((error: unknown) => {
-        if (isErrnoCode(error, "ENOENT")) return undefined;
-        throw error;
-      });
-      if (stat === undefined || !stat.isFile()) continue;
-      const raw = await readFile(filePath, "utf8");
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(raw);
-      } catch {
-        corrupt("json_parse");
-      }
-      events.push({ seq, event: parseStoredEvent(parsed, procedureIdFileHash(procedureId), seq) });
-    }
-    events.sort((a, b) => a.seq - b.seq);
-    return events.map((e) => e.event);
+    return this.#withLock(procedureId, async () => {
+      await this.#recoverLocked(procedureId);
+      return this.#readEventsLocked(procedureId);
+    });
   }
 }

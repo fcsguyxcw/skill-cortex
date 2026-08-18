@@ -12,7 +12,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import type { OverlayEvaluationReport } from "./index.ts";
-import { evaluateOverlay, evaluateProfilePromotion, PROMOTION_THRESHOLDS } from "./index.ts";
+import {
+  evaluateOverlay,
+  evaluateProfilePromotion,
+  FROZEN_REQUIRED_COLUMNS,
+  PROMOTION_THRESHOLDS,
+} from "./index.ts";
 
 function column(overrides: Partial<OverlayEvaluationReport["learnedColumns"][number]> = {}) {
   return {
@@ -160,6 +165,27 @@ describe("promotion gate：达标/拒绝", () => {
       goldPreservedInTopK: 1,
     });
     assert.deepEqual(stricter, { ok: true });
+  });
+
+  it("requiredColumns 降级：real-skill 冻结 gate 只要求 hard_confuser + no_skill（缺 multi_skill/cross_language 仍通过）", () => {
+    const twoColumn = reportOf({
+      learnedColumns: [
+        column({ column: "hard_confuser" }),
+        column({ column: "no_skill", caseCount: 1, recallAtK: "N/A", setRecall: "N/A", noSkillPrecision: 1 }),
+      ],
+    });
+    // 缺省（四栏）⇒ 拒绝（缺 multi_skill / cross_language）。
+    const defaultVerdict = evaluateProfilePromotion(twoColumn);
+    assert.equal(defaultVerdict.ok, false);
+    if (!defaultVerdict.ok) {
+      assert.ok(defaultVerdict.reasons.includes("column_not_covered:multi_skill"));
+      assert.ok(defaultVerdict.reasons.includes("column_not_covered:cross_language"));
+    }
+    // 冻结 gate（FROZEN_REQUIRED_COLUMNS）⇒ 通过（multi_skill/cross_language 非必覆盖）。
+    const frozenVerdict = evaluateProfilePromotion(twoColumn, {
+      requiredColumns: FROZEN_REQUIRED_COLUMNS,
+    });
+    assert.deepEqual(frozenVerdict, { ok: true });
   });
 });
 

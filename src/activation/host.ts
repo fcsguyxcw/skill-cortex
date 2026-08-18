@@ -30,7 +30,11 @@ import {
   type OverlayEvaluationReport,
 } from "./evaluate.ts";
 import { induceActivationProfile } from "./induction.ts";
-import { evaluateProfilePromotion } from "./promotion.ts";
+import {
+  computePromotionBinding,
+  evaluateProfilePromotion,
+  FROZEN_REQUIRED_COLUMNS,
+} from "./promotion.ts";
 import {
   transitionProfileToActive,
   transitionProfileToShadow,
@@ -94,21 +98,25 @@ const FROZEN_NO_SKILL_QUERIES: readonly string[] = [
   "translate this poem to french",
 ];
 
-/** 冻结 cross_language 中文后缀（父无 learned 中文 alias 时的回退，保证四栏覆盖）。 */
-const FROZEN_CROSS_LANGUAGE_SUFFIX = "分页检测";
-
-const CJK_RE = /[一-鿿]/u;
-
 export interface FrozenEvaluation {
   cases: readonly EvaluationCase[];
   records: readonly SkillRecord[];
 }
 
 /**
- * 冻结 real-skill 评估集（唯一来源）：父 Skill 自身 metadata + 冻结无关查询 + learned 中文
- * alias 构成四栏。父（skillId+revision 匹配）不在 catalog ⇒ cases 为空 ⇒ 调用方拒绝晋升。
- * 说明：real-skill 无独立 ground-truth verifier（Phase 7 全系统验证另做更强压力测试），
- * 此处评估 non-inferiority（overlay 对父自身查询不劣于静态），不替代 final-heldout 门槛校准。
+ * 冻结 real-skill 评估集（唯一来源）：父 Skill 自身 metadata + 冻结无关查询，构成可**真实验证**
+ * 的 hard_confuser + no_skill 两栏。父（skillId+revision 匹配）不在 catalog ⇒ cases 为空 ⇒
+ * 调用方拒绝晋升。
+ *
+ * 降级说明（2026-08-18 收口，真实不造假）：
+ * - `multi_skill`：真实 catalog 无「单一 query 应共召回多个 gold」的 ground-truth，且 rerank
+ *   overlay 只能重排静态候选、不能新增候选——无法构造真实验证。故不再产出单-gold 的伪
+ *   multi_skill case，由合成 final-heldout/calibration 单独验证。
+ * - `cross_language`：纯跨语言召回须依赖 learned 中文 alias，但 real-skill induction 通常不
+ *   产中文 alias，且 `${alias} ${parent.name}` 里 parent.name 本身即可静态召回（learned cue
+ *   不贡献召回），无法证明 learned cue 有效。故不再产出含 parent.name 的伪 cross_language
+ *   case，由合成 final-heldout/calibration 的纯中文+英文关键词 fixture 单独验证。
+ * 两栏降级后 gate 用 FROZEN_REQUIRED_COLUMNS（hard_confuser + no_skill）。
  */
 export function buildFrozenEvaluation(
   profile: ActivationProfile,
@@ -127,12 +135,6 @@ export function buildFrozenEvaluation(
     .filter((record) => record.skillId !== gold)
     .sort((a, b) => (a.skillId < b.skillId ? -1 : 1));
   const confuserIds = others.length > 0 ? [others[0]!.skillId] : [];
-
-  const chineseAliases = profile.learnedAliases.filter((alias) => CJK_RE.test(alias.text));
-  const crossLanguageQueries =
-    chineseAliases.length > 0
-      ? chineseAliases.map((alias) => `${alias.text} ${parent.name}`)
-      : [`${parent.name} ${FROZEN_CROSS_LANGUAGE_SUFFIX}`];
 
   const cases: EvaluationCase[] = [
     {
@@ -155,14 +157,6 @@ export function buildFrozenEvaluation(
       query,
       expectedSkillIds: [] as string[],
     })),
-    { id: "ms-name", column: "multi_skill", query: parent.name, expectedSkillIds: [gold] },
-    { id: "ms-desc", column: "multi_skill", query: parent.description, expectedSkillIds: [gold] },
-    ...crossLanguageQueries.map((query, index) => ({
-      id: `cl-${index}`,
-      column: "cross_language" as const,
-      query,
-      expectedSkillIds: [gold],
-    })),
   ];
   return { cases, records: catalogRecords };
 }
@@ -183,12 +177,22 @@ export async function promoteProfileIfEligible(
     return { ok: false, reason: "promotion_gate_failed", reasons: ["parent_not_in_evaluation_set"] };
   }
   const report = evaluateProfileForPromotion(shadow, cases, catalogRecords, FROZEN_PROMOTION_OVERLAY);
-  const verdict = evaluateProfilePromotion(report);
+  const verdict = evaluateProfilePromotion(report, { requiredColumns: FROZEN_REQUIRED_COLUMNS });
   if (!verdict.ok) {
     return { ok: false, reason: "promotion_gate_failed", reasons: verdict.reasons };
   }
+  const binding = computePromotionBinding(
+    shadow,
+    cases,
+    catalogRecords,
+    FROZEN_PROMOTION_OVERLAY,
+    FROZEN_REQUIRED_COLUMNS,
+  );
   const active = transitionProfileToActive(shadow, { decision: "active", promotionReportId });
-  await store.transition(shadow, active, { trigger, promotion: { report, promotionReportId } });
+  await store.transition(shadow, active, {
+    trigger,
+    promotion: { report, promotionReportId, binding },
+  });
   return { ok: true, report };
 }
 

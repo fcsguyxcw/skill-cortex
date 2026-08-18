@@ -22,11 +22,14 @@
  * store 不内嵌状态机纯函数：合法边表与 state.ts 语义一致（只持久化 + 校验），transition
  * 的 next 由调用方用 state.ts 纯函数产出。删除级联落盘组合 cascade.ts 纯函数 + 本 store。
  *
- * crash consistency（tech debt，与 ProcedureStore 一致）：current 覆盖写与 event append
- * 无原子性；real-host 部署前必须引入 WAL/rename 原子提交。
+ * crash consistency（2026-08-18 收口，与 ProcedureStore 一致）：提交协议 = 事件先写（意图，
+ * 原子 rename）→ current（原子 rename）；每个文件经 <path>.tmp + rename 原子替换，崩溃不
+ * 截断。唯一崩溃产物是「事件已 append 但 current 未提交」的悬挂事件尾；读/写路径在每
+ * profile 进程内互斥锁内调用 #recoverLocked 确定性回滚悬挂事件尾；同一 profile 并发 writer
+ * 由锁串行化（后到者 re-read 后 stale-prior 拒绝）。
  */
 import { createHash } from "node:crypto";
-import { lstat, mkdir, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { ActivationProfile } from "../core/contracts/index.ts";
@@ -35,7 +38,12 @@ import {
   suspendProfilesForEvidenceDeletion,
 } from "./cascade.ts";
 import type { OverlayEvaluationReport } from "./evaluate.ts";
-import { evaluateProfilePromotion } from "./promotion.ts";
+import {
+  computeProfileContentHash,
+  evaluateProfilePromotion,
+  FROZEN_REQUIRED_COLUMNS,
+  type PromotionBinding,
+} from "./promotion.ts";
 import type { ActivationStatus, SuspendableProfile } from "./state.ts";
 
 export const PROFILE_SCHEMA_VERSION = 1;
@@ -111,6 +119,12 @@ export interface PromotionVerdictEvidence {
   report: OverlayEvaluationReport;
   /** promotion 报告 ID（受控格式，与 report 一起绑定）。 */
   promotionReportId: string;
+  /**
+   * 绑定（Issue 2）：promotion evidence 必须绑定 profileId / parentSkillRevision /
+   * profileContentHash / evaluationSetHash / evaluationConfigHash；store 用落盘 profile
+   * 自行重算 profile 三项，eval set/config hash 校验格式完整性——PASS report 不得跨 Profile 复用。
+   */
+  binding: PromotionBinding;
 }
 
 /** promotion 报告 ID 受控格式（审计可追溯）。 */
@@ -283,6 +297,7 @@ export class ActivationProfileStore {
   readonly projectRoot: string;
   readonly tenantScope: string;
   #initialized = false;
+  #locks = new Map<string, Promise<void>>();
   #now: () => Date;
 
   constructor(options: ActivationProfileStoreOptions) {
@@ -306,6 +321,30 @@ export class ActivationProfileStore {
     }
     await mkdir(this.rootDir, { recursive: true });
     this.#initialized = true;
+  }
+
+  /** 每 profile 进程内互斥（FIFO 异步链）：同一 profile 的写/恢复串行化，杜绝并发 writer 双成功。 */
+  async #withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    const prev = this.#locks.get(key) ?? Promise.resolve();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.#locks.set(key, prev.then(() => gate));
+    await prev;
+    try {
+      return await fn();
+    } finally {
+      release();
+    }
+  }
+
+  /** 原子写：先写 <path>.tmp 再 rename（同卷 rename 原子，崩溃不留截断文件）。 */
+  async #writeFileAtomic(filePath: string, body: string): Promise<void> {
+    await mkdir(path.dirname(filePath), { recursive: true });
+    const tmp = `${filePath}.tmp`;
+    await writeFile(tmp, body, { encoding: "utf8", flag: "w" });
+    await rename(tmp, filePath);
   }
 
   #currentDir(): string {
@@ -348,10 +387,9 @@ export class ActivationProfileStore {
     }
   }
 
-  async #writeProfileFile(filePath: string, profile: ActivationProfile, exclusive: boolean): Promise<void> {
-    await mkdir(path.dirname(filePath), { recursive: true });
+  async #writeProfileFile(filePath: string, profile: ActivationProfile): Promise<void> {
     const body = JSON.stringify(toStoredProfile(profile));
-    await writeFile(filePath, body, { encoding: "utf8", flag: exclusive ? "wx" : "w" });
+    await this.#writeFileAtomic(filePath, body);
   }
 
   async #appendEvent(
@@ -374,8 +412,7 @@ export class ActivationProfileStore {
       occurredAt: this.#now().toISOString(),
     };
     const filePath = this.#eventPath(profileId, seq);
-    await mkdir(path.dirname(filePath), { recursive: true });
-    await writeFile(filePath, JSON.stringify(event), { encoding: "utf8", flag: "wx" });
+    await this.#writeFileAtomic(filePath, JSON.stringify(event));
   }
 
   /**
@@ -391,12 +428,16 @@ export class ActivationProfileStore {
       throw new Error("activation_store_save_requires_draft");
     }
     if (profile.profileId === "") throw new Error("activation_store_invalid_identity");
-    const currentPath = this.#currentPath(profile.profileId);
-    if (await this.#fileExists(currentPath)) {
-      throw new Error("activation_store_already_exists");
-    }
-    await this.#writeProfileFile(currentPath, profile, true);
-    await this.#appendEvent(profile.profileId, undefined, profile.status, meta);
+    await this.#withLock(profile.profileId, async () => {
+      await this.#recoverLocked(profile.profileId);
+      const currentPath = this.#currentPath(profile.profileId);
+      if (await this.#fileExists(currentPath)) {
+        throw new Error("activation_store_already_exists");
+      }
+      // 提交顺序：事件先写（意图）→ current 原子 rename（崩溃只留悬挂事件，恢复可确定性回滚）。
+      await this.#appendEvent(profile.profileId, undefined, profile.status, meta);
+      await this.#writeProfileFile(currentPath, profile);
+    });
   }
 
   /**
@@ -404,7 +445,7 @@ export class ActivationProfileStore {
    * 受控报告 ID）；store 内部重新调用 evaluateProfilePromotion(report) 判定（四栏覆盖 +
    * 冻结门槛 + nonInferior），不信任 caller 的 verdict.ok。缺省/不满足 ⇒ 拒绝零写入。
    */
-  #assertPromotionVerdict(meta: TransitionMeta): void {
+  #assertPromotionVerdict(meta: TransitionMeta, stored: ActivationProfile): void {
     const evidence = meta.promotion;
     if (evidence === undefined) {
       throw new Error("activation_store_promotion_verdict_required");
@@ -413,10 +454,34 @@ export class ActivationProfileStore {
       throw new Error("activation_store_promotion_report_id_invalid");
     }
     // 不信任 caller 的 verdict.ok：store 根据 report 自己重新调用 evaluateProfilePromotion
-    // （四栏覆盖 + 冻结门槛 + nonInferior 一并判定）。
-    const recomputed = evaluateProfilePromotion(evidence.report);
+    // （real-skill 冻结 gate 用 FROZEN_REQUIRED_COLUMNS；冻结门槛 + nonInferior 一并判定）。
+    const recomputed = evaluateProfilePromotion(evidence.report, {
+      requiredColumns: FROZEN_REQUIRED_COLUMNS,
+    });
     if (!recomputed.ok) {
       throw new Error("activation_store_promotion_verdict_not_passed");
+    }
+    // Issue 2：binding 校验（store 根据落盘 stored 自己验证，不信任 caller）。缺 binding 或
+    // profileId / parentSkillRevision / profileContentHash 与落盘不一致 ⇒ 拒绝；eval set/config
+    // hash 校验 64-hex 格式完整性（防空/畸形）。
+    const binding = evidence.binding;
+    if (binding === undefined) {
+      throw new Error("activation_store_promotion_binding_required");
+    }
+    if (binding.profileId !== stored.profileId) {
+      throw new Error("activation_store_promotion_binding_profile_mismatch");
+    }
+    if (binding.parentSkillRevision !== stored.parentSkillRevision) {
+      throw new Error("activation_store_promotion_binding_revision_mismatch");
+    }
+    if (binding.profileContentHash !== computeProfileContentHash(stored)) {
+      throw new Error("activation_store_promotion_binding_content_hash_mismatch");
+    }
+    if (!/^[0-9a-f]{64}$/u.test(binding.evaluationSetHash)) {
+      throw new Error("activation_store_promotion_binding_eval_set_hash_invalid");
+    }
+    if (!/^[0-9a-f]{64}$/u.test(binding.evaluationConfigHash)) {
+      throw new Error("activation_store_promotion_binding_eval_config_hash_invalid");
     }
   }
 
@@ -442,35 +507,40 @@ export class ActivationProfileStore {
       throw new Error("activation_store_transition_profile_id_mismatch");
     }
     this.#assertLegalTransition(prior.status, next.status);
-    // BLOCKER 2：promotion 边（shadow→active）的结构化 evidence 校验先于落盘。
     const isPromotionEdge = prior.status === "shadow" && next.status === "active";
-    if (isPromotionEdge) {
-      this.#assertPromotionVerdict(meta);
-    }
-    const stored = await this.getProfile(prior.profileId);
-    if (stored === undefined) {
-      throw new Error("activation_store_missing_prior");
-    }
-    // stale-prior 三要素：profileId + parentSkillRevision + status 必须与落盘一致。
-    if (
-      stored.profileId !== prior.profileId ||
-      stored.parentSkillRevision !== prior.parentSkillRevision ||
-      stored.status !== prior.status
-    ) {
-      throw new Error("activation_store_stale_prior");
-    }
-    // immutable 内容以落盘 stored 为权威（不信任调用方 prior/next 双伪造）。
-    assertImmutableContentUnchanged(stored, next);
-    const currentPath = this.#currentPath(next.profileId);
-    await this.#writeProfileFile(currentPath, next, false);
-    // promotion 边的事件 reportId 绑定结构化 promotionReportId（不信任裸 reportId）。
-    const eventMeta: TransitionMeta = isPromotionEdge
-      ? {
-          trigger: meta.trigger,
-          reportId: meta.promotion!.promotionReportId,
-        }
-      : meta;
-    await this.#appendEvent(next.profileId, prior.status, next.status, eventMeta);
+    await this.#withLock(next.profileId, async () => {
+      await this.#recoverLocked(next.profileId);
+      const stored = await this.#readCurrentLocked(prior.profileId);
+      if (stored === undefined) {
+        throw new Error("activation_store_missing_prior");
+      }
+      // stale-prior 三要素：profileId + parentSkillRevision + status 必须与落盘一致。
+      if (
+        stored.profileId !== prior.profileId ||
+        stored.parentSkillRevision !== prior.parentSkillRevision ||
+        stored.status !== prior.status
+      ) {
+        throw new Error("activation_store_stale_prior");
+      }
+      // BLOCKER 2 + Issue 2：promotion 边（shadow→active）校验结构化 evidence + binding
+      // （以落盘 stored 为权威，不信任 caller 的 verdict 或 profile 绑定）。
+      if (isPromotionEdge) {
+        this.#assertPromotionVerdict(meta, stored);
+      }
+      // immutable 内容以落盘 stored 为权威（不信任调用方 prior/next 双伪造）。
+      assertImmutableContentUnchanged(stored, next);
+      const currentPath = this.#currentPath(next.profileId);
+      // promotion 边的事件 reportId 绑定结构化 promotionReportId（不信任裸 reportId）。
+      const eventMeta: TransitionMeta = isPromotionEdge
+        ? {
+            trigger: meta.trigger,
+            reportId: meta.promotion!.promotionReportId,
+          }
+        : meta;
+      // 提交顺序：事件先写（意图）→ current 原子 rename。
+      await this.#appendEvent(next.profileId, prior.status, next.status, eventMeta);
+      await this.#writeProfileFile(currentPath, next);
+    });
   }
 
   async #fileExists(filePath: string): Promise<boolean> {
@@ -483,9 +553,8 @@ export class ActivationProfileStore {
     }
   }
 
-  /** 当前状态（按 profileId）；不存在 ⇒ undefined。 */
-  async getProfile(profileId: string): Promise<ActivationProfile | undefined> {
-    await this.#ensureInit();
+  /** 读取 current（raw；不加锁不恢复——由调用方在锁内保证）。 */
+  async #readCurrentLocked(profileId: string): Promise<ActivationProfile | undefined> {
     const filePath = this.#currentPath(profileId);
     const raw = await readFile(filePath, "utf8").catch((error: unknown) => {
       if (isErrnoCode(error, "ENOENT")) return undefined;
@@ -499,6 +568,81 @@ export class ActivationProfileStore {
       corrupt("json_parse");
     }
     return parseStoredProfile(parsed, profileIdFileHash(profileId));
+  }
+
+  /** 读取事件日志（raw；seq 升序，不加锁不恢复）。 */
+  async #readEventsLocked(profileId: string): Promise<ActivationTransitionEvent[]> {
+    const dir = this.#eventsDir(profileId);
+    let names: string[] = [];
+    try {
+      names = await readdir(dir);
+    } catch (error) {
+      if (isErrnoCode(error, "ENOENT")) return [];
+      throw error;
+    }
+    const events: Array<{ seq: number; event: ActivationTransitionEvent }> = [];
+    for (const name of names) {
+      const seq = Number(name.replace(/\.json$/u, ""));
+      if (!Number.isFinite(seq)) continue;
+      const filePath = path.join(dir, name);
+      const stat = await lstat(filePath).catch((error: unknown) => {
+        if (isErrnoCode(error, "ENOENT")) return undefined;
+        throw error;
+      });
+      if (stat === undefined || !stat.isFile()) continue;
+      const raw = await readFile(filePath, "utf8");
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        corrupt("json_parse");
+      }
+      events.push({ seq, event: parseStoredEvent(parsed, profileIdFileHash(profileId), seq) });
+    }
+    events.sort((a, b) => a.seq - b.seq);
+    return events.map((e) => e.event);
+  }
+
+  /**
+   * crash 恢复（fail-closed；必须在锁内调用）：事件先写 + current 原子 rename 的提交协议下，
+   * 崩溃只可能留下「已 append 事件但 current 未提交」的悬挂事件尾。恢复 = 确定性回滚悬挂事件尾
+   * （不前滚、不补写）：current（原子 rename，永不截断）是权威，悬挂事件被删除。
+   * - current 缺失但事件存在（save 崩溃）⇒ 删除全部悬挂事件（首次写入未提交）。
+   * - 尾部事件 fromStatus == current.status 且 toStatus != current.status（transition 从
+   *   current 出发但未提交）⇒ 逐个删除尾部悬挂事件。
+   * - 尾部 "deleted" 事件但 current 仍在（remove 崩溃）⇒ 回滚删除意图。
+   */
+  async #recoverLocked(profileId: string): Promise<void> {
+    const current = await this.#readCurrentLocked(profileId);
+    let events = await this.#readEventsLocked(profileId);
+    if (events.length === 0) return;
+    if (current === undefined) {
+      for (const event of events) await rm(this.#eventPath(profileId, event.seq), { force: true });
+      return;
+    }
+    while (events.length > 0) {
+      const last = events[events.length - 1]!;
+      if (last.toStatus === "deleted") {
+        await rm(this.#eventPath(profileId, last.seq), { force: true });
+        events = await this.#readEventsLocked(profileId);
+        continue;
+      }
+      if (last.fromStatus === current.status && last.toStatus !== current.status) {
+        await rm(this.#eventPath(profileId, last.seq), { force: true });
+        events = await this.#readEventsLocked(profileId);
+        continue;
+      }
+      break;
+    }
+  }
+
+  /** 当前状态（按 profileId）；不存在 ⇒ undefined。 */
+  async getProfile(profileId: string): Promise<ActivationProfile | undefined> {
+    await this.#ensureInit();
+    return this.#withLock(profileId, async () => {
+      await this.#recoverLocked(profileId);
+      return this.#readCurrentLocked(profileId);
+    });
   }
 
   async #listCurrentRaw(): Promise<Array<{ profileId: string; parsed: ActivationProfile }>> {
@@ -564,35 +708,10 @@ export class ActivationProfileStore {
   /** 某 profile 的事件日志（seq 升序，审计可追溯）。 */
   async listEvents(profileId: string): Promise<ActivationTransitionEvent[]> {
     await this.#ensureInit();
-    const dir = this.#eventsDir(profileId);
-    let names: string[] = [];
-    try {
-      names = await readdir(dir);
-    } catch (error) {
-      if (isErrnoCode(error, "ENOENT")) return [];
-      throw error;
-    }
-    const events: Array<{ seq: number; event: ActivationTransitionEvent }> = [];
-    for (const name of names) {
-      const seq = Number(name.replace(/\.json$/u, ""));
-      if (!Number.isFinite(seq)) continue;
-      const filePath = path.join(dir, name);
-      const stat = await lstat(filePath).catch((error: unknown) => {
-        if (isErrnoCode(error, "ENOENT")) return undefined;
-        throw error;
-      });
-      if (stat === undefined || !stat.isFile()) continue;
-      const raw = await readFile(filePath, "utf8");
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(raw);
-      } catch {
-        corrupt("json_parse");
-      }
-      events.push({ seq, event: parseStoredEvent(parsed, profileIdFileHash(profileId), seq) });
-    }
-    events.sort((a, b) => a.seq - b.seq);
-    return events.map((e) => e.event);
+    return this.#withLock(profileId, async () => {
+      await this.#recoverLocked(profileId);
+      return this.#readEventsLocked(profileId);
+    });
   }
 }
 
