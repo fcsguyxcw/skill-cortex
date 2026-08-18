@@ -31,10 +31,15 @@ import {
 } from "./evaluate.ts";
 import { induceActivationProfile } from "./induction.ts";
 import {
-  computePromotionBinding,
+  buildFrozenEvaluation,
   evaluateProfilePromotion,
+  FROZEN_PROMOTION_OVERLAY,
   FROZEN_REQUIRED_COLUMNS,
+  type FrozenEvaluation,
 } from "./promotion.ts";
+
+// 供 host-integration-entry 直接 import（保持 host.ts 导出面兼容）。
+export { buildFrozenEvaluation, FROZEN_PROMOTION_OVERLAY, type FrozenEvaluation };
 import {
   transitionProfileToActive,
   transitionProfileToShadow,
@@ -73,97 +78,16 @@ export type PromoteResult =
 
 /**
  * Phase 7 Seam 3 —— 冻结 real-skill 评估 provider（promotion 不接受任意 caller 自定义评估集）。
- *
- * - `FROZEN_PROMOTION_OVERLAY`：冻结 overlay 参数（与 final-heldout 一致，定值）。
- * - `buildFrozenEvaluation`：唯一评估集来源——由 (profile, catalogRecords) 确定性构造
- *   四栏评估集（父 Skill 自身 name/description 作 hard_confuser/multi_skill 查询、
- *   冻结无关 no_skill、learned 中文 alias（或冻结中文后缀回退）作 cross_language；
- *   父不在 catalog ⇒ 空 case 集 ⇒ promotion 拒绝）。
- * - `promoteProfileIfEligible` 只接受 (store, shadow, catalogRecords, reportId, trigger)，
- *   内部走 buildFrozenEvaluation + evaluateProfileForPromotion，caller 无法注入手搓
- *   评估集/report/verdict。
+ * 冻结评估集（buildFrozenEvaluation）/ overlay 参数（FROZEN_PROMOTION_OVERLAY）已下沉到
+ * promotion.ts（供 store 自身重算 verdict，见 store.ts 的 #assertPromotionVerdict），此处重导出。
+ * promoteProfileIfEligible 只接受 (store, shadow, catalogRecords, reportId, trigger)，caller
+ * 无法注入手搓评估集/report/verdict。
  */
 
-/** 冻结 promotion overlay 参数（定值，与 final-heldout 阈值校准一致）。 */
-export const FROZEN_PROMOTION_OVERLAY: EvaluateOptions = {
-  aliasBoost: 5,
-  positiveBoost: 3,
-  nearMissPenalty: 10,
-} as const;
-
-/** 冻结 no_skill 查询（与 dev/calibration/final-heldout 均不重叠的无关主题）。 */
-const FROZEN_NO_SKILL_QUERIES: readonly string[] = [
-  "how to bake sourdough bread",
-  "best coffee shops in portland",
-  "translate this poem to french",
-];
-
-export interface FrozenEvaluation {
-  cases: readonly EvaluationCase[];
-  records: readonly SkillRecord[];
-}
-
 /**
- * 冻结 real-skill 评估集（唯一来源）：父 Skill 自身 metadata + 冻结无关查询，构成可**真实验证**
- * 的 hard_confuser + no_skill 两栏。父（skillId+revision 匹配）不在 catalog ⇒ cases 为空 ⇒
- * 调用方拒绝晋升。
- *
- * 降级说明（2026-08-18 收口，真实不造假）：
- * - `multi_skill`：真实 catalog 无「单一 query 应共召回多个 gold」的 ground-truth，且 rerank
- *   overlay 只能重排静态候选、不能新增候选——无法构造真实验证。故不再产出单-gold 的伪
- *   multi_skill case，由合成 final-heldout/calibration 单独验证。
- * - `cross_language`：纯跨语言召回须依赖 learned 中文 alias，但 real-skill induction 通常不
- *   产中文 alias，且 `${alias} ${parent.name}` 里 parent.name 本身即可静态召回（learned cue
- *   不贡献召回），无法证明 learned cue 有效。故不再产出含 parent.name 的伪 cross_language
- *   case，由合成 final-heldout/calibration 的纯中文+英文关键词 fixture 单独验证。
- * 两栏降级后 gate 用 FROZEN_REQUIRED_COLUMNS（hard_confuser + no_skill）。
- */
-export function buildFrozenEvaluation(
-  profile: ActivationProfile,
-  catalogRecords: readonly SkillRecord[],
-): FrozenEvaluation {
-  const parent = catalogRecords.find(
-    (record) =>
-      record.skillId === profile.parentSkillId &&
-      record.skillRevision === profile.parentSkillRevision,
-  );
-  if (parent === undefined) {
-    return { cases: [], records: catalogRecords };
-  }
-  const gold = parent.skillId;
-  const others = catalogRecords
-    .filter((record) => record.skillId !== gold)
-    .sort((a, b) => (a.skillId < b.skillId ? -1 : 1));
-  const confuserIds = others.length > 0 ? [others[0]!.skillId] : [];
-
-  const cases: EvaluationCase[] = [
-    {
-      id: "hc-name",
-      column: "hard_confuser",
-      query: parent.name,
-      expectedSkillIds: [gold],
-      ...(confuserIds.length > 0 ? { confuserSkillIds: confuserIds } : {}),
-    },
-    {
-      id: "hc-desc",
-      column: "hard_confuser",
-      query: parent.description,
-      expectedSkillIds: [gold],
-      ...(confuserIds.length > 0 ? { confuserSkillIds: confuserIds } : {}),
-    },
-    ...FROZEN_NO_SKILL_QUERIES.map((query, index) => ({
-      id: `ns-${index}`,
-      column: "no_skill" as const,
-      query,
-      expectedSkillIds: [] as string[],
-    })),
-  ];
-  return { cases, records: catalogRecords };
-}
-
-/**
- * 受控 promotion（冻结评估集）：report 只能由 buildFrozenEvaluation + evaluateProfileForPromotion
- * 重算，caller 无法注入手搓评估集/report/verdict；store 内部再重算 verdict 兜底。
+ * 受控 promotion（冻结评估集）：caller 只传 catalogRecords；report/verdict 由 store 在
+ * promotion 边用落盘 profile + records 自行重算（不可拼接绕过），host 侧只做前置短路的
+ * 诚实提示。store 内部再重算兜底。
  */
 export async function promoteProfileIfEligible(
   store: ActivationProfileStore,
@@ -181,17 +105,10 @@ export async function promoteProfileIfEligible(
   if (!verdict.ok) {
     return { ok: false, reason: "promotion_gate_failed", reasons: verdict.reasons };
   }
-  const binding = computePromotionBinding(
-    shadow,
-    cases,
-    catalogRecords,
-    FROZEN_PROMOTION_OVERLAY,
-    FROZEN_REQUIRED_COLUMNS,
-  );
   const active = transitionProfileToActive(shadow, { decision: "active", promotionReportId });
   await store.transition(shadow, active, {
     trigger,
-    promotion: { report, promotionReportId, binding },
+    promotion: { records: catalogRecords, promotionReportId },
   });
   return { ok: true, report };
 }

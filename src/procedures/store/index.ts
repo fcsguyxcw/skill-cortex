@@ -23,12 +23,11 @@
  *
  * 边界：不实现 transition 纯函数（draft.ts）；不接 host 事件（下一 slice）；不写用户环境。
  *
- * crash consistency（2026-08-18 收口）：
- * 提交协议 = 事件先写（意图，原子 rename）→ history（原子 rename，幂等）→ current（原子
- * rename）→ release（原子 rename）；每个文件经 <path>.tmp + rename 原子替换，崩溃不截断。
- * 唯一崩溃产物是「事件已 append 但 current 未提交」的悬挂事件尾；读/写路径在每 entity
- * 进程内互斥锁内调用 #recoverLocked，确定性回滚悬挂事件尾（见 #recoverLocked）。同一 entity
- * 的并发 writer 由锁串行化（后到者 re-read 后 stale-prior 拒绝），杜绝双 writer 双成功。
+ * crash consistency（2026-08-18 收口，WAL + store 级文件锁）：
+ * - 每次写操作先原子落一个事务文件（write/delete txn），再应用，最后清 txn；崩溃后 recoverAll
+ *   重放未清除 txn 幂等推进到一致终态（roll-forward），current/release 不再半提交；
+ * - store 级文件锁（<root>/<tenantHash>.lock，wx 创建 + 租约 + 过期抢占）跨实例/进程
+ *   single-writer，杜绝两个 Store 实例/进程并发写同一 root；后到者 re-read 后 stale-prior 拒绝。
  */
 import { createHash } from "node:crypto";
 import { lstat, mkdir, readdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
@@ -111,6 +110,33 @@ export interface ProcedureTransitionEvent {
   trigger: TriggerSource;
   occurredAt: string;
 }
+
+/**
+ * WAL 提交协议（2026-08-18 收口，替代 event-first + 悬挂回滚）：
+ * - 每次写操作先原子落一个事务文件（write 或 delete txn），再应用（applyWriteTxn /
+ *   completeDelete），最后清除 txn。txn 是单一真源：崩溃后 recovery 重放 txn 幂等地把
+ *   current/release/events/history 全部推到一致终态（roll-forward，不依赖「回滚」）。
+ * - 这样 current/release 不会再出现「current 已写、release 未写」的半提交（两个都从同一
+ *   txn 重放）；删除也不会留下 current 已删但 release 残留的半删除。
+ */
+export type ProcedureTxn =
+  | {
+      kind: "write";
+      seq: number;
+      procedureId: string;
+      procedure: CompiledProcedure;
+      event: ProcedureTransitionEvent;
+      /** save 还需写 immutable history 快照。 */
+      writeHistory: boolean;
+    }
+  | { kind: "delete"; procedureId: string };
+
+/** 文件锁超时（ms）——持锁操作是毫秒级小写，超时视为异常竞争。 */
+const LOCK_TIMEOUT_MS = 5000;
+/** 锁竞争重试间隔（ms）。 */
+const LOCK_RETRY_MS = 10;
+/** 锁租约过期阈值（ms）——超过视为持有者崩溃，可抢占。 */
+const LOCK_STALE_MS = 30000;
 
 export interface ProcedureStoreOptions {
   /** store 根目录（project-local，如 <project>/.skill-cortex/procedures）。 */
@@ -364,7 +390,6 @@ export class ProcedureStore {
   readonly projectRoot: string;
   readonly tenantScope: string;
   #initialized = false;
-  #locks = new Map<string, Promise<void>>();
 
   constructor(options: ProcedureStoreOptions) {
     const projectRoot = path.resolve(options.projectRoot ?? process.cwd());
@@ -397,19 +422,70 @@ export class ProcedureStore {
     this.#initialized = true;
   }
 
-  /** 每 entity 进程内互斥（FIFO 异步链）：同一 procedure 的写/恢复串行化，杜绝并发 writer 双成功。 */
-  async #withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
-    const prev = this.#locks.get(key) ?? Promise.resolve();
-    let release!: () => void;
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
+  /** store 级文件锁路径（跨实例/进程 single-writer；放在 tenant 分区旁，不混入数据目录）。 */
+  #storeLockPath(): string {
+    return path.join(this.rootDir, `${tenantHashOf(this.tenantScope)}.lock`);
+  }
+
+  #txnDir(): string {
+    return path.join(this.#tenantDir(), "txn");
+  }
+
+  #txnPath(procedureId: string): string {
+    return path.join(this.#txnDir(), `${procedureIdFileHash(procedureId)}.txn.json`);
+  }
+
+  /** 读锁租约；锁文件缺失 ⇒ 非 stale（重试即可）；损坏/过期 ⇒ 可抢占。 */
+  async #lockIsStale(lockPath: string): Promise<boolean> {
+    const raw = await readFile(lockPath, "utf8").catch((error: unknown) => {
+      if (isErrnoCode(error, "ENOENT")) return undefined;
+      throw error;
     });
-    this.#locks.set(key, prev.then(() => gate));
-    await prev;
+    if (raw === undefined) return false;
+    let parsed: unknown;
     try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return true;
+    }
+    const at = (parsed as { at?: unknown }).at;
+    return typeof at !== "number" || Date.now() - at > LOCK_STALE_MS;
+  }
+
+  /** 获取 store 级文件锁（wx 原子创建 + 租约 + 过期抢占）。返回释放函数。 */
+  async #acquireStoreLock(): Promise<() => Promise<void>> {
+    await mkdir(this.rootDir, { recursive: true });
+    const lockPath = this.#storeLockPath();
+    const deadline = Date.now() + LOCK_TIMEOUT_MS;
+    for (;;) {
+      try {
+        await writeFile(lockPath, JSON.stringify({ pid: process.pid, at: Date.now() }), {
+          encoding: "utf8",
+          flag: "wx",
+        });
+        return async () => {
+          await rm(lockPath, { force: true });
+        };
+      } catch (error) {
+        if (!isErrnoCode(error, "EEXIST")) throw error;
+        if (await this.#lockIsStale(lockPath)) {
+          await rm(lockPath, { force: true });
+          continue;
+        }
+        if (Date.now() > deadline) throw new Error("procedure_store_locked");
+        await new Promise((resolve) => setTimeout(resolve, LOCK_RETRY_MS));
+      }
+    }
+  }
+
+  /** store 级互斥 + 崩溃恢复：每个公开操作先抢锁 → recoverAll → 执行。 */
+  async #withStoreLock<T>(fn: () => Promise<T>): Promise<T> {
+    const release = await this.#acquireStoreLock();
+    try {
+      await this.#recoverAll();
       return await fn();
     } finally {
-      release();
+      await release();
     }
   }
 
@@ -419,6 +495,99 @@ export class ProcedureStore {
     const tmp = `${filePath}.tmp`;
     await writeFile(tmp, body, { encoding: "utf8", flag: "w" });
     await rename(tmp, filePath);
+  }
+
+  async #writeTxn(procedureId: string, txn: ProcedureTxn): Promise<void> {
+    await this.#writeFileAtomic(this.#txnPath(procedureId), JSON.stringify(txn));
+  }
+
+  async #clearTxn(procedureId: string): Promise<void> {
+    await rm(this.#txnPath(procedureId), { force: true });
+  }
+
+  /** 校验并把已解析 txn 对象转成类型化 txn（fail-closed：字段/嵌套 procedure/event 全部校验）。 */
+  #parseTxnObject(obj: Record<string, unknown>): ProcedureTxn {
+    if (obj.kind === "delete") {
+      if (typeof obj.procedureId !== "string") corrupt("txn_delete_procedure_id");
+      return { kind: "delete", procedureId: obj.procedureId };
+    }
+    if (obj.kind === "write") {
+      if (typeof obj.seq !== "number") corrupt("txn_write_seq");
+      if (typeof obj.procedureId !== "string") corrupt("txn_write_procedure_id");
+      const procedure = parseStoredProcedure(obj.procedure, procedureIdFileHash(obj.procedureId));
+      const event = parseStoredEvent(obj.event, procedureIdFileHash(obj.procedureId), obj.seq);
+      return {
+        kind: "write",
+        seq: obj.seq,
+        procedureId: obj.procedureId,
+        procedure,
+        event,
+        writeHistory: obj.writeHistory === true,
+      };
+    }
+    corrupt("txn_kind");
+  }
+
+  async #readTxn(procedureId: string): Promise<ProcedureTxn | undefined> {
+    const raw = await readFile(this.#txnPath(procedureId), "utf8").catch((error: unknown) => {
+      if (isErrnoCode(error, "ENOENT")) return undefined;
+      throw error;
+    });
+    if (raw === undefined) return undefined;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      corrupt("txn_json_parse");
+    }
+    return this.#parseTxnObject(parsed as Record<string, unknown>);
+  }
+
+  /** 幂等重放 write txn：把 event/history/release/current 全部推到一致终态。 */
+  async #applyWriteTxn(txn: Extract<ProcedureTxn, { kind: "write" }>): Promise<void> {
+    await this.#appendEventAt(txn.procedureId, txn.seq, txn.event);
+    if (txn.writeHistory) {
+      await this.#writeProcedureFile(
+        this.#historyPath(txn.procedureId, txn.procedure.procedureRevision),
+        txn.procedure,
+      );
+    }
+    await this.#writeReleaseState(txn.procedure);
+    await this.#writeProcedureFile(this.#currentPath(txn.procedureId), txn.procedure);
+  }
+
+  /** 幂等完成 delete：删除 current/history/release/events 全部目录。 */
+  async #completeDelete(procedureId: string): Promise<void> {
+    await rm(this.#currentPath(procedureId), { force: true });
+    await rm(this.#historyDir(procedureId), { recursive: true, force: true });
+    await rm(this.#releaseDir(procedureId), { recursive: true, force: true });
+    await rm(this.#eventsDir(procedureId), { recursive: true, force: true });
+  }
+
+  /** 崩溃恢复（store 级，锁内调用）：重放所有未清除 txn，幂等推进到一致终态。 */
+  async #recoverAll(): Promise<void> {
+    let names: string[] = [];
+    try {
+      names = await readdir(this.#txnDir());
+    } catch (error) {
+      if (isErrnoCode(error, "ENOENT")) return;
+      throw error;
+    }
+    for (const name of names) {
+      if (!name.endsWith(".txn.json")) continue;
+      const txnPath = path.join(this.#txnDir(), name);
+      const raw = await readFile(txnPath, "utf8");
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        corrupt("txn_json_parse");
+      }
+      const txn = this.#parseTxnObject(parsed as Record<string, unknown>);
+      if (txn.kind === "delete") await this.#completeDelete(txn.procedureId);
+      else await this.#applyWriteTxn(txn);
+      await rm(txnPath, { force: true });
+    }
   }
 
   #tenantDir(): string {
@@ -583,18 +752,19 @@ export class ProcedureStore {
     } as CompiledProcedure;
   }
 
-  async #appendEvent(
+  /** 构造可审计 transition 事件（seq 由调用方在锁内用 #nextEventSeq 确定）。 */
+  #buildEvent(
+    seq: number,
     procedureId: string,
     procedureRevision: string,
     fromStatus: CompiledProcedure["status"] | undefined,
     toStatus: EventToStatus,
     trigger: TriggerSource,
     meta: { reason?: string; reportId?: string },
-  ): Promise<void> {
-    const seq = await this.#nextEventSeq(procedureId);
-    const event: ProcedureTransitionEvent = {
+  ): ProcedureTransitionEvent {
+    return {
       schemaVersion: PROCEDURE_SCHEMA_VERSION,
-      eventId: `evt-${hash(`${procedureId}\u0000${seq}`, 40)}`,
+      eventId: `evt-${hash(`${procedureId}#${seq}`, 40)}`,
       procedureId,
       procedureRevision,
       fromStatus,
@@ -605,13 +775,16 @@ export class ProcedureStore {
       occurredAt: this.#now().toISOString(),
       seq,
     };
-    const filePath = this.#eventPath(procedureId, seq);
-    await this.#writeFileAtomic(filePath, JSON.stringify(event));
+  }
+
+  /** 原子写事件文件（seq 由 txn 确定，幂等覆盖）。 */
+  async #appendEventAt(procedureId: string, seq: number, event: ProcedureTransitionEvent): Promise<void> {
+    await this.#writeFileAtomic(this.#eventPath(procedureId, seq), JSON.stringify(event));
   }
 
   /**
    * 首次写入（导入/构建落盘）。prior 已存在 ⇒ 拒绝（不覆盖当前状态；更新走 transition）。
-   * 写 current（wx）+ history（wx，按 procedureRevision）+ release 状态 + 首条事件（fromStatus=undefined）。
+   * WAL：写 write txn → 应用（event + history + release + current）→ 清 txn。
    */
   async save(procedure: CompiledProcedure, meta: TransitionMeta): Promise<void> {
     await this.#ensureInit();
@@ -619,28 +792,32 @@ export class ProcedureStore {
     if (procedure.procedureId === "" || procedure.procedureRevision === "") {
       throw new Error("procedure_store_invalid_identity");
     }
-    await this.#withLock(procedure.procedureId, async () => {
-      await this.#recoverLocked(procedure.procedureId);
-      const currentPath = this.#currentPath(procedure.procedureId);
-      if (await this.#fileExists(currentPath)) {
+    await this.#withStoreLock(async () => {
+      if (await this.#fileExists(this.#currentPath(procedure.procedureId))) {
         throw new Error("procedure_store_already_exists");
       }
-      // 提交顺序：事件先写（意图）→ history（幂等，原子）→ current（原子 rename）→ release（原子 rename）。
-      const meta_ = auditMetaOf(procedure);
-      await this.#appendEvent(
+      // WAL：写 txn（意图）→ 应用（event/history/release/current）→ 清 txn。
+      const seq = await this.#nextEventSeq(procedure.procedureId);
+      const event = this.#buildEvent(
+        seq,
         procedure.procedureId,
         procedure.procedureRevision,
         undefined,
         procedure.status,
         meta.trigger,
-        meta_,
+        auditMetaOf(procedure),
       );
-      await this.#writeProcedureFile(
-        this.#historyPath(procedure.procedureId, procedure.procedureRevision),
+      const txn: ProcedureTxn = {
+        kind: "write",
+        seq,
+        procedureId: procedure.procedureId,
         procedure,
-      );
-      await this.#writeProcedureFile(currentPath, procedure);
-      await this.#writeReleaseState(procedure);
+        event,
+        writeHistory: true,
+      };
+      await this.#writeTxn(procedure.procedureId, txn);
+      await this.#applyWriteTxn(txn);
+      await this.#clearTxn(procedure.procedureId);
     });
   }
 
@@ -669,8 +846,7 @@ export class ProcedureStore {
       throw new Error("procedure_store_transition_procedure_id_mismatch");
     }
     this.#assertLegalTransition(prior.status, next.status);
-    await this.#withLock(next.procedureId, async () => {
-      await this.#recoverLocked(next.procedureId);
+    await this.#withStoreLock(async () => {
       // HIGH 1：读取真实落盘状态，校验 prior 一致（stale/伪造 prior 拒绝）。
       const stored = await this.#readCurrentLocked(prior.procedureId);
       if (stored === undefined) {
@@ -689,18 +865,28 @@ export class ProcedureStore {
       }
       // HIGH 2：同 revision 不得偷改 immutable 内容 + 晋升锁定字段（以落盘 stored 为权威，不信任 prior）。
       assertAllowedDelta(stored, next);
-      const meta_ = auditMetaOf(next);
-      // 提交顺序：事件先写（意图）→ current（原子 rename）→ release（原子 rename）。
-      await this.#appendEvent(
+      // WAL：写 txn（意图）→ 应用（event/release/current）→ 清 txn。
+      const seq = await this.#nextEventSeq(next.procedureId);
+      const event = this.#buildEvent(
+        seq,
         next.procedureId,
         next.procedureRevision,
         prior.status,
         next.status,
         meta.trigger,
-        meta_,
+        auditMetaOf(next),
       );
-      await this.#writeProcedureFile(this.#currentPath(next.procedureId), next);
-      await this.#writeReleaseState(next);
+      const txn: ProcedureTxn = {
+        kind: "write",
+        seq,
+        procedureId: next.procedureId,
+        procedure: next,
+        event,
+        writeHistory: false,
+      };
+      await this.#writeTxn(next.procedureId, txn);
+      await this.#applyWriteTxn(txn);
+      await this.#clearTxn(next.procedureId);
     });
   }
 
@@ -737,8 +923,7 @@ export class ProcedureStore {
   ): Promise<void> {
     await this.#ensureInit();
     assertValidStatus(failed.status);
-    await this.#withLock(failed.procedureId, async () => {
-      await this.#recoverLocked(failed.procedureId);
+    await this.#withStoreLock(async () => {
       const stored = await this.#readCurrentLocked(failed.procedureId);
       if (stored === undefined) {
         throw new Error("procedure_store_missing_prior");
@@ -764,7 +949,7 @@ export class ProcedureStore {
         throw new Error("procedure_store_rollback_target_revision_mismatch");
       }
       // HIGH 3：stable 恢复来源只认 store 自身重读（不接受 caller 内容）。
-      const stableNow = await this.getStableByRevision(previous);
+      const stableNow = await this.#getStableByRevisionLocked(previous);
       if (stableNow === undefined || stableNow.procedureId !== failed.procedureId) {
         throw new Error("procedure_store_rollback_stable_unavailable");
       }
@@ -774,8 +959,10 @@ export class ProcedureStore {
       void _from;
       void _kind;
       const target = { ...rest, status: "active" as const } as CompiledProcedure;
-      // 提交顺序：事件先写（意图）→ current（原子 rename）→ release（原子 rename）。
-      await this.#appendEvent(
+      // WAL：写 txn（意图）→ 应用（event/release/current）→ 清 txn。
+      const seq = await this.#nextEventSeq(target.procedureId);
+      const event = this.#buildEvent(
+        seq,
         target.procedureId,
         target.procedureRevision,
         failed.status,
@@ -783,8 +970,17 @@ export class ProcedureStore {
         meta.trigger,
         { reason: ROLLBACK_REASON },
       );
-      await this.#writeProcedureFile(this.#currentPath(target.procedureId), target);
-      await this.#writeReleaseState(target);
+      const txn: ProcedureTxn = {
+        kind: "write",
+        seq,
+        procedureId: target.procedureId,
+        procedure: target,
+        event,
+        writeHistory: false,
+      };
+      await this.#writeTxn(target.procedureId, txn);
+      await this.#applyWriteTxn(txn);
+      await this.#clearTxn(target.procedureId);
     });
   }
 
@@ -794,24 +990,14 @@ export class ProcedureStore {
    */
   async remove(procedureId: string, meta: TransitionMeta): Promise<void> {
     await this.#ensureInit();
-    await this.#withLock(procedureId, async () => {
-      await this.#recoverLocked(procedureId);
-      const currentPath = this.#currentPath(procedureId);
-      const prior = await this.#readCurrentLocked(procedureId);
-      if (prior === undefined) return; // 幂等：不存在无操作
-      const reason = prior.lifecycleReason;
-      await this.#appendEvent(
-        prior.procedureId,
-        prior.procedureRevision,
-        prior.status,
-        "deleted",
-        meta.trigger,
-        { reason },
-      );
-      await rm(currentPath, { force: true });
-      await rm(this.#historyDir(procedureId), { recursive: true, force: true });
-      await rm(this.#releaseDir(procedureId), { recursive: true, force: true });
-      await rm(this.#eventsDir(procedureId), { recursive: true, force: true });
+    await this.#withStoreLock(async () => {
+      if ((await this.#readCurrentLocked(procedureId)) === undefined) return; // 幂等：不存在无操作
+      // WAL delete：写 delete txn（意图）→ 完成删除 → 清 txn。崩溃后 recoverAll 重放完成删除，
+      // 不留下「current 已删、release/history 残留」的半删除。
+      const txn: ProcedureTxn = { kind: "delete", procedureId };
+      await this.#writeTxn(procedureId, txn);
+      await this.#completeDelete(procedureId);
+      await this.#clearTxn(procedureId);
     });
   }
 
@@ -875,52 +1061,19 @@ export class ProcedureStore {
     return events.map((e) => e.event);
   }
 
-  /**
-   * crash 恢复（fail-closed；必须在锁内调用）：事件先写 + current/release 原子 rename 的提交
-   * 协议下，崩溃只可能留下「已 append 事件但 current 未提交」的悬挂事件尾。恢复 = 确定性回滚
-   * 悬挂事件尾（不前滚、不补写）：current（原子 rename，永不截断）是权威，悬挂事件被删除。
-   * - current 缺失但事件存在（save 崩溃）⇒ 删除全部悬挂事件（首次写入未提交）。
-   * - 尾部事件 fromStatus == current.status 且 toStatus != current.status（transition/rollback
-   *   从 current 出发但未提交）⇒ 逐个删除尾部悬挂事件。
-   * - 尾部 "deleted" 事件但 current 仍在（remove 崩溃）⇒ 回滚删除意图（删除该事件，保留实体）。
-   * 非上述情形（正常提交 / current 领先事件的测试直写 seam）不动作。
-   */
-  async #recoverLocked(procedureId: string): Promise<void> {
-    const current = await this.#readCurrentLocked(procedureId);
-    let events = await this.#readEventsLocked(procedureId);
-    if (events.length === 0) return;
-    if (current === undefined) {
-      for (const event of events) await rm(this.#eventPath(procedureId, event.seq), { force: true });
-      return;
-    }
-    while (events.length > 0) {
-      const last = events[events.length - 1]!;
-      if (last.toStatus === "deleted") {
-        await rm(this.#eventPath(procedureId, last.seq), { force: true });
-        events = await this.#readEventsLocked(procedureId);
-        continue;
-      }
-      if (last.fromStatus === current.status && last.toStatus !== current.status) {
-        await rm(this.#eventPath(procedureId, last.seq), { force: true });
-        events = await this.#readEventsLocked(procedureId);
-        continue;
-      }
-      break;
-    }
-  }
-
   /** 当前状态（按 procedureId）；不存在 ⇒ undefined。 */
   async getProcedure(procedureId: string): Promise<CompiledProcedure | undefined> {
     await this.#ensureInit();
-    return this.#withLock(procedureId, async () => {
-      await this.#recoverLocked(procedureId);
-      return this.#readCurrentLocked(procedureId);
-    });
+    return this.#withStoreLock(() => this.#readCurrentLocked(procedureId));
   }
 
   /** 按 procedureRevision 查修订历史（rollback stableLookup 注入用）；未找到 ⇒ undefined。 */
   async getByRevision(procedureRevision: string): Promise<CompiledProcedure | undefined> {
     await this.#ensureInit();
+    return this.#withStoreLock(() => this.#getByRevisionLocked(procedureRevision));
+  }
+
+  async #getByRevisionLocked(procedureRevision: string): Promise<CompiledProcedure | undefined> {
     const revisionHash = revisionFileHash(procedureRevision);
     const historyRoot = path.join(this.#tenantDir(), "history");
     let procedureDirs: string[] = [];
@@ -964,6 +1117,10 @@ export class ProcedureStore {
    */
   async getStableByRevision(procedureRevision: string): Promise<CompiledProcedure | undefined> {
     await this.#ensureInit();
+    return this.#withStoreLock(() => this.#getStableByRevisionLocked(procedureRevision));
+  }
+
+  async #getStableByRevisionLocked(procedureRevision: string): Promise<CompiledProcedure | undefined> {
     const release = await this.#findReleaseByRevision(procedureRevision);
     if (release === undefined) return undefined;
     // BLOCKER 1 fail-closed：声称曾 active（active 或 suspended-from-active）的 stable
@@ -1020,29 +1177,35 @@ export class ProcedureStore {
 
   /** 全部当前 procedure（供 diff/cascade 依赖查找注入）。 */
   async listCurrent(): Promise<CompiledProcedure[]> {
-    const results = await this.#listCurrentRaw();
-    return results.map((r) => r.parsed);
+    await this.#ensureInit();
+    return this.#withStoreLock(async () => {
+      const results = await this.#listCurrentRaw();
+      return results.map((r) => r.parsed);
+    });
   }
 
   /** 按状态过滤当前 procedure。 */
   async listByStatus(status: CompiledProcedure["status"]): Promise<CompiledProcedure[]> {
     assertValidStatus(status);
-    const results = await this.#listCurrentRaw();
-    return results.filter((r) => r.parsed.status === status).map((r) => r.parsed);
+    await this.#ensureInit();
+    return this.#withStoreLock(async () => {
+      const results = await this.#listCurrentRaw();
+      return results.filter((r) => r.parsed.status === status).map((r) => r.parsed);
+    });
   }
 
   /** 按 evidenceId 过滤当前 procedure（cascade 查找注入用）。 */
   async listByEvidenceId(evidenceId: string): Promise<CompiledProcedure[]> {
-    const results = await this.#listCurrentRaw();
-    return results.filter((r) => r.parsed.evidenceIds.includes(evidenceId)).map((r) => r.parsed);
+    await this.#ensureInit();
+    return this.#withStoreLock(async () => {
+      const results = await this.#listCurrentRaw();
+      return results.filter((r) => r.parsed.evidenceIds.includes(evidenceId)).map((r) => r.parsed);
+    });
   }
 
   /** 某 procedure 的事件日志（seq 升序，审计可追溯）。 */
   async listEvents(procedureId: string): Promise<ProcedureTransitionEvent[]> {
     await this.#ensureInit();
-    return this.#withLock(procedureId, async () => {
-      await this.#recoverLocked(procedureId);
-      return this.#readEventsLocked(procedureId);
-    });
+    return this.#withStoreLock(() => this.#readEventsLocked(procedureId));
   }
 }

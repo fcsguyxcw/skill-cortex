@@ -1047,22 +1047,28 @@ describe("ProcedureStore：rollback 落盘 seam（闭环）", () => {
   });
 });
 
-/** 故障注入：手工写某 procedure 的事件文件（模拟「事件已 append 但 current 未提交」的崩溃态）。 */
-async function writeProcedureEvent(
+/** 故障注入：手工写某 procedure 的 WAL 事务文件（模拟崩溃后遗留的未清除 txn）。 */
+async function writeProcedureTxn(
   store: ProcedureStore,
   procedureId: string,
-  seq: number,
-  event: Record<string, unknown>,
+  txn: Record<string, unknown>,
 ): Promise<void> {
   const { createHash } = await import("node:crypto");
   const tenantHash = createHash("sha256").update(store.tenantScope, "utf8").digest("hex").slice(0, 32);
   const pidHash = createHash("sha256").update(procedureId, "utf8").digest("hex").slice(0, 40);
-  const dir = path.join(store.rootDir, tenantHash, "events", pidHash);
+  const dir = path.join(store.rootDir, tenantHash, "txn");
   mkdirSync(dir, { recursive: true });
-  writeFileSync(path.join(dir, `${String(seq).padStart(6, "0")}.json`), JSON.stringify(event), "utf8");
+  writeFileSync(path.join(dir, `${pidHash}.txn.json`), JSON.stringify(txn), "utf8");
 }
 
-describe("ProcedureStore：并发与 crash 恢复（Issue 1）", () => {
+/** 故障注入：直写 current（模拟「current 已写、release 未写」的崩溃窗口）。 */
+function writeProcedureCurrent(store: ProcedureStore, procedure: CompiledProcedure): void {
+  const currentDir = path.join(store.tenantDir, "current");
+  const file = readdirSync(currentDir).find((f) => f.endsWith(".json"))!;
+  writeFileSync(path.join(currentDir, file), JSON.stringify(procedure), "utf8");
+}
+
+describe("ProcedureStore：并发与 crash 恢复（WAL，Issue 1/3/4）", () => {
   it("并发 transition（同一 prior）⇒ 恰好一个 writer 成功，另一个 stale_prior 拒绝", async () => {
     const store = makeStore();
     const draft = draftOf();
@@ -1082,68 +1088,97 @@ describe("ProcedureStore：并发与 crash 恢复（Issue 1）", () => {
     assert.equal((await store.listEvents(draft.procedureId)).length, 2, "save + 1 次成功 transition = 2 事件");
   });
 
-  it("crash 恢复：transition 悬挂事件（事件已写 current 未提交）⇒ 读时确定性回滚", async () => {
+  it("两个 Store 实例并发 transition（同一 rootDir）⇒ 文件锁串行，恰好一个成功（Issue 3）", async () => {
+    const store1 = makeStore();
+    const store2 = new ProcedureStore({
+      rootDir: store1.rootDir,
+      projectRoot,
+      now: () => new Date("2026-08-20T00:00:00.000Z"),
+    });
+    const draft = draftOf();
+    await store1.save(draft, { trigger: "agent" });
+    const validated = validatedOf();
+    const results = await Promise.allSettled([
+      store1.transition(draft, validated, { trigger: "procedure" }),
+      store2.transition(draft, validated, { trigger: "procedure" }),
+    ]);
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter((r) => r.status === "rejected");
+    assert.equal(fulfilled.length, 1, "恰好一个实例成功");
+    assert.equal(rejected.length, 1, "另一个实例拒绝");
+    const reason = (rejected[0] as PromiseRejectedResult).reason as Error;
+    assert.match(reason.message, /procedure_store_stale_prior/);
+    assert.equal((await store1.getProcedure(draft.procedureId))!.status, "validated");
+  });
+
+  it("crash 恢复：遗留 write txn（current 已写 release 未写）⇒ recoverAll 重放，current/release 一致（Issue 1）", async () => {
     const store = makeStore();
     const draft = draftOf();
     await store.save(draft, { trigger: "agent" });
-    await writeProcedureEvent(store, draft.procedureId, 2, {
+    await store.transition(draft, validatedOf(), { trigger: "procedure" });
+    await store.transition(validatedOf(), canaryOf(), { trigger: "procedure" });
+    const active = activeOf();
+    const event = {
       schemaVersion: 1,
-      eventId: "evt-dangling",
-      seq: 2,
-      procedureId: draft.procedureId,
-      procedureRevision: draft.procedureRevision,
-      fromStatus: "draft",
-      toStatus: "validated",
-      reportId: VALIDATION_REPORT,
-      trigger: "procedure",
-      occurredAt: "2026-08-20T00:00:00.000Z",
-    });
-    assert.equal((await store.getProcedure(draft.procedureId))!.status, "draft", "current 保持 draft");
-    const events = await store.listEvents(draft.procedureId);
-    assert.deepEqual(events.map((e) => e.toStatus), ["draft"], "悬挂 validated 事件被回滚");
-  });
-
-  it("crash 恢复：rollback 悬挂事件（rollback 事件已写 current 未切回）⇒ 读时确定性回滚", async () => {
-    const store = makeStore();
-    const { draft: v1 } = await persistActiveV1(store);
-    // 直写 current 为 v2 suspended（同 rollback seam 的跨 revision 直写；无 revision save seam）。
-    const v2 = activeWithReference(REFERENCE_V2, v1.procedureRevision);
-    const v2Failed = transitionPhase3ProcedureSuspend(v2 as never, {
-      decision: "suspended",
-      reason: REASON,
-      suspendKind: "dependency_drift",
-    });
-    const currentDir = path.join(store.tenantDir, "current");
-    const file = readdirSync(currentDir).find((f) => f.endsWith(".json"))!;
-    writeFileSync(path.join(currentDir, file), JSON.stringify(v2Failed), "utf8");
-
-    await writeProcedureEvent(store, v1.procedureId, 5, {
-      schemaVersion: 1,
-      eventId: "evt-rollback-dangling",
-      seq: 5,
-      procedureId: v1.procedureId,
-      procedureRevision: v1.procedureRevision,
-      fromStatus: v2Failed.status,
+      eventId: "evt-crash",
+      seq: 4,
+      procedureId: active.procedureId,
+      procedureRevision: active.procedureRevision,
+      fromStatus: "canary",
       toStatus: "active",
-      reason: ROLLBACK_REASON,
+      reportId: ACTIVE_REPORT,
       trigger: "tool",
       occurredAt: "2026-08-20T00:00:00.000Z",
+    };
+    // 写 write txn + 只写 current=active（release 仍 canary）模拟「current 已写、release 未写」崩溃窗口。
+    await writeProcedureTxn(store, active.procedureId, {
+      kind: "write",
+      seq: 4,
+      procedureId: active.procedureId,
+      procedure: active,
+      event,
+      writeHistory: false,
     });
-    assert.equal((await store.getProcedure(v1.procedureId))!.status, "suspended", "current 保持 failed");
-    const events = await store.listEvents(v1.procedureId);
-    assert.deepEqual(
-      events.map((e) => `${e.fromStatus ?? "∅"}→${e.toStatus}`),
-      ["∅→draft", "draft→validated", "validated→canary", "canary→active"],
-      "悬挂 rollback 事件被回滚，事件历史不丢",
-    );
+    writeProcedureCurrent(store, active);
+
+    const reloaded = new ProcedureStore({
+      rootDir: store.rootDir,
+      projectRoot,
+      now: () => new Date("2026-08-20T00:00:00.000Z"),
+    });
+    // recoverAll 重放 txn：release 也从 canary 推到 active（不再 current=new/release=old）。
+    const stable = await reloaded.getStableByRevision(active.procedureRevision);
+    assert.ok(stable !== undefined, "release 被重放为 active");
+    assert.equal(stable!.status, "active");
+    assert.equal(stable!.activeReportId, ACTIVE_REPORT);
+    assert.equal((await reloaded.getProcedure(active.procedureId))!.status, "active");
   });
 
-  it("crash 恢复：save 悬挂事件（无 current 但有事件）⇒ 读时删除全部悬挂", async () => {
+  it("crash 恢复：遗留 delete txn（current 已删 release 残留）⇒ recoverAll 完成删除（Issue 4）", async () => {
+    const store = makeStore();
+    const { draft: v1 } = await persistActiveV1(store);
+    await writeProcedureTxn(store, v1.procedureId, { kind: "delete", procedureId: v1.procedureId });
+    // 只删 current（模拟半删除：release/history 残留）。
+    const currentDir = path.join(store.tenantDir, "current");
+    const file = readdirSync(currentDir).find((f) => f.endsWith(".json"))!;
+    rmSync(path.join(currentDir, file), { force: true });
+
+    const reloaded = new ProcedureStore({
+      rootDir: store.rootDir,
+      projectRoot,
+      now: () => new Date("2026-08-20T00:00:00.000Z"),
+    });
+    assert.equal(await reloaded.getProcedure(v1.procedureId), undefined, "current 已删");
+    assert.equal(await reloaded.getStableByRevision(v1.procedureRevision), undefined, "release 残留被清理");
+    assert.equal(await reloaded.getByRevision(v1.procedureRevision), undefined, "history 残留被清理");
+  });
+
+  it("crash 恢复：遗留 save write txn（无 current）⇒ recoverAll 重放，entity 落盘", async () => {
     const store = makeStore();
     const draft = draftOf();
-    await writeProcedureEvent(store, draft.procedureId, 1, {
+    const event = {
       schemaVersion: 1,
-      eventId: "evt-save-dangling",
+      eventId: "evt-save-crash",
       seq: 1,
       procedureId: draft.procedureId,
       procedureRevision: draft.procedureRevision,
@@ -1151,8 +1186,23 @@ describe("ProcedureStore：并发与 crash 恢复（Issue 1）", () => {
       toStatus: "draft",
       trigger: "agent",
       occurredAt: "2026-08-20T00:00:00.000Z",
+    };
+    await writeProcedureTxn(store, draft.procedureId, {
+      kind: "write",
+      seq: 1,
+      procedureId: draft.procedureId,
+      procedure: draft,
+      event,
+      writeHistory: true,
     });
-    assert.equal(await store.getProcedure(draft.procedureId), undefined, "save 未提交 ⇒ 无 current");
-    assert.deepEqual(await store.listEvents(draft.procedureId), [], "悬挂事件被清理");
+    const reloaded = new ProcedureStore({
+      rootDir: store.rootDir,
+      projectRoot,
+      now: () => new Date("2026-08-20T00:00:00.000Z"),
+    });
+    const loaded = await reloaded.getProcedure(draft.procedureId);
+    assert.ok(loaded !== undefined, "save txn 被重放，entity 落盘");
+    assert.equal(loaded!.status, "draft");
+    assert.equal((await reloaded.listEvents(draft.procedureId)).length, 1);
   });
 });

@@ -10,8 +10,6 @@
  * 本模块只判门；draft→shadow 回放与 active 落地（store 持久化）不在本 slice；
  * 任何退化可关闭 overlay 无损回静态（rerankWithOverlay overlay-off 可复现，无需本模块动作）。
  */
-import { createHash } from "node:crypto";
-
 import type { ActivationProfile, SkillRecord } from "../core/contracts/index.ts";
 import type {
   EvaluateOptions,
@@ -46,65 +44,81 @@ export const FROZEN_REQUIRED_COLUMNS: readonly EvaluationColumn[] = [
   "no_skill",
 ];
 
-function hashHex(value: string): string {
-  return createHash("sha256").update(value, "utf8").digest("hex");
-}
+/** 冻结 promotion overlay 参数（定值，与 final-heldout 阈值校准一致）。 */
+export const FROZEN_PROMOTION_OVERLAY: EvaluateOptions = {
+  aliasBoost: 5,
+  positiveBoost: 3,
+  nearMissPenalty: 10,
+} as const;
 
-/** 递归稳定序列化（对象 key 排序、数组有序），保证同内容不同 key 顺序产生同 hash。 */
-function stableStringify(value: unknown): string {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map((v) => stableStringify(v)).join(",")}]`;
-  const keys = Object.keys(value).sort();
-  return `{${keys
-    .map((k) => `${JSON.stringify(k)}:${stableStringify((value as Record<string, unknown>)[k])}`)
-    .join(",")}}`;
-}
+/** 冻结 no_skill 查询（与 dev/calibration/final-heldout 均不重叠的无关主题）。 */
+const FROZEN_NO_SKILL_QUERIES: readonly string[] = [
+  "how to bake sourdough bread",
+  "best coffee shops in portland",
+  "translate this poem to french",
+];
 
-/**
- * promotion evidence 绑定（Issue 2：PASS report 不得跨 Profile 复用）。至少绑定：
- * profileId / parentSkillRevision / profile content hash / evaluation set hash /
- * evaluation config hash。store 用落盘 profile 重算 profileId/parentSkillRevision/
- * profileContentHash 三项（不信任 caller），eval set/config hash 校验格式完整性。
- */
-export interface PromotionBinding {
-  profileId: string;
-  parentSkillRevision: string;
-  profileContentHash: string;
-  evaluationSetHash: string;
-  evaluationConfigHash: string;
+export interface FrozenEvaluation {
+  cases: readonly EvaluationCase[];
+  records: readonly SkillRecord[];
 }
 
 /**
- * profile 内容 hash（learned cue 数据 + 父绑定，不含可变 status/updatedAt）。store 用落盘
- * profile 重算同 hash，与 caller 传入的 binding 比对（内容被改 ⇒ 失配拒绝）。
+ * 冻结 real-skill 评估集（唯一来源）：父 Skill 自身 metadata + 冻结无关查询，构成可**真实验证**
+ * 的 hard_confuser + no_skill 两栏。父（skillId+revision 匹配）不在 catalog ⇒ cases 为空 ⇒
+ * 调用方拒绝晋升。
+ *
+ * 降级说明（2026-08-18 收口，真实不造假）：
+ * - `multi_skill`：真实 catalog 无「单一 query 应共召回多个 gold」的 ground-truth，且 rerank
+ *   overlay 只能重排静态候选、不能新增候选——无法构造真实验证。故不再产出单-gold 的伪
+ *   multi_skill case，由合成 final-heldout/calibration 单独验证。
+ * - `cross_language`：纯跨语言召回须依赖 learned 中文 alias，但 real-skill induction 通常不
+ *   产中文 alias，且 `${alias} ${parent.name}` 里 parent.name 本身即可静态召回（learned cue
+ *   不贡献召回），无法证明 learned cue 有效。故不再产出含 parent.name 的伪 cross_language
+ *   case，由合成 final-heldout/calibration 的纯中文+英文关键词 fixture 单独验证。
+ * 两栏降级后 gate 用 FROZEN_REQUIRED_COLUMNS（hard_confuser + no_skill）。
  */
-export function computeProfileContentHash(profile: ActivationProfile): string {
-  return hashHex(
-    stableStringify({
-      parentSkillId: profile.parentSkillId,
-      learnedAliases: profile.learnedAliases,
-      positiveExamples: profile.positiveExamples,
-      nearMissExamples: profile.nearMissExamples,
-      environmentCues: profile.environmentCues,
-    }),
-  );
-}
-
-/** 由评估输入确定性计算 promotion binding（供 host 侧 promotion 时绑定 evidence）。 */
-export function computePromotionBinding(
+export function buildFrozenEvaluation(
   profile: ActivationProfile,
-  cases: readonly EvaluationCase[],
-  records: readonly SkillRecord[],
-  options: EvaluateOptions,
-  requiredColumns: readonly EvaluationColumn[],
-): PromotionBinding {
-  return {
-    profileId: profile.profileId,
-    parentSkillRevision: profile.parentSkillRevision,
-    profileContentHash: computeProfileContentHash(profile),
-    evaluationSetHash: hashHex(stableStringify({ cases, records })),
-    evaluationConfigHash: hashHex(stableStringify({ options, requiredColumns })),
-  };
+  catalogRecords: readonly SkillRecord[],
+): FrozenEvaluation {
+  const parent = catalogRecords.find(
+    (record) =>
+      record.skillId === profile.parentSkillId &&
+      record.skillRevision === profile.parentSkillRevision,
+  );
+  if (parent === undefined) {
+    return { cases: [], records: catalogRecords };
+  }
+  const gold = parent.skillId;
+  const others = catalogRecords
+    .filter((record) => record.skillId !== gold)
+    .sort((a, b) => (a.skillId < b.skillId ? -1 : 1));
+  const confuserIds = others.length > 0 ? [others[0]!.skillId] : [];
+
+  const cases: EvaluationCase[] = [
+    {
+      id: "hc-name",
+      column: "hard_confuser",
+      query: parent.name,
+      expectedSkillIds: [gold],
+      ...(confuserIds.length > 0 ? { confuserSkillIds: confuserIds } : {}),
+    },
+    {
+      id: "hc-desc",
+      column: "hard_confuser",
+      query: parent.description,
+      expectedSkillIds: [gold],
+      ...(confuserIds.length > 0 ? { confuserSkillIds: confuserIds } : {}),
+    },
+    ...FROZEN_NO_SKILL_QUERIES.map((query, index) => ({
+      id: `ns-${index}`,
+      column: "no_skill" as const,
+      query,
+      expectedSkillIds: [] as string[],
+    })),
+  ];
+  return { cases, records: catalogRecords };
 }
 
 /**

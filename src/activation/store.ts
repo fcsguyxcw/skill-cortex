@@ -22,27 +22,27 @@
  * store 不内嵌状态机纯函数：合法边表与 state.ts 语义一致（只持久化 + 校验），transition
  * 的 next 由调用方用 state.ts 纯函数产出。删除级联落盘组合 cascade.ts 纯函数 + 本 store。
  *
- * crash consistency（2026-08-18 收口，与 ProcedureStore 一致）：提交协议 = 事件先写（意图，
- * 原子 rename）→ current（原子 rename）；每个文件经 <path>.tmp + rename 原子替换，崩溃不
- * 截断。唯一崩溃产物是「事件已 append 但 current 未提交」的悬挂事件尾；读/写路径在每
- * profile 进程内互斥锁内调用 #recoverLocked 确定性回滚悬挂事件尾；同一 profile 并发 writer
- * 由锁串行化（后到者 re-read 后 stale-prior 拒绝）。
+ * crash consistency（2026-08-18 收口，WAL + store 级文件锁，与 ProcedureStore 一致）：
+ * - 每次写操作先原子落 txn（write/delete），再应用，最后清 txn；崩溃后 recoverAll 重放
+ *   未清除 txn 幂等推进到一致终态（roll-forward），current 不再半提交；
+ * - store 级文件锁（<root>/<tenantHash>.lock，wx 创建 + 租约 + 过期抢占）跨实例/进程
+ *   single-writer，杜绝两个 Store 实例/进程并发写同一 root。
  */
 import { createHash } from "node:crypto";
 import { lstat, mkdir, readdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import type { ActivationProfile } from "../core/contracts/index.ts";
+import type { ActivationProfile, SkillRecord } from "../core/contracts/index.ts";
 import {
   PROFILE_SUSPEND_REASON_EVIDENCE_CASCADE,
   suspendProfilesForEvidenceDeletion,
 } from "./cascade.ts";
-import type { OverlayEvaluationReport } from "./evaluate.ts";
+import { evaluateOverlay } from "./evaluate.ts";
 import {
-  computeProfileContentHash,
+  buildFrozenEvaluation,
   evaluateProfilePromotion,
+  FROZEN_PROMOTION_OVERLAY,
   FROZEN_REQUIRED_COLUMNS,
-  type PromotionBinding,
 } from "./promotion.ts";
 import type { ActivationStatus, SuspendableProfile } from "./state.ts";
 
@@ -107,25 +107,36 @@ export interface TransitionMeta {
   reason?: string;
   /**
    * BLOCKER 2（promotion trust boundary）：shadow→active 边必须携带结构化 promotion
-   * evidence（支撑报告 + 受控报告 ID）；store 内部自行重算 verdict，不信任 caller 传入的
-   * ok。缺省 ⇒ 该边拒绝零写入；caller 无法只凭伪造 promotionReportId 通过。
+   * evidence（当次 catalog records + 受控报告 ID）；store 用落盘 profile + records 自行
+   * 重算 frozen 评估集与 verdict，不信任 caller。缺省 ⇒ 该边拒绝零写入。
    */
   promotion?: PromotionVerdictEvidence;
 }
 
-/** 结构化 promotion evidence（BLOCKER 2 收口：不信任 caller 的 verdict，store 自行重算）。 */
+/** 结构化 promotion evidence（Issue 2：report/eval-input/binding 不可拆分——store 用落盘
+ * profile + records 自行重算 frozen cases/report/verdict，不接受 caller 的 report/binding）。 */
 export interface PromotionVerdictEvidence {
-  /** 支撑判定的评估报告（store 内部重新调用 evaluateProfilePromotion 判定）。 */
-  report: OverlayEvaluationReport;
-  /** promotion 报告 ID（受控格式，与 report 一起绑定）。 */
+  /** 当次 discovery catalog（SkillRecord 全集）：store 据此 + 落盘 stored 重算 frozen 评估集。 */
+  records: readonly SkillRecord[];
+  /** promotion 报告 ID（受控格式）。 */
   promotionReportId: string;
-  /**
-   * 绑定（Issue 2）：promotion evidence 必须绑定 profileId / parentSkillRevision /
-   * profileContentHash / evaluationSetHash / evaluationConfigHash；store 用落盘 profile
-   * 自行重算 profile 三项，eval set/config hash 校验格式完整性——PASS report 不得跨 Profile 复用。
-   */
-  binding: PromotionBinding;
 }
+
+/** WAL 事务（与 ProcedureStore 一致的 write/delete txn；write 携带完整 profile + event）。 */
+export type ActivationTxn =
+  | {
+      kind: "write";
+      seq: number;
+      profileId: string;
+      profile: ActivationProfile;
+      event: ActivationTransitionEvent;
+    }
+  | { kind: "delete"; profileId: string };
+
+/** 文件锁超时 / 重试 / 租约过期阈值（与 ProcedureStore 一致）。 */
+const LOCK_TIMEOUT_MS = 5000;
+const LOCK_RETRY_MS = 10;
+const LOCK_STALE_MS = 30000;
 
 /** promotion 报告 ID 受控格式（审计可追溯）。 */
 const PROMOTION_REPORT_ID_PATTERN = /^promotion:[A-Za-z0-9._-]{1,95}$/u;
@@ -297,7 +308,6 @@ export class ActivationProfileStore {
   readonly projectRoot: string;
   readonly tenantScope: string;
   #initialized = false;
-  #locks = new Map<string, Promise<void>>();
   #now: () => Date;
 
   constructor(options: ActivationProfileStoreOptions) {
@@ -323,19 +333,127 @@ export class ActivationProfileStore {
     this.#initialized = true;
   }
 
-  /** 每 profile 进程内互斥（FIFO 异步链）：同一 profile 的写/恢复串行化，杜绝并发 writer 双成功。 */
-  async #withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
-    const prev = this.#locks.get(key) ?? Promise.resolve();
-    let release!: () => void;
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
+  #storeLockPath(): string {
+    return path.join(this.rootDir, `${tenantHashOf(this.tenantScope)}.lock`);
+  }
+
+  #txnDir(): string {
+    return path.join(this.rootDir, tenantHashOf(this.tenantScope), "txn");
+  }
+
+  #txnPath(profileId: string): string {
+    return path.join(this.#txnDir(), `${profileIdFileHash(profileId)}.txn.json`);
+  }
+
+  async #lockIsStale(lockPath: string): Promise<boolean> {
+    const raw = await readFile(lockPath, "utf8").catch((error: unknown) => {
+      if (isErrnoCode(error, "ENOENT")) return undefined;
+      throw error;
     });
-    this.#locks.set(key, prev.then(() => gate));
-    await prev;
+    if (raw === undefined) return false;
+    let parsed: unknown;
     try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return true;
+    }
+    const at = (parsed as { at?: unknown }).at;
+    return typeof at !== "number" || Date.now() - at > LOCK_STALE_MS;
+  }
+
+  async #acquireStoreLock(): Promise<() => Promise<void>> {
+    await mkdir(this.rootDir, { recursive: true });
+    const lockPath = this.#storeLockPath();
+    const deadline = Date.now() + LOCK_TIMEOUT_MS;
+    for (;;) {
+      try {
+        await writeFile(lockPath, JSON.stringify({ pid: process.pid, at: Date.now() }), {
+          encoding: "utf8",
+          flag: "wx",
+        });
+        return async () => {
+          await rm(lockPath, { force: true });
+        };
+      } catch (error) {
+        if (!isErrnoCode(error, "EEXIST")) throw error;
+        if (await this.#lockIsStale(lockPath)) {
+          await rm(lockPath, { force: true });
+          continue;
+        }
+        if (Date.now() > deadline) throw new Error("activation_store_locked");
+        await new Promise((resolve) => setTimeout(resolve, LOCK_RETRY_MS));
+      }
+    }
+  }
+
+  async #withStoreLock<T>(fn: () => Promise<T>): Promise<T> {
+    const release = await this.#acquireStoreLock();
+    try {
+      await this.#recoverAll();
       return await fn();
     } finally {
-      release();
+      await release();
+    }
+  }
+
+  #parseTxnObject(obj: Record<string, unknown>): ActivationTxn {
+    if (obj.kind === "delete") {
+      if (typeof obj.profileId !== "string") corrupt("txn_delete_profile_id");
+      return { kind: "delete", profileId: obj.profileId };
+    }
+    if (obj.kind === "write") {
+      if (typeof obj.seq !== "number") corrupt("txn_write_seq");
+      if (typeof obj.profileId !== "string") corrupt("txn_write_profile_id");
+      const profile = parseStoredProfile(obj.profile, profileIdFileHash(obj.profileId));
+      const event = parseStoredEvent(obj.event, profileIdFileHash(obj.profileId), obj.seq);
+      return { kind: "write", seq: obj.seq, profileId: obj.profileId, profile, event };
+    }
+    corrupt("txn_kind");
+  }
+
+  async #writeTxn(profileId: string, txn: ActivationTxn): Promise<void> {
+    await this.#writeFileAtomic(this.#txnPath(profileId), JSON.stringify(txn));
+  }
+
+  async #clearTxn(profileId: string): Promise<void> {
+    await rm(this.#txnPath(profileId), { force: true });
+  }
+
+  /** 幂等重放 write txn：写 event + current。 */
+  async #applyWriteTxn(txn: Extract<ActivationTxn, { kind: "write" }>): Promise<void> {
+    await this.#appendEventAt(txn.profileId, txn.seq, txn.event);
+    await this.#writeProfileFile(this.#currentPath(txn.profileId), txn.profile);
+  }
+
+  /** 幂等完成 delete：删 current + events 目录。 */
+  async #completeDelete(profileId: string): Promise<void> {
+    await rm(this.#currentPath(profileId), { force: true });
+    await rm(this.#eventsDir(profileId), { recursive: true, force: true });
+  }
+
+  /** 崩溃恢复（store 级，锁内调用）：重放所有未清除 txn，幂等推进到一致终态。 */
+  async #recoverAll(): Promise<void> {
+    let names: string[] = [];
+    try {
+      names = await readdir(this.#txnDir());
+    } catch (error) {
+      if (isErrnoCode(error, "ENOENT")) return;
+      throw error;
+    }
+    for (const name of names) {
+      if (!name.endsWith(".txn.json")) continue;
+      const txnPath = path.join(this.#txnDir(), name);
+      const raw = await readFile(txnPath, "utf8");
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        corrupt("txn_json_parse");
+      }
+      const txn = this.#parseTxnObject(parsed as Record<string, unknown>);
+      if (txn.kind === "delete") await this.#completeDelete(txn.profileId);
+      else await this.#applyWriteTxn(txn);
+      await rm(txnPath, { force: true });
     }
   }
 
@@ -392,16 +510,17 @@ export class ActivationProfileStore {
     await this.#writeFileAtomic(filePath, body);
   }
 
-  async #appendEvent(
+  /** 构造可审计 transition 事件（seq 由调用方在锁内用 #nextEventSeq 确定）。 */
+  #buildEvent(
+    seq: number,
     profileId: string,
     fromStatus: ActivationStatus | undefined,
     toStatus: EventToStatus,
     meta: TransitionMeta,
-  ): Promise<void> {
-    const seq = await this.#nextEventSeq(profileId);
-    const event: ActivationTransitionEvent = {
+  ): ActivationTransitionEvent {
+    return {
       schemaVersion: PROFILE_SCHEMA_VERSION,
-      eventId: `evt-${hash(`${profileId}\u0000${seq}`, 40)}`,
+      eventId: `evt-${hash(`${profileId}#${seq}`, 40)}`,
       seq,
       profileId,
       fromStatus,
@@ -411,15 +530,18 @@ export class ActivationProfileStore {
       trigger: meta.trigger,
       occurredAt: this.#now().toISOString(),
     };
-    const filePath = this.#eventPath(profileId, seq);
-    await this.#writeFileAtomic(filePath, JSON.stringify(event));
+  }
+
+  /** 原子写事件文件（seq 由 txn 确定，幂等覆盖）。 */
+  async #appendEventAt(profileId: string, seq: number, event: ActivationTransitionEvent): Promise<void> {
+    await this.#writeFileAtomic(this.#eventPath(profileId, seq), JSON.stringify(event));
   }
 
   /**
    * 首次写入（draft induction 落盘）。prior 已存在 ⇒ 拒绝（不覆盖；更新走 transition）。
    * BLOCKER 2：save 只允许初始 status="draft"——非 draft（直接 save active/shadow 等）
    * 拒绝零写入（发布状态必须经状态机 transition，不能绕过）。
-   * 写 current（wx）+ 首条事件（fromStatus=undefined）。
+   * WAL：写 write txn → 应用（event + current）→ 清 txn。
    */
   async save(profile: ActivationProfile, meta: TransitionMeta): Promise<void> {
     await this.#ensureInit();
@@ -428,22 +550,25 @@ export class ActivationProfileStore {
       throw new Error("activation_store_save_requires_draft");
     }
     if (profile.profileId === "") throw new Error("activation_store_invalid_identity");
-    await this.#withLock(profile.profileId, async () => {
-      await this.#recoverLocked(profile.profileId);
-      const currentPath = this.#currentPath(profile.profileId);
-      if (await this.#fileExists(currentPath)) {
+    await this.#withStoreLock(async () => {
+      if (await this.#fileExists(this.#currentPath(profile.profileId))) {
         throw new Error("activation_store_already_exists");
       }
-      // 提交顺序：事件先写（意图）→ current 原子 rename（崩溃只留悬挂事件，恢复可确定性回滚）。
-      await this.#appendEvent(profile.profileId, undefined, profile.status, meta);
-      await this.#writeProfileFile(currentPath, profile);
+      // WAL：写 txn（意图）→ 应用（event + current）→ 清 txn。
+      const seq = await this.#nextEventSeq(profile.profileId);
+      const event = this.#buildEvent(seq, profile.profileId, undefined, profile.status, meta);
+      const txn: ActivationTxn = { kind: "write", seq, profileId: profile.profileId, profile, event };
+      await this.#writeTxn(profile.profileId, txn);
+      await this.#applyWriteTxn(txn);
+      await this.#clearTxn(profile.profileId);
     });
   }
 
   /**
-   * BLOCKER 2（收口）：shadow→active 边必须携带结构化 promotion evidence（report +
-   * 受控报告 ID）；store 内部重新调用 evaluateProfilePromotion(report) 判定（四栏覆盖 +
-   * 冻结门槛 + nonInferior），不信任 caller 的 verdict.ok。缺省/不满足 ⇒ 拒绝零写入。
+   * BLOCKER 2 + Issue 2（收口）：shadow→active 边必须携带 records（当次 discovery catalog）；
+   * store 用落盘 stored + records 确定性重算 frozen cases → report → verdict，不接受 caller
+   * 的 report/binding——report/eval-input/binding 由同一重算构成，不可拼接绕过（A 的 report
+   * 无法用于 B）。缺省/不满足 ⇒ 拒绝零写入。
    */
   #assertPromotionVerdict(meta: TransitionMeta, stored: ActivationProfile): void {
     const evidence = meta.promotion;
@@ -453,35 +578,14 @@ export class ActivationProfileStore {
     if (!PROMOTION_REPORT_ID_PATTERN.test(evidence.promotionReportId)) {
       throw new Error("activation_store_promotion_report_id_invalid");
     }
-    // 不信任 caller 的 verdict.ok：store 根据 report 自己重新调用 evaluateProfilePromotion
-    // （real-skill 冻结 gate 用 FROZEN_REQUIRED_COLUMNS；冻结门槛 + nonInferior 一并判定）。
-    const recomputed = evaluateProfilePromotion(evidence.report, {
-      requiredColumns: FROZEN_REQUIRED_COLUMNS,
-    });
-    if (!recomputed.ok) {
+    const { cases } = buildFrozenEvaluation(stored, evidence.records);
+    if (cases.length === 0) {
+      throw new Error("activation_store_promotion_parent_not_in_evaluation_set");
+    }
+    const report = evaluateOverlay(cases, evidence.records, stored, FROZEN_PROMOTION_OVERLAY);
+    const verdict = evaluateProfilePromotion(report, { requiredColumns: FROZEN_REQUIRED_COLUMNS });
+    if (!verdict.ok) {
       throw new Error("activation_store_promotion_verdict_not_passed");
-    }
-    // Issue 2：binding 校验（store 根据落盘 stored 自己验证，不信任 caller）。缺 binding 或
-    // profileId / parentSkillRevision / profileContentHash 与落盘不一致 ⇒ 拒绝；eval set/config
-    // hash 校验 64-hex 格式完整性（防空/畸形）。
-    const binding = evidence.binding;
-    if (binding === undefined) {
-      throw new Error("activation_store_promotion_binding_required");
-    }
-    if (binding.profileId !== stored.profileId) {
-      throw new Error("activation_store_promotion_binding_profile_mismatch");
-    }
-    if (binding.parentSkillRevision !== stored.parentSkillRevision) {
-      throw new Error("activation_store_promotion_binding_revision_mismatch");
-    }
-    if (binding.profileContentHash !== computeProfileContentHash(stored)) {
-      throw new Error("activation_store_promotion_binding_content_hash_mismatch");
-    }
-    if (!/^[0-9a-f]{64}$/u.test(binding.evaluationSetHash)) {
-      throw new Error("activation_store_promotion_binding_eval_set_hash_invalid");
-    }
-    if (!/^[0-9a-f]{64}$/u.test(binding.evaluationConfigHash)) {
-      throw new Error("activation_store_promotion_binding_eval_config_hash_invalid");
     }
   }
 
@@ -508,8 +612,7 @@ export class ActivationProfileStore {
     }
     this.#assertLegalTransition(prior.status, next.status);
     const isPromotionEdge = prior.status === "shadow" && next.status === "active";
-    await this.#withLock(next.profileId, async () => {
-      await this.#recoverLocked(next.profileId);
+    await this.#withStoreLock(async () => {
       const stored = await this.#readCurrentLocked(prior.profileId);
       if (stored === undefined) {
         throw new Error("activation_store_missing_prior");
@@ -522,14 +625,13 @@ export class ActivationProfileStore {
       ) {
         throw new Error("activation_store_stale_prior");
       }
-      // BLOCKER 2 + Issue 2：promotion 边（shadow→active）校验结构化 evidence + binding
-      // （以落盘 stored 为权威，不信任 caller 的 verdict 或 profile 绑定）。
+      // BLOCKER 2 + Issue 2：promotion 边（shadow→active）用落盘 stored 自行重算 verdict
+      // （不信任 caller 的 report/binding）。
       if (isPromotionEdge) {
         this.#assertPromotionVerdict(meta, stored);
       }
       // immutable 内容以落盘 stored 为权威（不信任调用方 prior/next 双伪造）。
       assertImmutableContentUnchanged(stored, next);
-      const currentPath = this.#currentPath(next.profileId);
       // promotion 边的事件 reportId 绑定结构化 promotionReportId（不信任裸 reportId）。
       const eventMeta: TransitionMeta = isPromotionEdge
         ? {
@@ -537,9 +639,13 @@ export class ActivationProfileStore {
             reportId: meta.promotion!.promotionReportId,
           }
         : meta;
-      // 提交顺序：事件先写（意图）→ current 原子 rename。
-      await this.#appendEvent(next.profileId, prior.status, next.status, eventMeta);
-      await this.#writeProfileFile(currentPath, next);
+      // WAL：写 txn（意图）→ 应用（event + current）→ 清 txn。
+      const seq = await this.#nextEventSeq(next.profileId);
+      const event = this.#buildEvent(seq, next.profileId, prior.status, next.status, eventMeta);
+      const txn: ActivationTxn = { kind: "write", seq, profileId: next.profileId, profile: next, event };
+      await this.#writeTxn(next.profileId, txn);
+      await this.#applyWriteTxn(txn);
+      await this.#clearTxn(next.profileId);
     });
   }
 
@@ -603,46 +709,10 @@ export class ActivationProfileStore {
     return events.map((e) => e.event);
   }
 
-  /**
-   * crash 恢复（fail-closed；必须在锁内调用）：事件先写 + current 原子 rename 的提交协议下，
-   * 崩溃只可能留下「已 append 事件但 current 未提交」的悬挂事件尾。恢复 = 确定性回滚悬挂事件尾
-   * （不前滚、不补写）：current（原子 rename，永不截断）是权威，悬挂事件被删除。
-   * - current 缺失但事件存在（save 崩溃）⇒ 删除全部悬挂事件（首次写入未提交）。
-   * - 尾部事件 fromStatus == current.status 且 toStatus != current.status（transition 从
-   *   current 出发但未提交）⇒ 逐个删除尾部悬挂事件。
-   * - 尾部 "deleted" 事件但 current 仍在（remove 崩溃）⇒ 回滚删除意图。
-   */
-  async #recoverLocked(profileId: string): Promise<void> {
-    const current = await this.#readCurrentLocked(profileId);
-    let events = await this.#readEventsLocked(profileId);
-    if (events.length === 0) return;
-    if (current === undefined) {
-      for (const event of events) await rm(this.#eventPath(profileId, event.seq), { force: true });
-      return;
-    }
-    while (events.length > 0) {
-      const last = events[events.length - 1]!;
-      if (last.toStatus === "deleted") {
-        await rm(this.#eventPath(profileId, last.seq), { force: true });
-        events = await this.#readEventsLocked(profileId);
-        continue;
-      }
-      if (last.fromStatus === current.status && last.toStatus !== current.status) {
-        await rm(this.#eventPath(profileId, last.seq), { force: true });
-        events = await this.#readEventsLocked(profileId);
-        continue;
-      }
-      break;
-    }
-  }
-
   /** 当前状态（按 profileId）；不存在 ⇒ undefined。 */
   async getProfile(profileId: string): Promise<ActivationProfile | undefined> {
     await this.#ensureInit();
-    return this.#withLock(profileId, async () => {
-      await this.#recoverLocked(profileId);
-      return this.#readCurrentLocked(profileId);
-    });
+    return this.#withStoreLock(() => this.#readCurrentLocked(profileId));
   }
 
   async #listCurrentRaw(): Promise<Array<{ profileId: string; parsed: ActivationProfile }>> {
@@ -681,37 +751,43 @@ export class ActivationProfileStore {
 
   /** 全部当前 profile。 */
   async listCurrent(): Promise<ActivationProfile[]> {
-    const results = await this.#listCurrentRaw();
-    return results.map((r) => r.parsed);
+    await this.#ensureInit();
+    return this.#withStoreLock(async () => {
+      const results = await this.#listCurrentRaw();
+      return results.map((r) => r.parsed);
+    });
   }
 
   /** 按状态过滤当前 profile。 */
   async listByStatus(status: ActivationStatus): Promise<ActivationProfile[]> {
     assertValidStatus(status);
-    const results = await this.#listCurrentRaw();
-    return results.filter((r) => r.parsed.status === status).map((r) => r.parsed);
+    await this.#ensureInit();
+    return this.#withStoreLock(async () => {
+      const results = await this.#listCurrentRaw();
+      return results.filter((r) => r.parsed.status === status).map((r) => r.parsed);
+    });
   }
 
   /** 按 evidenceId 过滤当前 profile（cascade 查找注入用）。 */
   async listByEvidenceId(evidenceId: string): Promise<ActivationProfile[]> {
-    const results = await this.#listCurrentRaw();
-    return results.filter((r) =>
-      [
-        ...r.parsed.learnedAliases,
-        ...r.parsed.positiveExamples,
-        ...r.parsed.nearMissExamples,
-        ...r.parsed.environmentCues,
-      ].some((cue) => cue.evidenceIds.includes(evidenceId)),
-    ).map((r) => r.parsed);
+    await this.#ensureInit();
+    return this.#withStoreLock(async () => {
+      const results = await this.#listCurrentRaw();
+      return results.filter((r) =>
+        [
+          ...r.parsed.learnedAliases,
+          ...r.parsed.positiveExamples,
+          ...r.parsed.nearMissExamples,
+          ...r.parsed.environmentCues,
+        ].some((cue) => cue.evidenceIds.includes(evidenceId)),
+      ).map((r) => r.parsed);
+    });
   }
 
   /** 某 profile 的事件日志（seq 升序，审计可追溯）。 */
   async listEvents(profileId: string): Promise<ActivationTransitionEvent[]> {
     await this.#ensureInit();
-    return this.#withLock(profileId, async () => {
-      await this.#recoverLocked(profileId);
-      return this.#readEventsLocked(profileId);
-    });
+    return this.#withStoreLock(() => this.#readEventsLocked(profileId));
   }
 }
 

@@ -16,13 +16,10 @@ import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
 
-import type { ActivationProfile } from "../core/contracts/index.ts";
-import type { OverlayEvaluationReport } from "./evaluate.ts";
+import type { ActivationProfile, SkillRecord } from "../core/contracts/index.ts";
 import {
   applyEvidenceDeletionCascade,
   ActivationProfileStore,
-  computeProfileContentHash,
-  evaluateProfilePromotion,
   transitionProfileToActive,
   transitionProfileToShadow,
   transitionProfileToSuspended,
@@ -63,72 +60,57 @@ function draftProfile(id = "profile:test1", overrides: Partial<ActivationProfile
   };
 }
 
-/** 通过 promotion gate 的 fixture 报告（四栏全覆盖 + nonInferior）。 */
-function passingReport(): OverlayEvaluationReport {
+/** 父 SkillRecord（skillId=SKILL_ID/revision=SKILL_REV，与 draftProfile 绑定一致）。 */
+function parentRecord(): SkillRecord {
+  return skillRecord(SKILL_ID, SKILL_REV, "sql-pagination-helper", "Detect pagination in SQL queries using offset or keyset.");
+}
+
+/** 无关 confuser（pdf；与父查询不重叠，hard_confuser 不误召）。 */
+const CONFUSER_ID = "skill:" + "b".repeat(64);
+function confuserRecord(): SkillRecord {
+  return skillRecord(CONFUSER_ID, SKILL_REV, "pdf-reader", "Read and merge PDF documents.");
+}
+
+function skillRecord(id: string, rev: string, name: string, description: string): SkillRecord {
   return {
-    staticColumns: [],
-    learnedColumns: [
-      {
-        column: "hard_confuser",
-        caseCount: 1,
-        recallAtK: 1,
-        setRecall: 1,
-        noSkillPrecision: "N/A",
-        confuserNotRecalled: 1,
-        goldPreservedInTopK: 1,
-      },
-      {
-        column: "no_skill",
-        caseCount: 1,
-        recallAtK: "N/A",
-        setRecall: "N/A",
-        noSkillPrecision: 1,
-        confuserNotRecalled: "N/A",
-        goldPreservedInTopK: "N/A",
-      },
-      {
-        column: "multi_skill",
-        caseCount: 1,
-        recallAtK: 1,
-        setRecall: 1,
-        noSkillPrecision: "N/A",
-        confuserNotRecalled: "N/A",
-        goldPreservedInTopK: 1,
-      },
-      {
-        column: "cross_language",
-        caseCount: 1,
-        recallAtK: 1,
-        setRecall: 1,
-        noSkillPrecision: "N/A",
-        confuserNotRecalled: "N/A",
-        goldPreservedInTopK: 1,
-      },
-    ],
-    nonInferior: true,
-    violations: [],
+    schemaVersion: 1,
+    skillId: id,
+    skillRevision: rev,
+    name,
+    description,
+    scope: "user",
+    sourceLocator: "/test-fixture",
+    sourceHash: "sha256:" + "2".repeat(64),
+    disableModelInvocation: false,
+    declaredAliases: [],
+    declaredEffects: [],
+    declaredPermissions: [],
+    dependencyManifest: [],
+    discoveredAt: "2026-08-14T00:00:00.000Z",
   };
 }
 
-/** 构造与默认 draftProfile 绑定的 promotion binding（Issue 2：profileId/revision/content hash）。 */
-function promotionBinding(profile: ActivationProfile = draftProfile()) {
-  return {
-    profileId: profile.profileId,
-    parentSkillRevision: profile.parentSkillRevision,
-    profileContentHash: computeProfileContentHash(profile),
-    evaluationSetHash: "e".repeat(64),
-    evaluationConfigHash: "f".repeat(64),
-  };
+/** 与父高词汇重叠的 confuser（keyset/pagination 共享词，hard_confuser 会误召 ⇒ 判门拒绝）。 */
+function overlappingConfuser(): SkillRecord {
+  return skillRecord(
+    "skill:" + "c".repeat(64),
+    SKILL_REV,
+    "sql-cursor-traversal-tool",
+    "Apply keyset pagination to SQL result sets using cursor pointers.",
+  );
 }
 
-/** 构造 promotion 边需要的结构化 evidence（BLOCKER 2 fixture：report + reportId + binding）。 */
+/** 冻结评估语料：父 + 无关 confuser（可通过 hard_confuser + no_skill 判门）。 */
+function promotionRecords(): SkillRecord[] {
+  return [parentRecord(), confuserRecord()];
+}
+
+/** 构造 promotion 边需要的结构化 evidence（Issue 2：只传 records + 受控报告 ID，store 自行重算）。 */
 function promotionMeta(
-  report: OverlayEvaluationReport = passingReport(),
+  records: SkillRecord[] = promotionRecords(),
   promotionReportId = "promotion:phase6-gate-001",
 ) {
-  const verdict = evaluateProfilePromotion(report);
-  if (verdict.ok !== true) throw new Error("fixture verdict must pass");
-  return { promotion: { report, promotionReportId, binding: promotionBinding() } };
+  return { promotion: { records, promotionReportId } };
 }
 
 before(() => {
@@ -435,7 +417,7 @@ describe("BLOCKER 2：promotion trust boundary + save draft-only", () => {
     assert.equal((await store.listEvents("profile:test1")).length, 2, "拒绝后事件不变");
   });
 
-  it("shadow→active 的 report 未通过（非非劣 / 空报告 / 缺栏 / 低于门槛 / 报告 ID 非法）⇒ 全部拒绝（store 自行重算 verdict）", async () => {
+  it("shadow→active 的 evidence 未通过（报告 ID 非法 / 父不在 records / 重叠 confuser）⇒ 全部拒绝（store 自行重算）", async () => {
     const store = makeStore();
     const draft = draftProfile();
     await store.save(draft, { trigger: "procedure" });
@@ -449,31 +431,10 @@ describe("BLOCKER 2：promotion trust boundary + save draft-only", () => {
       promotionReportId: "promotion:phase6-gate-001",
     });
 
-    const nonInferiorFail = {
-      ...passingReport(),
-      nonInferior: false,
-      violations: ["hard_confuser.recallAtK: learned=0.5 < static=1"],
-    };
-    const emptyColumns = { ...passingReport(), learnedColumns: [] };
-    const missingColumn = {
-      ...passingReport(),
-      learnedColumns: passingReport().learnedColumns.slice(0, 1),
-    };
-    const belowThreshold = {
-      ...passingReport(),
-      learnedColumns: passingReport().learnedColumns.map((column) =>
-        column.column === "hard_confuser"
-          ? { ...column, recallAtK: 0.5, setRecall: 0.5 }
-          : column,
-      ),
-    };
-
     const cases: Array<[string, Parameters<typeof store.transition>[2]]> = [
-      ["activation_store_promotion_verdict_not_passed", { trigger: "agent", promotion: { report: nonInferiorFail, promotionReportId: "promotion:phase6-gate-001", binding: promotionBinding() } }],
-      ["activation_store_promotion_verdict_not_passed", { trigger: "agent", promotion: { report: emptyColumns, promotionReportId: "promotion:phase6-gate-001", binding: promotionBinding() } }],
-      ["activation_store_promotion_verdict_not_passed", { trigger: "agent", promotion: { report: missingColumn, promotionReportId: "promotion:phase6-gate-001", binding: promotionBinding() } }],
-      ["activation_store_promotion_verdict_not_passed", { trigger: "agent", promotion: { report: belowThreshold, promotionReportId: "promotion:phase6-gate-001", binding: promotionBinding() } }],
-      ["activation_store_promotion_report_id_invalid", { trigger: "agent", promotion: { report: passingReport(), promotionReportId: "not-a-promotion-report", binding: promotionBinding() } }],
+      ["activation_store_promotion_report_id_invalid", { trigger: "agent", promotion: { records: promotionRecords(), promotionReportId: "not-a-promotion-report" } }],
+      ["activation_store_promotion_parent_not_in_evaluation_set", { trigger: "agent", promotion: { records: [confuserRecord()], promotionReportId: "promotion:phase6-gate-001" } }],
+      ["activation_store_promotion_verdict_not_passed", { trigger: "agent", promotion: { records: [parentRecord(), overlappingConfuser()], promotionReportId: "promotion:phase6-gate-001" } }],
     ];
     for (const [expected, meta] of cases) {
       await assert.rejects(
@@ -509,19 +470,18 @@ describe("BLOCKER 2：promotion trust boundary + save draft-only", () => {
   });
 });
 
-/** 故障注入：手工写某 profile 的事件文件（模拟「事件已 append 但 current 未提交」的崩溃态）。 */
-async function writeEvent(
+/** 故障注入：手工写某 profile 的 WAL 事务文件（模拟崩溃后遗留的未清除 txn）。 */
+async function writeProfileTxn(
   store: ActivationProfileStore,
   profileId: string,
-  seq: number,
-  event: Record<string, unknown>,
+  txn: Record<string, unknown>,
 ): Promise<void> {
   const { createHash } = await import("node:crypto");
   const tenantHash = createHash("sha256").update(store.tenantScope, "utf8").digest("hex").slice(0, 32);
   const pidHash = createHash("sha256").update(profileId, "utf8").digest("hex").slice(0, 40);
-  const dir = path.join(store.rootDir, tenantHash, "events", pidHash);
+  const dir = path.join(store.rootDir, tenantHash, "txn");
   mkdirSync(dir, { recursive: true });
-  writeFileSync(path.join(dir, `${String(seq).padStart(6, "0")}.json`), JSON.stringify(event), "utf8");
+  writeFileSync(path.join(dir, `${pidHash}.txn.json`), JSON.stringify(txn), "utf8");
 }
 
 /** 落盘一个 draft→shadow 的 profile（返回 draft 与 shadow 对象）。 */
@@ -541,7 +501,7 @@ async function seedShadow(
   return { draft, shadow };
 }
 
-describe("并发与 crash 恢复（Issue 1）", () => {
+describe("并发与 crash 恢复（WAL，Issue 1/3/4）", () => {
   it("并发 transition（同一 prior）⇒ 恰好一个 writer 成功，另一个 stale_prior 拒绝", async () => {
     const store = makeStore();
     const draft = draftProfile();
@@ -564,54 +524,93 @@ describe("并发与 crash 恢复（Issue 1）", () => {
     assert.equal((await store.listEvents("profile:test1")).length, 2, "save + 1 次成功 transition = 2 事件");
   });
 
-  it("crash 恢复：transition 悬挂事件（事件已写 current 未提交）⇒ 读时确定性回滚", async () => {
+  it("两个 Store 实例并发 transition（同一 rootDir）⇒ 文件锁串行，恰好一个成功（Issue 3）", async () => {
+    const store1 = makeStore();
+    const store2 = new ActivationProfileStore({
+      rootDir: store1.rootDir,
+      projectRoot: tempRoot,
+      now: () => new Date("2026-08-20T00:00:00.000Z"),
+    });
+    const draft = draftProfile();
+    await store1.save(draft, { trigger: "procedure" });
+    const shadow = transitionProfileToShadow(draft as never, {
+      decision: "shadow",
+      shadowReportId: "shadow:phase6-replay-001",
+    });
+    const results = await Promise.allSettled([
+      store1.transition(draft, shadow, { trigger: "agent", reportId: "shadow:phase6-replay-001" }),
+      store2.transition(draft, shadow, { trigger: "agent", reportId: "shadow:phase6-replay-001" }),
+    ]);
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter((r) => r.status === "rejected");
+    assert.equal(fulfilled.length, 1, "恰好一个实例成功");
+    assert.equal(rejected.length, 1, "另一个实例拒绝");
+    const reason = (rejected[0] as PromiseRejectedResult).reason as Error;
+    assert.match(reason.message, /activation_store_stale_prior/);
+    assert.equal((await store1.getProfile("profile:test1"))!.status, "shadow");
+  });
+
+  it("crash 恢复：遗留 write txn ⇒ recoverAll 重放，current/event 一致（Issue 1）", async () => {
     const store = makeStore();
     const draft = draftProfile();
     await store.save(draft, { trigger: "procedure" });
-    await writeEvent(store, "profile:test1", 2, {
-      schemaVersion: 1,
-      eventId: "evt-dangling",
+    const shadow = transitionProfileToShadow(draft as never, {
+      decision: "shadow",
+      shadowReportId: "shadow:phase6-replay-001",
+    });
+    await writeProfileTxn(store, "profile:test1", {
+      kind: "write",
       seq: 2,
       profileId: "profile:test1",
-      fromStatus: "draft",
-      toStatus: "shadow",
-      reportId: "shadow:phase6-replay-001",
-      trigger: "agent",
-      occurredAt: "2026-08-20T00:00:00.000Z",
+      profile: shadow,
+      event: {
+        schemaVersion: 1,
+        eventId: "evt-crash",
+        seq: 2,
+        profileId: "profile:test1",
+        fromStatus: "draft",
+        toStatus: "shadow",
+        reportId: "shadow:phase6-replay-001",
+        trigger: "agent",
+        occurredAt: "2026-08-20T00:00:00.000Z",
+      },
     });
-    assert.equal((await store.getProfile("profile:test1"))!.status, "draft", "current 保持 draft");
-    const events = await store.listEvents("profile:test1");
-    assert.deepEqual(events.map((e) => e.toStatus), ["draft"], "悬挂 shadow 事件被回滚");
+    const reloaded = new ActivationProfileStore({
+      rootDir: store.rootDir,
+      projectRoot: tempRoot,
+      now: () => new Date("2026-08-20T00:00:00.000Z"),
+    });
+    assert.equal((await reloaded.getProfile("profile:test1"))!.status, "shadow", "txn 被重放，current=shadow");
+    assert.deepEqual(
+      (await reloaded.listEvents("profile:test1")).map((e) => e.toStatus),
+      ["draft", "shadow"],
+      "event 被重放",
+    );
   });
 
-  it("crash 恢复：save 悬挂事件（无 current 但有事件）⇒ 读时删除全部悬挂", async () => {
+  it("crash 恢复：遗留 delete txn ⇒ recoverAll 完成删除（Issue 4）", async () => {
     const store = makeStore();
-    await writeEvent(store, "profile:crash", 1, {
-      schemaVersion: 1,
-      eventId: "evt-save-dangling",
-      seq: 1,
-      profileId: "profile:crash",
-      fromStatus: undefined,
-      toStatus: "draft",
-      trigger: "procedure",
-      occurredAt: "2026-08-20T00:00:00.000Z",
+    const draft = draftProfile();
+    await store.save(draft, { trigger: "procedure" });
+    await writeProfileTxn(store, "profile:test1", { kind: "delete", profileId: "profile:test1" });
+    const reloaded = new ActivationProfileStore({
+      rootDir: store.rootDir,
+      projectRoot: tempRoot,
+      now: () => new Date("2026-08-20T00:00:00.000Z"),
     });
-    assert.equal(await store.getProfile("profile:crash"), undefined, "save 未提交 ⇒ 无 current");
-    assert.deepEqual(await store.listEvents("profile:crash"), [], "悬挂事件被清理");
+    assert.equal(await reloaded.getProfile("profile:test1"), undefined, "delete txn 重放，current 已删");
+    assert.deepEqual(await reloaded.listEvents("profile:test1"), [], "事件目录已清理");
   });
 });
 
-describe("Issue 2：promotion binding（PASS report 不得跨 Profile 复用）", () => {
-  it("Profile A 的 PASS report + binding 用于 Profile B ⇒ profileId 失配拒绝", async () => {
+describe("Issue 2：promotion 不可拼接绕过（store 用落盘 profile + records 自行重算）", () => {
+  it("Profile A 的评估 records（含 A 父）用于 Profile B ⇒ 父不在 records 拒绝", async () => {
     const store = makeStore();
     const a = await seedShadow(store, "profile:a");
-    const b = await seedShadow(store, "profile:b", {
-      learnedAliases: [{ cueId: "cue:b1", text: "z-query", evidenceIds: ["obs-b"] }],
-      positiveExamples: [],
-      nearMissExamples: [],
-      environmentCues: [],
-    });
-    const aBinding = promotionBinding(a.shadow);
+    const otherId = "skill:" + "d".repeat(64);
+    const b = await seedShadow(store, "profile:b", { parentSkillId: otherId });
+    void a;
+    // 只传含 A 父（SKILL_ID）的 records（对 A 可通过），试图晋升 B（父=otherId）⇒ 拒绝。
     const bActive = transitionProfileToActive(b.shadow, {
       decision: "active",
       promotionReportId: "promotion:b",
@@ -619,22 +618,16 @@ describe("Issue 2：promotion binding（PASS report 不得跨 Profile 复用）"
     await assert.rejects(
       store.transition(b.shadow, bActive, {
         trigger: "agent",
-        promotion: { report: passingReport(), promotionReportId: "promotion:b", binding: aBinding },
+        promotion: { records: promotionRecords(), promotionReportId: "promotion:b" },
       }),
-      /activation_store_promotion_binding_profile_mismatch/,
+      /activation_store_promotion_parent_not_in_evaluation_set/,
     );
     assert.equal((await store.getProfile("profile:b"))!.status, "shadow", "B 不得晋升");
   });
 
-  it("binding profileContentHash 与落盘内容不一致（cue 被偷改）⇒ 拒绝", async () => {
+  it("records 缺父 ⇒ 拒绝（空 case 集，不虚判）", async () => {
     const store = makeStore();
     const b = await seedShadow(store, "profile:b");
-    const tamperedHash = computeProfileContentHash(
-      draftProfile("profile:b", {
-        learnedAliases: [{ cueId: "cue:hacked", text: "hacked", evidenceIds: ["obs-h"] }],
-      }),
-    );
-    const binding = { ...promotionBinding(b.shadow), profileContentHash: tamperedHash };
     const bActive = transitionProfileToActive(b.shadow, {
       decision: "active",
       promotionReportId: "promotion:b",
@@ -642,44 +635,10 @@ describe("Issue 2：promotion binding（PASS report 不得跨 Profile 复用）"
     await assert.rejects(
       store.transition(b.shadow, bActive, {
         trigger: "agent",
-        promotion: { report: passingReport(), promotionReportId: "promotion:b", binding },
+        promotion: { records: [confuserRecord()], promotionReportId: "promotion:b" },
       }),
-      /activation_store_promotion_binding_content_hash_mismatch/,
+      /activation_store_promotion_parent_not_in_evaluation_set/,
     );
     assert.equal((await store.getProfile("profile:b"))!.status, "shadow");
-  });
-
-  it("binding parentSkillRevision 与落盘不一致 ⇒ 拒绝", async () => {
-    const store = makeStore();
-    const b = await seedShadow(store, "profile:b");
-    const binding = { ...promotionBinding(b.shadow), parentSkillRevision: "rev:" + "9".repeat(64) };
-    const bActive = transitionProfileToActive(b.shadow, {
-      decision: "active",
-      promotionReportId: "promotion:b",
-    });
-    await assert.rejects(
-      store.transition(b.shadow, bActive, {
-        trigger: "agent",
-        promotion: { report: passingReport(), promotionReportId: "promotion:b", binding },
-      }),
-      /activation_store_promotion_binding_revision_mismatch/,
-    );
-  });
-
-  it("binding eval set hash 非 64-hex ⇒ 拒绝", async () => {
-    const store = makeStore();
-    const b = await seedShadow(store, "profile:b");
-    const binding = { ...promotionBinding(b.shadow), evaluationSetHash: "not-a-hash" };
-    const bActive = transitionProfileToActive(b.shadow, {
-      decision: "active",
-      promotionReportId: "promotion:b",
-    });
-    await assert.rejects(
-      store.transition(b.shadow, bActive, {
-        trigger: "agent",
-        promotion: { report: passingReport(), promotionReportId: "promotion:b", binding },
-      }),
-      /activation_store_promotion_binding_eval_set_hash_invalid/,
-    );
   });
 });
