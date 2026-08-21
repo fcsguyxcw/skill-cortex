@@ -1,0 +1,810 @@
+{
+  "schemaVersion": 1,
+  "catalogHash": "sha256:9190e01aa3ea13951f7b60027fb03aeae79cf1c056cebe74acc7e24d939ffcd7",
+  "manifestEntriesHash": "sha256:b8a1d83ef9c089434788d6ce633454fb5698f3452fc7009966613958ed6e8e16",
+  "loader": {
+    "package": "@earendil-works/pi-coding-agent",
+    "version": "0.84.1",
+    "discoveredCount": 146,
+    "visibleRecordCount": 132,
+    "excludesDisableModelInvocation": true
+  },
+  "privacy": {
+    "sourcePathsStored": false,
+    "descriptionsStored": false
+  },
+  "entries": [
+    {
+      "skillId": "skill:0076ede03e488c1edf9d05b90d36f3725b7c4518d51a67a150d5cde2db52e6fa",
+      "name": "web-design-guidelines",
+      "skillRevision": "rev:0ecde5bb163c1582bd18706969e29aba0e5d3dafe91e312b1bf405986ebc9960",
+      "descriptionHash": "sha256:9fa2a4f2fb6b4efbeca52a5fbe5b6d46574516f553522c6c5bde7408ed797fe8"
+    },
+    {
+      "skillId": "skill:03165140889cff61f45938f8b8af2a38980514158712b650f541a1220edb0081",
+      "name": "architecture-designer",
+      "skillRevision": "rev:3cd15b9327f119e63cd055e76aeecd2a115b37ef309194808fb690a7b6844cb0",
+      "descriptionHash": "sha256:0e85d6d30b43059d9a3af68bffb07d340883c9cd9ac0306255cd1b7f5546e1ce"
+    },
+    {
+      "skillId": "skill:046a1a627646f43eea601b4b35ea62544525239c91094fd1bbc1b2d8cb594fe6",
+      "name": "agent-reach",
+      "skillRevision": "rev:4636e0022194c3edf50ee7e5b44733395b7f45371a1240f3fcfb973ac429ac78",
+      "descriptionHash": "sha256:b063580141e00ae5b597ce645a9d94c4cfd9e925edcdb5dadc3770284da9fc02"
+    },
+    {
+      "skillId": "skill:06110a6e188eaa60ed5e64251f0070216cf7aca15c28d4f364b3c3dcdc6e4a5d",
+      "name": "guizang-ppt-skill",
+      "skillRevision": "rev:b6d72433dcfd760e7a13d860d1f99e43914bb00a06aea4653f12139b93d92f26",
+      "descriptionHash": "sha256:999aacee240c29f57ed0fc35010c8bf507a6e9c50e52d73e96ab1e131d3688bd"
+    },
+    {
+      "skillId": "skill:07a0a4ad46a203ea29850eac71f5c784438280332c8b0d9b0cfc7e823d33164b",
+      "name": "SEO (Site Audit + Content Writer + Competitor Analysis)",
+      "skillRevision": "rev:1929bb91b6d40cf2deb3f71b1c6bbb78e4a24ba7359b9f6a44bd7802557538ee",
+      "descriptionHash": "sha256:b05845b06e58e93d9ce62a7428fd9589797f11f046939c5d640521a29da82e84"
+    },
+    {
+      "skillId": "skill:0b0d687f5de892f5968ff0880190b74fcda0c8cb7d1868c5e7907e5ea20b0f71",
+      "name": "research",
+      "skillRevision": "rev:e519f038cca0eb2019ce9fc3ef0bd5044e3973f17f20778f36c38a91ae99c699",
+      "descriptionHash": "sha256:8062c29038abc1afb299469d92dd1167481fa84a867f32484ce4abc815d070f3"
+    },
+    {
+      "skillId": "skill:0e686d481105bc9101de54d343d803d2b84539527adca61b916a7bb0cafe4d15",
+      "name": "frontend-design",
+      "skillRevision": "rev:40759f8130742bbc5fc5f7d404deea2b163f4f2491b2f8fab03a09e3f331e4f4",
+      "descriptionHash": "sha256:bb178422b4e47d5118c9a2dc4d20a3eaedae993844235e4ef4423a200c267be8"
+    },
+    {
+      "skillId": "skill:10a0dee8ef9e8070c3eff75fe98beb48979ef0adf4d807701028e28809b3df4e",
+      "name": "feishu-cron-reminder",
+      "skillRevision": "rev:bc576c153394d7ce55ea1624bf0656dbe41fb1ee975d96a051111bf48d38ac51",
+      "descriptionHash": "sha256:02bbde0d87f643ba51b5d5a044c3d7f31daaa3fb5abfc62313ef1f749e49d395"
+    },
+    {
+      "skillId": "skill:12dda99826e7fc458057fcc2591964493bbdd258dff538c775f23d8e5757a784",
+      "name": "gsap-core",
+      "skillRevision": "rev:eaf2dd4eacf80d95a990a0e7c2c50fadb0d483a839f8022e2320135440f6d593",
+      "descriptionHash": "sha256:c56244c45f14905afb58bccac737799fbd0651a2c6f47acf60a2dddee167f9a7"
+    },
+    {
+      "skillId": "skill:153ac5a85a00b144cbf8bd56b09ee4e58b02d010055989732d36ef8962037d53",
+      "name": "feishu-perm",
+      "skillRevision": "rev:85c372c5ab8e477d08ca56f69284f0274a0b44ffaac66173077e2176c100447f",
+      "descriptionHash": "sha256:fb8de8705053d3a185a376a2f45578bee397e468c3c6a155056a8a7da1c1f734"
+    },
+    {
+      "skillId": "skill:19b69789fbeda323ab86bb05b509c81b559d9c935d3f0caaca3ab9e03ac6ce3c",
+      "name": "gsap-performance",
+      "skillRevision": "rev:6cb22829e0e53e9fda55042569897750465c5304afae61c0bca960be4b7bbd97",
+      "descriptionHash": "sha256:0e8d9b2e03db109ab37650408a6229e186ad4eadaed9f05393959244379305df"
+    },
+    {
+      "skillId": "skill:1a1d65e4aabedbc138cc9a541bb36a31ea61d182f19855bea08b730d605cf633",
+      "name": "herdr",
+      "skillRevision": "rev:9db1ce09df1f20c537bd3872399321da03ebfcce90f0102bbe47159f7f4294f9",
+      "descriptionHash": "sha256:0ab27b17a2dace2d8164ceadb892802b5ee0d42369a55c6f5a4054971c1c1019"
+    },
+    {
+      "skillId": "skill:1c0460ecd1a60144a345f0cba32b29d8170d1107ff2df339f350566138cab8e8",
+      "name": "minimalist-ui",
+      "skillRevision": "rev:1a63f9975f720aeddec7f4bcd4a67c4716a5f5ebbf141c30ec18935c2992e950",
+      "descriptionHash": "sha256:92ce6d5c287b56c7e90ad2804f87ca66f92e7b144f586a385afb253814616724"
+    },
+    {
+      "skillId": "skill:1f63e11ea505b8aff2884614d45ea126ab282ebc7cd5cae8a5e0eec6ae03bbeb",
+      "name": "blog-writer",
+      "skillRevision": "rev:548b86b87020e491156f53293c09be09d287acfbc2bc8ab1a192c3ba05894ae6",
+      "descriptionHash": "sha256:bb2ebb6ca8d1c0adb3a4097b4a5a58c3ef9a240279ca05865d90e2762c1e7700"
+    },
+    {
+      "skillId": "skill:20ed4bdc136aea858e6c5155430349748ef864d22612f6eaa1ffb35dd8608fed",
+      "name": "git-essentials",
+      "skillRevision": "rev:3e5458f10e3e6dca26ed8e1e8ea623316fd3921df3d84c074060ebadbab801e2",
+      "descriptionHash": "sha256:abe0088d99d5f5e6032776b5ca6603c1ce78e4554706eebb8014a1d8c4a47819"
+    },
+    {
+      "skillId": "skill:21cecbce37e2a3b3cf7ca1c09a5c558a5fd266d56701eadda94185746bef73da",
+      "name": "full-output-enforcement",
+      "skillRevision": "rev:531c523cf911c925d95945e3df1cdb8ea8f9a019c5022d0766809b68d77f5771",
+      "descriptionHash": "sha256:a752dc6d63dc9c8cf71dae1aeb51cba7bb379b85142fc8feed11e1472a2e5fa5"
+    },
+    {
+      "skillId": "skill:222ebc7fd78edbc5fa25e6815753768443260e403c186fcc7d9323a64545f6dc",
+      "name": "redesign-existing-projects",
+      "skillRevision": "rev:0196ffae133b6cf37afd9984b5599c903d7f1a48d775b91b69e58e2b11128e68",
+      "descriptionHash": "sha256:5adf68c621308806a5fed30a3f9b04d54f62ed47046da3f840896d22e008ade3"
+    },
+    {
+      "skillId": "skill:2693c89e1de701aaad7cef99edaf14720ab58056b01d84b62bfc56c7d1d056d3",
+      "name": "diagnosing-bugs",
+      "skillRevision": "rev:bb43f3cadb4a4b7dc66bfacefecb906dffba9d6d16b85eaa613523768718fdae",
+      "descriptionHash": "sha256:b78755b7df92745190a4ede0855094538318dbc93e66387eb9410c7fc6c5e10d"
+    },
+    {
+      "skillId": "skill:282e8943c2651cf5c7288a924d6099d244f19a29c657c52b90ede0df696a3777",
+      "name": "gsap-timeline",
+      "skillRevision": "rev:ab5c6e67a3c7171b571199b7d01380146be68dff4197e36dd38dffa8367d8d24",
+      "descriptionHash": "sha256:1189b89ea06b03ec7fb31956e8c783d49a8097956ab14c38532c33c6f5759b92"
+    },
+    {
+      "skillId": "skill:2982931fd20011ebaffdabd0674934a2070e3849626f002924c2c858ab43c408",
+      "name": "vercel-deploy",
+      "skillRevision": "rev:ff108ba4f89d1ee3aca1ef8dbad13f0297a54620a6c54446f1d527f6521e55a8",
+      "descriptionHash": "sha256:8837d478083a57d64da26546a9b3f22c82f5b98d9a73e2f26548898af1de1b54"
+    },
+    {
+      "skillId": "skill:304957d3a3ac2f2d51f6993118fd60adb52505466ebc2cbd122d3ee6c857ead3",
+      "name": "smart-explore",
+      "skillRevision": "rev:48072bc146339395f17bd093626ec5bf4ffe4c73c85e31d39dbc5d1038459990",
+      "descriptionHash": "sha256:614c892419b07bbf0cff37d2b04b113b5051aaf099af2e7c9e3e44718bed1d5a"
+    },
+    {
+      "skillId": "skill:3d993ceb947952ce66b32f967fe2706548fd111ea3bfdf79ced5c46453d09540",
+      "name": "autoglm-search-image",
+      "skillRevision": "rev:715b188d53d8089b37ca2bab156edef871ce0d53255a130937a057d89c13b333",
+      "descriptionHash": "sha256:20e36f8294704e8134f25e00b1482713987f6235d03f5ac15b8c4fcd25a43983"
+    },
+    {
+      "skillId": "skill:3f6d7d0fc0ac0f7e28bda35c6db31b895e6b0a90954c1865e09f64e165589466",
+      "name": "autoglm-websearch",
+      "skillRevision": "rev:71129195be1a83df2ef2cad3a37dddc131966e31bd4cd353f166165b061357d6",
+      "descriptionHash": "sha256:d2479360fbe985ea80be7baff1537f0dbd254b1872c413a49834d8b205812991"
+    },
+    {
+      "skillId": "skill:42ba65e270545f81d7c6897ebc392fd822304e8900d1725940a7b18d02d44a18",
+      "name": "knowledge-agent",
+      "skillRevision": "rev:309b2b1ac010e75595aac7c5a10786508bdeeca75bc2fb18f7e489fe0c526b3e",
+      "descriptionHash": "sha256:067acacc747f1937dad98a6727798d1610979fdbea17adbe1d007ad80b385a8f"
+    },
+    {
+      "skillId": "skill:43d2e979b5d443b9c64575843301603f6898940e977f56aebc1986a231175d06",
+      "name": "audio-transcriber",
+      "skillRevision": "rev:d69f75eba2c242a5f28a3521ab13797b51fb232478196b2428fd77e71434118f",
+      "descriptionHash": "sha256:7800707b26e6bc83526a04e09a6a06160a1344dec11268d1ee90405c6d4020e7"
+    },
+    {
+      "skillId": "skill:4491be5f4c0849ed0dc2ba6fabcceaee974a2b51203d7ae14758c07934eec3e9",
+      "name": "Memory",
+      "skillRevision": "rev:08d1f41e578575cadea5fd52acaba2f1824f761a798265abad4819b4cdd8cdc5",
+      "descriptionHash": "sha256:ec2dd8ef0808c39d5647b91ff9143dac01981a021a431e990f989d2f23cd2487"
+    },
+    {
+      "skillId": "skill:47ab1c984cde1d34f3a4c59bd38706d4e46c58147abbe9772ca060f282984fd7",
+      "name": "seo-content-writer",
+      "skillRevision": "rev:0bad363bda61d57bf64bc788456255aa0ff37077126d13ed450029244eba598d",
+      "descriptionHash": "sha256:6acb36bac8f0831ab96c9698f003d90f68440afa458df709992efa8b79371ace"
+    },
+    {
+      "skillId": "skill:484195732383f018915aa8a43519983967eeddc832c2e2d8192c564bd506048a",
+      "name": "humanizer-zh",
+      "skillRevision": "rev:c634999335e9a2195d851073240982a7f4cdc95e6236e8ca45b1573f81bd907a",
+      "descriptionHash": "sha256:e8862d2c72e266060a87aa7fbd9de6f6cac2b0d25aeabb1cf75209f475139c5a"
+    },
+    {
+      "skillId": "skill:487359341670208dd340e63d1291e35b262927e6e9bcad52a205a21e1b5dd552",
+      "name": "opencli-browser",
+      "skillRevision": "rev:eb72ae2d8d828e69187d094cc5ed0af516a81fad327405625b9aea598d63a459",
+      "descriptionHash": "sha256:907976b03ef0f733b8cba452a8c24f05916a76f4d30105d5d3aaab1a80423479"
+    },
+    {
+      "skillId": "skill:48ff05c1f580673d249e23b07a1e22ee668781fe742f09e4d157614af966b9eb",
+      "name": "stitch-design-taste",
+      "skillRevision": "rev:bc098f95d12b4e24b4282993ae1fdcb139a651ee9a8cfb7e2ffbbc3dfea8fcd7",
+      "descriptionHash": "sha256:1062dda5cbe578596d58a4e3c17ac9416cb5d1adeabd5b7b78b9cef177bbb2c5"
+    },
+    {
+      "skillId": "skill:4c039b1b2c1ee679620518d543e142da4d1490d1f98dbbb6598909f75b2cdf20",
+      "name": "podcast-generation",
+      "skillRevision": "rev:28616e240af56380f9025ee473ed5d844b397ab33c560029351101f13c7b6490",
+      "descriptionHash": "sha256:bb1b468448e68099bd98d9bff39cc2c5ab5ff57ed18d0d9aa63b09e1e4cbf236"
+    },
+    {
+      "skillId": "skill:4ccb0694e21ead7052c49e14f84aac4262bb0790830b96f808dc336abcc2bd79",
+      "name": "ielts-reading",
+      "skillRevision": "rev:dc6a69e5ca50f1e20d4ce2763e42420e150d51df3f6c4b3b31c4ab30611bd642",
+      "descriptionHash": "sha256:ba4068cde3612918b4b346557818183fcaa9bbd7027cb023702aec62c2889881"
+    },
+    {
+      "skillId": "skill:4da3bb88223b3ec492fbf97ace4ed0713b678a634771f7dd4cdc04cbf590c00f",
+      "name": "tdd",
+      "skillRevision": "rev:472126beab56ff555c44450ec3e1e92b3be8b4f56804062575af88d6c28f2eb8",
+      "descriptionHash": "sha256:58ff584d9462495638cc6513449398700d3e3599946d39cb0643cd50b5e6ddb6"
+    },
+    {
+      "skillId": "skill:4dde8cfaf305a63c0da2cac2daeda86eae01f1a7b2be6e9d6df802f84f263809",
+      "name": "last30days",
+      "skillRevision": "rev:be3ddc95ca46c865f187dc97e840b250fc12eea9cabc4a2a4d6112b9310e962e",
+      "descriptionHash": "sha256:1debbdc65d6ac766411250eec739ba7cd3bfaa07b9aafc1f97d08c542dbfc5a3"
+    },
+    {
+      "skillId": "skill:4df9ad3d198ae71664e23fc26ba452e1f4e7c6f8a02b9256743c009696045f9e",
+      "name": "video-generation",
+      "skillRevision": "rev:2735956a24a823cfdef4b98a827c0bfa80e8dafd3975c28a7005c705e1ca79ab",
+      "descriptionHash": "sha256:65df1c3f776e8dd1e1cd44d46036094314edf08379ac9d56df6b2389aeed4fd4"
+    },
+    {
+      "skillId": "skill:4f880a99c44068d5bc7ab94aac6e6047743478547ecb7ec1e684a8ceb2bceee6",
+      "name": "gsap-scrolltrigger",
+      "skillRevision": "rev:e4ffd16575f1cc94213566971339596c45d5a1f927412bbca4c32833b765ab13",
+      "descriptionHash": "sha256:b5a10e5bc5072c080b4f2f035e8e4d2d0227d81cedfcdde44d65b65b2471f3b2"
+    },
+    {
+      "skillId": "skill:51347c6d93dc72dd5792d6b757b2870363822ffe91bbee7bc175db93b81245f2",
+      "name": "wizard",
+      "skillRevision": "rev:cd9b749048c2452f089165cf8121ec12abc6cf18f64d43ef53fcffe8a4a91520",
+      "descriptionHash": "sha256:f4db30f214c1f632131e7df0b54b7c21e345828c1d25ff96a3e926ef77e6943e"
+    },
+    {
+      "skillId": "skill:51d5c9264f38a3abb6b79cb338dc072d2aba03f317ba134a39f8a5b372517518",
+      "name": "ppt-generation",
+      "skillRevision": "rev:f97b39153a5e16b9944d4b6e4ceb1f542e80b8f118d9fc7b739951b52cbba531",
+      "descriptionHash": "sha256:ea831abd26a1d1dd5671a1175a6338330d758575bfb6e4ea502b5e73b870ced7"
+    },
+    {
+      "skillId": "skill:525517c57372b13afe8a55b9654fb5c09e28f6bc8547b4ec46315dc537050cc1",
+      "name": "autoglm-open-link",
+      "skillRevision": "rev:8541d43dca9b73eb7ba3c49d530d88179f122382d4e3bf15aec77deb39d48db8",
+      "descriptionHash": "sha256:b3fe4a3c5da1d600e2afdcf2fbc9fa23e22d6d919b54a84550eb9d128da54be8"
+    },
+    {
+      "skillId": "skill:536d52ee3e5e40fdd3ffe7711a37f635ae4d099d5326c713c01de9a532aa0c3d",
+      "name": "ui-ux-pro-max",
+      "skillRevision": "rev:61ea1208e83e183e43b3272bb81440b8eebd97363315aee7dc81f91a4b6a50fd",
+      "descriptionHash": "sha256:74b0fc757edc5a77607304901caa05ed1c6c16be02c1cf3ff5ea5ff9f48cd39e"
+    },
+    {
+      "skillId": "skill:550e41c1a3e5538d08e01e590bd8ec10565f07b510adfb24c34a10f3c7db1753",
+      "name": "surprise-me",
+      "skillRevision": "rev:ec25a2c173daa81f59fde4a89ab958e2562a11cf775ab31b84673a02058ffe6f",
+      "descriptionHash": "sha256:b27644d8ad1cfbe45e789efaa53148b1f26d3bd380fce6973610a81331141c87"
+    },
+    {
+      "skillId": "skill:5b58db6f8675c6241389e2208b9ad7cf666810f66d9744842aec3bddeb955ab4",
+      "name": "github-trending",
+      "skillRevision": "rev:1a9e125b441ee6a1f64caee09fa4e0fce9006a51915c4ef2edef7c6095b7bb27",
+      "descriptionHash": "sha256:faddeace7e33f3e339a1b29e7c486206967d11170de9ff645f868f2c31deac7d"
+    },
+    {
+      "skillId": "skill:5e74252c038faac5c3dd480de4980b90d786918b0b2c28685eb830209f553e04",
+      "name": "docx",
+      "skillRevision": "rev:e2d5f0bacc3455f06c5d2eb30b37c36ae31b2fe57757f418a78a27cff8ba7005",
+      "descriptionHash": "sha256:fccb2bdad8b58f86d4f18a9dcfc301fb1f534f63d9c62fa79b373db65b56bddb"
+    },
+    {
+      "skillId": "skill:5f1d521404dd2fb264a2b45c079d4caab3e55cffbeeebf7ac262661f111eb9b3",
+      "name": "opencli-usage",
+      "skillRevision": "rev:eb60046407647a5d53890038b976d2ee4acdca31ca0966779eff63139734d714",
+      "descriptionHash": "sha256:6f47aca283c4a51493088fe004ced896ad26c57723a5e5a12464df5e88d75df6"
+    },
+    {
+      "skillId": "skill:5f1dc0190933260656d7ff7b591657582c833e25e2063e9a93c88c5e0c0623e1",
+      "name": "Codex-plugin-release",
+      "skillRevision": "rev:17a70f88a6b93a187dc3d06442c61a7d9c0d3015dc8e2861f1d43d58a91b3a21",
+      "descriptionHash": "sha256:cc1a1a57ed94ed4f8dc9f57414f21ed1c1ace054d5d2b13e6aea76665f31e9d0"
+    },
+    {
+      "skillId": "skill:5f3645eca6028e259d82b6e2c402759b9a289d194d231f60b5d467b210de7dea",
+      "name": "openai-whisper",
+      "skillRevision": "rev:23d429c42523bc135613f461e68c7ce252c23299888bd08d5f4964576c4b0bc8",
+      "descriptionHash": "sha256:23ae473bc47d019af835b02834d0f4921f2748eddfa22e6bbfb6e8ad4c5afe71"
+    },
+    {
+      "skillId": "skill:5fb183b7a84c00ab7eea3fd15af5b3e7ec0bc08836a695fcd1b2883b3884e116",
+      "name": "ielts-speaking",
+      "skillRevision": "rev:cc8f542fe645ca458d40436af2a3631aa775c03f55c6a13864d94b7d2102df1c",
+      "descriptionHash": "sha256:d9a3cbd7dc1c2b9b3ecf0c081f046b1ee78a07a3200e96e3a5782520cc2f128b"
+    },
+    {
+      "skillId": "skill:60e7f5ee4176522316a9b3cbc6362ae05c5444117b477f621416a9803fe94c69",
+      "name": "find-skills",
+      "skillRevision": "rev:33cf0ffcacc0686be99734578de3fe60698ff8917d8520f5ecddea67607a9d8f",
+      "descriptionHash": "sha256:ae20b48793b11f5341a82473dbee7a120f4462c501b1b56f3732876809c94ef5"
+    },
+    {
+      "skillId": "skill:60eced6f0c9ea1072223cd3a71fb825a4470dc79677b5dcac692207201020524",
+      "name": "mineru",
+      "skillRevision": "rev:1477405d8c0e8743cb23c73bfbef55af1fce2fac526e659342ba5972ff0ea72e",
+      "descriptionHash": "sha256:35b31112a0bbbab40a980a92605e7bcdea3ee50abc29a8cf57ef4973bf3e0477"
+    },
+    {
+      "skillId": "skill:615ec382cbc3b68c80cf0d98568e502df440f7206ba2f839bf5b2541054df717",
+      "name": "tmux",
+      "skillRevision": "rev:da702bb6d864a4df774d29992eaf4f6bac6fbebe94bedcbe8d1199de6c0dbd35",
+      "descriptionHash": "sha256:955e6e2ee3d6fcf6d2e1c34ff096990610ae70bb9a9152c4e339af91f494ebab"
+    },
+    {
+      "skillId": "skill:62081eac27222448485ba91b6f987279486059b48a966df444e1e9cf14e53673",
+      "name": "NovaForge",
+      "skillRevision": "rev:e8654e59b38253c8cdd608930db3cd4bf814a3eeef98e3a96420e9aecbf4786d",
+      "descriptionHash": "sha256:63e7a61fb22371557bc0fc59657f0928794cf385a5b74db3441293381e5bcd59"
+    },
+    {
+      "skillId": "skill:64170cf357c1a0c9dc1b700648b00e3d7e4fd65a235ce0fc5dedfe17487158c5",
+      "name": "gsap-react",
+      "skillRevision": "rev:413fdc943cc1d09b4eaf6eea7a885ad913c034c1b406050e82e36c9c0458a311",
+      "descriptionHash": "sha256:380395d4613f4df6e5ddd19a7cecc21cc6434d2f9a483af31a98bc0c4cacb1a1"
+    },
+    {
+      "skillId": "skill:651f1a3b724a0b418e5a85fd76c8cf41d6b4c2a09233055e335c512691f46dfd",
+      "name": "do",
+      "skillRevision": "rev:10642431ba16673badcd579bb91dca0285e508f798433c45a27cca3ab8e89e53",
+      "descriptionHash": "sha256:a127070d6d2eb3e972bf5289bb7544da3b712e2b7f227f055f372eccc4dd8d06"
+    },
+    {
+      "skillId": "skill:660c0296aadfdfa6aa29acdbd6f0ae36d76576773e70dff9890f34c4ed0fcacf",
+      "name": "pptx",
+      "skillRevision": "rev:0b7778a5a61f9d39c785843b3945a05ec73d830572b3edf225b9f8f07f676e62",
+      "descriptionHash": "sha256:65b1ec16c39d0adc722229184dc2cb74b9a581280c5649743f80f0aa87fd085f"
+    },
+    {
+      "skillId": "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d",
+      "name": "security-auditor",
+      "skillRevision": "rev:df9d3172f803bb33205c063343e5a1870d9f9e539d7cd98941ba84f9aaf7036e",
+      "descriptionHash": "sha256:2734074050d135704c52b5fa1937417a7f7d83ede68107e40712b520b477c557"
+    },
+    {
+      "skillId": "skill:670b8f65dca2ceda3de0d70e92ccd8b5cb832e7c4fd2e5d845b58b19e230cbe2",
+      "name": "supabase-postgres-best-practices",
+      "skillRevision": "rev:ce271d3393e3f1ee836ab48419f33e4337098ecf809e936b969a8ea8af2a8dec",
+      "descriptionHash": "sha256:88aa4e1c8070c178cf399f1c14522d38efdbdfa518af12906c0c1dd43e456aaa"
+    },
+    {
+      "skillId": "skill:681f792463fbcfbd0706f0ad9547329a308a0e741123efb5592b1e72e6197e5b",
+      "name": "academic-paper-review",
+      "skillRevision": "rev:634914f4f7cf1294e99cfed969d8b5821e60b815ff559d1aaba85a0ab060841b",
+      "descriptionHash": "sha256:37691f83a5be7b30f9cd4b2262cc160eaccd87955276f6fffaffc3b86b6ac690"
+    },
+    {
+      "skillId": "skill:6a35f7a30d46757e30f3c75f5f55f504bb585289952abbd7eb6ed42808501789",
+      "name": "autoglm-browser-agent",
+      "skillRevision": "rev:541032fd0b66807f691ea7967a9cc4c0898847d4786e39e682da7fc71d8cc977",
+      "descriptionHash": "sha256:2654c4622248f6da61d0c72b0b3f778952cfc203870b5ffe1366f84f9a16fd6e"
+    },
+    {
+      "skillId": "skill:6d91cffef570c9eb3f4e0b4291b980d0da3f8309eead582370735c190440efd1",
+      "name": "Social Media Scheduler",
+      "skillRevision": "rev:c5d72564fcaa381749135b0be56cc17a80e49e06f301da50bca21e024d3c738a",
+      "descriptionHash": "sha256:d36169d3484e4f8804cb0b8161ed6550a87a2a5d042a3450d52b36ffb5a28a3e"
+    },
+    {
+      "skillId": "skill:7036b77a9169bbfd40df0f9713f4891d563a17a597c24ddc868d5e78e9e1b8fb",
+      "name": "1password",
+      "skillRevision": "rev:d014387dc8eb60b2b9e7a30ce4ce065f0d16e7d82545672b42da4a53d11a5478",
+      "descriptionHash": "sha256:e329eefca6e6eb34d045496ed445bdecb9a467932082b5af34ef0fad03440a7f"
+    },
+    {
+      "skillId": "skill:703cb811875c0d9c3eb0ddbb059d6b7f74b262cfb5ce160311b74e7f6bfde5dc",
+      "name": "session-logs",
+      "skillRevision": "rev:a2c8992a3c4c67c2e71ad0580875a61bde041462de3814854ffe52d13e3ea296",
+      "descriptionHash": "sha256:00b894247d218b2bc7cabf8b41421197e9c047f6898bb0c80e8dde51ad550883"
+    },
+    {
+      "skillId": "skill:725cfa99ce6b7899e15cbad51a338a648ec04be09eb87729ee37b14a3eeb347f",
+      "name": "codebase-design",
+      "skillRevision": "rev:e8019317703110617a2ffa96f3b417017c696ba7f489052d558dd00530b13569",
+      "descriptionHash": "sha256:63f3b1bed0c9fa4a69c9186b18f1bfecb01d1c636e8a0ff21de8ec096f5a82ea"
+    },
+    {
+      "skillId": "skill:7299f8aac4971588e4c75d52a0190101ffca821c9d2524f29ffa777db80513a4",
+      "name": "copywriting",
+      "skillRevision": "rev:f3e0e4a2229bed3c72f9b9abaa21bd998b149ead8a0a64e04c72d235b8830b14",
+      "descriptionHash": "sha256:fa6147d5b91b468b180180d65b999dd2d9ea2c97ce809306c7a453daa9316901"
+    },
+    {
+      "skillId": "skill:7366392fe25e729a66c012caba4a296cfc2b220702a34a3bde8b1d46ae562476",
+      "name": "Code",
+      "skillRevision": "rev:15b5a99cce60c1f6e21f56a4e1143c189c4ee26c7010063efec8e9db77fd0325",
+      "descriptionHash": "sha256:903c05357eb1c8b68d32ffca9eaf51ce94779a3ce4032199924f3fc477b19470"
+    },
+    {
+      "skillId": "skill:74d991e2035f1ee7c20bdaad3f4277de397317e3a172d83b97f3f20c9c2e19b2",
+      "name": "YouTube Playlist to MP3 Downloader with Metadata",
+      "skillRevision": "rev:5116dd529f3347efbcd40c2077747d240343b8d5ee87d07570a9fca4454f7b80",
+      "descriptionHash": "sha256:6089a3912c48730bbe40a755979519f3a4994ceac320f231e7e7208de1b8e76a"
+    },
+    {
+      "skillId": "skill:74dbae3c6f64bfdad9e763440fade3963fe2216f77d2c0383226895ebcccec5b",
+      "name": "grilling",
+      "skillRevision": "rev:956bf1332552b5e93d3b53b83cc8859a224e3d41ea74075a55efb2ec7b415fb6",
+      "descriptionHash": "sha256:aefd3e0be77f0961bdfa49de8cf3a5bbba7e55bfbf32c5386aa1a39a42352bcf"
+    },
+    {
+      "skillId": "skill:7660aa59099eaf428a38707b22ad78d930f95735b9131f688d889196941eec15",
+      "name": "lab-report",
+      "skillRevision": "rev:e79cb8d1dbd54cea19bd2e69bd304b10ae52c4f4d23c600d4f4d486a5b81da7b",
+      "descriptionHash": "sha256:8e0dca40b658e2f762f1ced3160f86fc125abef1d9533a8613fbade99b247c04"
+    },
+    {
+      "skillId": "skill:7730a0ca9c559eed9e30b1ddfa4f1ec355dac8cc4d86b007e5f2f7a9d05cc97d",
+      "name": "backtest-expert",
+      "skillRevision": "rev:f62a238695604e6341594f74ed5accfe0659bed8abd9343f05f918b340aac01e",
+      "descriptionHash": "sha256:79c50b5c154b5e02ec5fa543dd2dac4b2c02b104cf2a7288ef473e67e5d63873"
+    },
+    {
+      "skillId": "skill:7a8a506ba5180e4d3dfc97fd0dd663bf747e2d2d93b9e3d472672e186d26dc35",
+      "name": "github-repo-search",
+      "skillRevision": "rev:c1b0948941433d7d18afc2283f65e7d09a39f36edecea1ac80ecc9b445eddb09",
+      "descriptionHash": "sha256:f4956471662e36c8a4397e1971373458744fe7b16762439b531d80eea8f8731e"
+    },
+    {
+      "skillId": "skill:8111be861f909a00f2b377c8e90aa1593b8c5d642a529b3013d815083455069b",
+      "name": "code-review",
+      "skillRevision": "rev:9bdbeaf12de6e6a55b3cffe80da0a30f7268724275d7f502bd0dc3c0fb8bd888",
+      "descriptionHash": "sha256:b6d001c6be7115c6c9dc57aab4ee65796d2219c20385e0e0b0c2ce6cf74afb3e"
+    },
+    {
+      "skillId": "skill:814cacd312e3ac69f5b0d1b96d563991b63492859e3b2430fc817e16b73d1aad",
+      "name": "FFmpeg Video Editor",
+      "skillRevision": "rev:30896311b0097ca38a13a36ca789210308a742debbaf2d3332f88a9ec56ec3c0",
+      "descriptionHash": "sha256:92a30ad1f17c1be7cc17ced9a361558307d20c4fa2d9a14085dc1776b7af6894"
+    },
+    {
+      "skillId": "skill:82c6131e757d4f956a0e4bc1f041a47e33126576ac1b625e60a88bd214d2473d",
+      "name": "brandkit",
+      "skillRevision": "rev:0a6747274c9ef078e9ba5626a143717075872692c027b137b6d74dc2f7db5b3f",
+      "descriptionHash": "sha256:cc10f613c5c58f279fc02390b508323c71b19ceb20032249c8caebf3f1c8f227"
+    },
+    {
+      "skillId": "skill:84f3d955f5aa3840b3d3e8e4b13b866c8e0f792dc1d55288325ff619e3d907a0",
+      "name": "consulting-analysis",
+      "skillRevision": "rev:3b3f664e5601efa547280ef5c912671f7739143e04fff5d86c5178f9c904a62d",
+      "descriptionHash": "sha256:f7e478d842cbd569abf39fdbf820a779134e1302e1caed937954bdd57aed1308"
+    },
+    {
+      "skillId": "skill:85f6153c4961f90be2a3bf8415d467dc4f003c5cdd0cce1410cc9c2e4827b434",
+      "name": "feishu-screenshot",
+      "skillRevision": "rev:2a5c46f7fa9ab7dcad4f013bcdd655d72b80fdb77078090bd8155778cfac256b",
+      "descriptionHash": "sha256:d42c7d62b2865dd43be2dbb9c5548f9fd37c412784279383450a929631947ea8"
+    },
+    {
+      "skillId": "skill:87048bb1689f395a322b3ed4912eb8d3ee3bc7bfb91df2730573f91bb21256a1",
+      "name": "chart-visualization",
+      "skillRevision": "rev:7d76b7489efe2041eddd92f0d63688b4f63ff4149bda131194dc301188a7c93e",
+      "descriptionHash": "sha256:11526e0a8bb481b6f9afd07a5e1032df71043c82f03dc4bf90e5ede01b31e570"
+    },
+    {
+      "skillId": "skill:87a8d78746fb5144f2ec55d86f5320121482b98ef4dc3ff0f420c9cf8f9a2170",
+      "name": "design-taste-frontend",
+      "skillRevision": "rev:5a5080925a971e52126c8f65d1b0d7e6b949c065cbfd3c70b55cdb09a44374fa",
+      "descriptionHash": "sha256:2142f793e222abbed40eafb168695c25171e9d91234753cc5bf2b17688edd17e"
+    },
+    {
+      "skillId": "skill:8bf022f5ca491c251e98be13b520fb053d0966a33cbf1455b2340575f4ff3c01",
+      "name": "feishu-chat-history",
+      "skillRevision": "rev:3f295b0014ee3b5416419f0d641e021c8327b574e50fee11452bac6b4c5eb51d",
+      "descriptionHash": "sha256:f9168752635a3afbfbbdeaf468cdaff460bbc3af7821a1893444838b913af301"
+    },
+    {
+      "skillId": "skill:908fa1bd6cb03dcf0a2560ccc8ff43cc311d12915846a6db71b1675edc812930",
+      "name": "ielts",
+      "skillRevision": "rev:83c00c63f5aa35aacb66a970447b07a6f99ae08fa83d7db7e1d13642675a2352",
+      "descriptionHash": "sha256:ff21383fdca6ffb53e523297238dc98c1987778a8570a2f51c06bf391e4b9ef7"
+    },
+    {
+      "skillId": "skill:90b35f18e008b8428482a3b19ecab823f9f4cd103fdaada68fc0ef641f882b01",
+      "name": "humanizer",
+      "skillRevision": "rev:516c267c40792313c2eacc5532271ad51d9c0104e71d0c8aa89e3f97e2a9c9ec",
+      "descriptionHash": "sha256:fd344744d47476e704eaac354201cb93354aae6d463fea23081b8d7bd0481d7a"
+    },
+    {
+      "skillId": "skill:9227aa3b1d90d5a598bba1cd013f33b0aa746818b87b31bcaab71eb4e9fe39c8",
+      "name": "opencode-controller",
+      "skillRevision": "rev:3df13678528c8fa8c9d45216fb5dbd5322ab1295b24d58dc64cdc03bd545dbdc",
+      "descriptionHash": "sha256:a2235735be1953b7f9ea9bd206886e59b27f65668a7f9b10b0863ea1a35af1df"
+    },
+    {
+      "skillId": "skill:949457902c5ffb8e9c84b5dcf90073cee62084607593a3da0ae037b63121608b",
+      "name": "domain-modeling",
+      "skillRevision": "rev:57d743cc50501fd301e5e1abc4cb917c0e476fdaa072d4f5f3120238839efe86",
+      "descriptionHash": "sha256:92f0a3a377ed94554eb54df81c116cea52f2d9e193b233fcacf66398837c197b"
+    },
+    {
+      "skillId": "skill:972f49559143229cc9ae3d70a465318dd261adb9f29de56aea50a37d99f589bc",
+      "name": "image-to-code",
+      "skillRevision": "rev:b6fa3c2e5069eaa696dd75b77822b117f1230a3dc5602432f12e6097e121c0fc",
+      "descriptionHash": "sha256:9e716e0ede6007969e4e7a95b51eb5533c7fc2637bf465de68aacb5254f02306"
+    },
+    {
+      "skillId": "skill:9a2f797c235608ce46661396ca3d9fbd132e8985fa512fc76c717ca49272d09b",
+      "name": "prototype",
+      "skillRevision": "rev:695d06751e14de5b8cd41cfa321bbd2bfc3f16acde61bbbedf10d087998b5845",
+      "descriptionHash": "sha256:cc3996263316c1f1c89db6ecdcd8ec1e1fa08253b2316939e838f995017c2b72"
+    },
+    {
+      "skillId": "skill:9b03e7f9cd45badacbaf1547fd9e6167233a3f98915ca59ee274a0b9acff2ecb",
+      "name": "high-end-visual-design",
+      "skillRevision": "rev:e47fd3c414baad01542a3af68a2de394a52c5fd8a6bfcde39baeb007b426e4a4",
+      "descriptionHash": "sha256:46a54c46099b62a35d3c36e0106673188398a17185e44c1c7d89463c34a09e92"
+    },
+    {
+      "skillId": "skill:9e1c09c8d8cdf48d0ef490d25c50e69cfbbbc83e84d4fd02d749dd7f2a400f2b",
+      "name": "youtube-watcher",
+      "skillRevision": "rev:d5292ee6f71f506156858b7b6de6cb2c3609991271e4d456dc89946d1e21152a",
+      "descriptionHash": "sha256:3b0dbee82ffa463a87a44129809a7f39a71e00d5f9a297a7e8b131f0b59af932"
+    },
+    {
+      "skillId": "skill:9e90d4bdb80d55c4e9417b691d5d195ddc51d7897e2eb85ed819b9dbce74900e",
+      "name": "xiaohongshu-cli",
+      "skillRevision": "rev:1d5a044edfcd1b0af2bda05f5b26349d5a7aa2b6dde3fa2da7ca43304570c437",
+      "descriptionHash": "sha256:acbe2e679c0a0c246c59de74346e9bcbdb3a293b413f4458075b3119a3800e2c"
+    },
+    {
+      "skillId": "skill:9f54a004d8989de6854a53d1d06eb8d6eb7d4773f5ace6b03870c334a9459f96",
+      "name": "multi-search-engine",
+      "skillRevision": "rev:c290ccd93479552ef593196a3effcfed4db3267a4affeb0af90c4e7449361d07",
+      "descriptionHash": "sha256:09af22c97979a5df50ff49c141e772c4ae28842473f51c0a41c75164cb32deea"
+    },
+    {
+      "skillId": "skill:a09bfff7d5400fefb904f4422835ebc396498a654799135a847903e74dd735e8",
+      "name": "make-plan",
+      "skillRevision": "rev:94bd03d5d37c288edb21832038fd502ed65998d6381fd9abde1cf4f6b7d82d39",
+      "descriptionHash": "sha256:b6d12e5abf15b5eaf01871c2eadfe2c4464c92ad29a0687b937314c56b735653"
+    },
+    {
+      "skillId": "skill:a148c83714285cdd2184a90cf4a1d46969c3d3b87792e75f46df021a294734c9",
+      "name": "content-strategy",
+      "skillRevision": "rev:a64eeace07910ffb3a6099bd33bacbe61a3e9a3a2819e946029f3bb84b9887bc",
+      "descriptionHash": "sha256:5a4946f4531bdd2786493b7f60528d6fb7f1702f5a162b90d8e49c58e23e9d5c"
+    },
+    {
+      "skillId": "skill:a2fa83ab3477cd0caa895e6716cf5b5f6f0b35e7e3b64410b34898b823e79e36",
+      "name": "pdf",
+      "skillRevision": "rev:2dfd75f201448629445b4e656b618879eddb6ff063f0f9c7c0ef5573d1c2b58a",
+      "descriptionHash": "sha256:d1906e2fc005cb80c70b054ca9a61cbcaa67f14c348463f18c7c3bd41e682d02"
+    },
+    {
+      "skillId": "skill:a5a7b4ae71c9607e2bb45e7cfc4aec543990c8a1a36b5f483d2eaa7baad24c5e",
+      "name": "agentkey",
+      "skillRevision": "rev:cd17de182b632e97fe34d03bda13b0144b1f727bd388636552b2d6f230f4455d",
+      "descriptionHash": "sha256:28fe8eaeb5ee25e4c807ad35ae148c35b0e19dc733de734e3a7b5c8c03d0f1f1"
+    },
+    {
+      "skillId": "skill:a80811b680bb5ceef1ecf26b62d1e34bd79c7c83766227665ec5e627223830c0",
+      "name": "neat-freak",
+      "skillRevision": "rev:3b121c581087e6582a6b00e04db221628ebc4fb0b62ee68445c5868261151943",
+      "descriptionHash": "sha256:5c3471d84e336a4beddfa08e1979abbcc803f34f25f0ed8d80cc6f0552270619"
+    },
+    {
+      "skillId": "skill:aa60d382e71c2a9004f3c8ab8d76e7cf8746a90cea64a14222b88b47bc22fa74",
+      "name": "aminer-data-search",
+      "skillRevision": "rev:312e0f9147462826ad52bb1cee0bc4296a8ceb7b3faa595378da480eeff5a9f2",
+      "descriptionHash": "sha256:cfe0420efa87f7f8f33ce97fd0cd2f0fe32060532c18ff7a5b49318fa65bb8c3"
+    },
+    {
+      "skillId": "skill:af83f1585c04d65e9b7396c9e38cf18d76feee72550b7316e6694b20bf35e456",
+      "name": "video-to-subtitle-summary",
+      "skillRevision": "rev:f6083be87e0b8e2f603fd1598451a2397d80efa710fe466a8b4c025f2fb18e1f",
+      "descriptionHash": "sha256:d685b325f8f9d772f588e91487da5ef397e798426fbb46290f67812a5b0148fb"
+    },
+    {
+      "skillId": "skill:b3859d361ba00ec5cb02ec0ef18e8356bbe4e5a8a6236b10b9ea13e9b5357af1",
+      "name": "xlsx",
+      "skillRevision": "rev:8f4a9d20333418885391abde13c13487f1ed26c5af17e3de49a87c5b85a11674",
+      "descriptionHash": "sha256:69274ce262434e114cce0a34d4e5c584945ed0c659bc5242a5e2df05c80e72b7"
+    },
+    {
+      "skillId": "skill:b65cf785bd1ac572feb45b9fc3697e06a649ac836857e187f1e8499fd837ed60",
+      "name": "social-content",
+      "skillRevision": "rev:19db07e0368fa892cd1a5f21a5573648768aedf96d2d9a4d9854ae15efe0afd6",
+      "descriptionHash": "sha256:847f19dc93560c83efc42b11b1ea11d106dced90ea55026fde45e127c27c4547"
+    },
+    {
+      "skillId": "skill:b81a429793362319d955388a0420d8ac5717abcc3fda118822478a9a3f0531fe",
+      "name": "feishu-send-file",
+      "skillRevision": "rev:f742b98a8ab274ee060771c2c34ba97e91adf17d47a44b1bd8cb7a227fa82c82",
+      "descriptionHash": "sha256:c0aa65a014cd72cdc8d6d01485f0d0f143b3db6d9367f23868f6c9e466b34ac7"
+    },
+    {
+      "skillId": "skill:ba0d53875a8d37ffa9857aff5348b12bc660b26cd3eaf23a65a0bb138aabbf39",
+      "name": "imagegen-frontend-mobile",
+      "skillRevision": "rev:0c67fa929cfff649d426fff6dadd8bd7f485053f6134cb3ca828b3f3bd2198b2",
+      "descriptionHash": "sha256:24c790491b1813ebd19c0dd26b3a16bbfbc0d5f7f5f20fe397087f4c6cd07889"
+    },
+    {
+      "skillId": "skill:bb60775d931e951bc870511a40388a5daebf5d7ca88c7f5868521943ce982408",
+      "name": "tts",
+      "skillRevision": "rev:02ab84b2c314b8f781a1bdca3dad5c193765d03f3ddd2449e453ef741883b036",
+      "descriptionHash": "sha256:30532f9e69d5be847fb32236f3ae00927db6df283ed2cc0998dc400f554739c3"
+    },
+    {
+      "skillId": "skill:bd8acdaaeeae6807d80067d826e62583a466fa61892f9c3216f7593cf134aeb1",
+      "name": "research-paper-writer",
+      "skillRevision": "rev:2e9673482d84913a5f62847bbd47c51892e6a894111d5ce2a1066061fe8a6ed0",
+      "descriptionHash": "sha256:fffdb57faff4c84192cbce09ab01a337f9173bc18bfe3af91ed16b234d0bb5e9"
+    },
+    {
+      "skillId": "skill:bded306d54d13624ed6111ea014710270c9c385a8e9578415957c73faed7ce09",
+      "name": "Market Research",
+      "skillRevision": "rev:314cff7d0b21fdb955845003f91d4fd574528489d81a76c0dc12b26c98181404",
+      "descriptionHash": "sha256:280bfdb924ec64d8ba284d1aacbad15c7908a63cd153d7f98944a983f505159d"
+    },
+    {
+      "skillId": "skill:bec8e35a8e60b62db96e41a97f5ba935202b9c889add41060d989ee126aac730",
+      "name": "systematic-literature-review",
+      "skillRevision": "rev:b3623c87c190d153abf724f9f605e92ba81ca12f7dcd5a4087e5d2c37a9e5645",
+      "descriptionHash": "sha256:4cdfa31a6727aa691de3d02b5ed24c0c26e970bc292e9e931f6563eb6e140ec8"
+    },
+    {
+      "skillId": "skill:bf0a7baf67f2d5facdec44dbccbcd655fd098413e83d688abbda510da507c07b",
+      "name": "fitness-coach",
+      "skillRevision": "rev:3a2519a3375d375b50d6160ebd78ce3c314f3d4549eb838c7674f86f8471a2ba",
+      "descriptionHash": "sha256:320cc588f9066ad3f1bf9b70ffedcfe8be8445939c44b5035c2d3a92a71e5844"
+    },
+    {
+      "skillId": "skill:c1e726c6b6a0f40be55cf92f280ae1c3f8e82f7b2d5af38216f0e6db1d81ca91",
+      "name": "executing-plans",
+      "skillRevision": "rev:871df607bd9c2f748401ac28f8ce174a249b9ae905af557e7e9d53773dc2ab85",
+      "descriptionHash": "sha256:f5ac56aa78b912c2eaa0bdd01e07afe3e372757c2a4586d6392c633b0974d9bd"
+    },
+    {
+      "skillId": "skill:c3c8c33cd68102d6ad4d8b5fb017e82271a0064d70f938a33f912289be513144",
+      "name": "opencli-autofix",
+      "skillRevision": "rev:b20408c7fbd948b7001fd6c2e8eec52727831cb721669cb5cb3189bbadd4e725",
+      "descriptionHash": "sha256:e83563f4cdc55ceee1ef5ad931dc1d80a088afaff8a12b4c32a61b4cb1fed03e"
+    },
+    {
+      "skillId": "skill:c564b209ae13dda734cd4fd971762dd8840278c5c7309fa540c6bce4b65e5562",
+      "name": "image-generation",
+      "skillRevision": "rev:99905bf6bdb5ffea2bda7c999b08f90eb814e89e027f92d3bf43bc51b9dbf95f",
+      "descriptionHash": "sha256:93fc857d04d6f9ba9657d57f1d987a43e2ad1784be4dbe1c5a16eae5da24304f"
+    },
+    {
+      "skillId": "skill:c57f071709ac38dd7dec931857e3fbcaea60f74afc74c4d0beab7b985c64f638",
+      "name": "opencli-adapter-author",
+      "skillRevision": "rev:f651cad98143c7996910ffb7810f9972c7d45919250cd7e4a5b0bc4539f0aa9d",
+      "descriptionHash": "sha256:6f924d914409af8ddc44d70ad406867f3d68f158c44c6cd059e7928bbc324863"
+    },
+    {
+      "skillId": "skill:c63c6aa4f53f1196a41eb15fc3000859364ebdd27b95b8b067ba5667e4b26bd1",
+      "name": "brainstorming",
+      "skillRevision": "rev:6cede7474acbdfc02a788de4c3b43cb423f715a3e2cf4a90687d7eb42919c02d",
+      "descriptionHash": "sha256:e9d027d6a5c7244d1e80c86963d647204a8bbfd000345432ebe5e0e1f8802b90"
+    },
+    {
+      "skillId": "skill:c7cc814faa6acf132d63bab555cc59959844e4d4289c78e8df7e4b60b17f2b87",
+      "name": "writing-plans",
+      "skillRevision": "rev:d50b8b23ac0276846a8fc96c4369bda4e8ba75313cc2152f92789e1062f3cf1d",
+      "descriptionHash": "sha256:90ae238dbfd4ac845d20a7e3c14e1f13284457aa2ae21b3c068e7af181d869ca"
+    },
+    {
+      "skillId": "skill:c925823dd5624f7734bf2ea358aa7cb98fcff665ed2c24f9c123078a644004ce",
+      "name": "follow-builders",
+      "skillRevision": "rev:a85440e6abe88de17483c29fc7fe532eed89ef400cf9a43e3fdaa4f0d3556227",
+      "descriptionHash": "sha256:285cf71bca7b233e0019cc7c0d1ba3293ffa7ea4db95e473979b5ce13da12e3e"
+    },
+    {
+      "skillId": "skill:c94788cf928888d3c23958cf7f0ff84f4f53f5843f026544812e324e674e498d",
+      "name": "mem-search",
+      "skillRevision": "rev:f24f9933ba9336130c14f35d5e686e3e3fadfb23f596e553ebce7720da1fa96b",
+      "descriptionHash": "sha256:274f88914684384f587881623f10a251e18be8d4824cf173c5873bbb52fa9fb1"
+    },
+    {
+      "skillId": "skill:c9a7094a17eba95938f622994e04d99c58700cc2ea7657904ec62656c03e2f0f",
+      "name": "obsidian-ontology-sync",
+      "skillRevision": "rev:850245beb0b1339aa4bb2aef1c2d0196036bda6ac84fa692454b08e33c67b2c0",
+      "descriptionHash": "sha256:69f020a16411b4f2147ca00be3fb84c7f776f345123ec39ad21b0d2091657c07"
+    },
+    {
+      "skillId": "skill:cbf6cf5b0890e5ea7a68ed773112acfff0d18a2b62637e75e03c04d420916211",
+      "name": "amap-lbs-skill",
+      "skillRevision": "rev:8792039318a83d698089c0fde4cb739dabd571786aee7ab5231c5cde4219bc4c",
+      "descriptionHash": "sha256:96fb1964015a741120c19449b188fc00268abae56024b03bb742b6ff59c0c44a"
+    },
+    {
+      "skillId": "skill:cc97faad87b03e57b0edead28e6b7fe60dd929b4188183d4bdcf45875de7787a",
+      "name": "imagegen-frontend-web",
+      "skillRevision": "rev:eee145e598ca8ee0c1980ec01ba225875020da27da0e16cb48c03934dfbc412e",
+      "descriptionHash": "sha256:4f6d9769e518de95814cd811e74a0b31465f04a295e29b92214bd93739d06621"
+    },
+    {
+      "skillId": "skill:cd62a6fd3cb6ca46f5779e40d4334b746a5fab881170c386bec92f6e261843a2",
+      "name": "automation-workflows",
+      "skillRevision": "rev:3c3c3e5d884af393065ecb8bb533490797fb5e0a8998de4a7aa78758136b55e3",
+      "descriptionHash": "sha256:2aa7eca9a3d8ff2d9d8a4c5c78916dc94f01901da77cf2d0974fd0a415bcfbf1"
+    },
+    {
+      "skillId": "skill:d0150e4c734ff8019485cb548ce42dd3ac07e5b8870fb81d1dda8e7237054284",
+      "name": "industrial-brutalist-ui",
+      "skillRevision": "rev:28ff544d4ce43f775a5d26f27f652bee5b8ceb231f942340a5cb2f0a59a09aa1",
+      "descriptionHash": "sha256:b8e2623f2c9a298e125719300d2f221be2e7e90b7d1b56273a366adbe5b52971"
+    },
+    {
+      "skillId": "skill:d5e330bb3282aded574a024e6855182d9e1506d8eb824043f28e35b918044bc6",
+      "name": "claude-to-deerflow",
+      "skillRevision": "rev:09faac5c2b94c993c457f0c822a7896c6008779b3e4defdb72499ee3874eafcd",
+      "descriptionHash": "sha256:63e04db5a54769057917db7b301d33d21f550f3fbf55a0a9625138a5b6482f5e"
+    },
+    {
+      "skillId": "skill:d6537d90e6c400a867fd555bb3a9e3f3cfe360e89f480e132428c3f2d9b4e7d1",
+      "name": "newsletter-generation",
+      "skillRevision": "rev:14be29249a9c596f6339e5e656bb48011cbeb45375c1d5cbed3272a6c4ecd4d3",
+      "descriptionHash": "sha256:280c8327493d536d53ff3edc5bb349d551d4cf2da9a693d5aa2472523a1a62e5"
+    },
+    {
+      "skillId": "skill:dfb8725e91a53a5cac5af70921cdba26ef7bbe3d6288645bc6da53568fd63f3d",
+      "name": "clawdefender",
+      "skillRevision": "rev:1fc323f8e2c3169c4518af5ecf2db07402193a68ff731d8fbb6d0c4a99cf93bd",
+      "descriptionHash": "sha256:f76b0b0e5353b1a24babb3b3f9d12021cacf3796ed8866dc015d8ecfc0bf3f1a"
+    },
+    {
+      "skillId": "skill:e393bbe8cb3863cbdf1cd4a9af5bb397d31c63125873406fbb6cd6e6f2e4be0f",
+      "name": "feishu-doc",
+      "skillRevision": "rev:b68950797a1d29f6e3a6cce6e2833fcb6a3d1152d88c5e2f8dc82b76e4721e87",
+      "descriptionHash": "sha256:45885e177457ceca6a94d3f76c20704288c98f0cd0dfa3172922112269bbb517"
+    },
+    {
+      "skillId": "skill:e602318adbf9b8f17d9d7f149144d5582b8fb53a4e1efd4eba5a1680ca719254",
+      "name": "interview-designer",
+      "skillRevision": "rev:059aee928bec033bd1c63f9d66f18d54dbb60354c6f45af07c87e72e655e97cd",
+      "descriptionHash": "sha256:1ec9ad2177e2579e3528e8b2bead5e1ca5b4fa8218300940b5ef1ac33285e387"
+    },
+    {
+      "skillId": "skill:e86a4d5e92af5d8520f000f8a72872a333a6f62da2dc62ff08195c30b8c54fab",
+      "name": "ielts-writing",
+      "skillRevision": "rev:1e15d58899ce31bd0a22b865747cf010db3cd36df6536573fc7d46025199bc15",
+      "descriptionHash": "sha256:fc4cee7c1b7c6f28de2e20c0bff1824a39e3d3336f81f036a376b46db5ec07b4"
+    },
+    {
+      "skillId": "skill:e8da2ec737ed6579d59d7ebbc552b452d5f1a6e25cf470b5205751d607e39ec8",
+      "name": "code-documentation",
+      "skillRevision": "rev:dab12680db31319159827bab3578835147f331f3cf23628da4c9f763edc10b9e",
+      "descriptionHash": "sha256:31163e991c47777f2183a3b2ec6c0d52cf0312a57e94391aacea52642ccbcd8b"
+    },
+    {
+      "skillId": "skill:e8f1b89b80baf01a3a2f619f2e40f4ae5b99d8641daa4809898c934eef88bee1",
+      "name": "autoglm-deepresearch",
+      "skillRevision": "rev:a9da84fc3daa743c87800982f593accb484010a9ae8b1e766bb4067c216f423e",
+      "descriptionHash": "sha256:bcc44470522a3bfe1bbdf2eb647e9bfa1c21c3aded567955cf0e9eb141517df7"
+    },
+    {
+      "skillId": "skill:ecd14d3c7f5c275c899338ac3ddd6044efe8a6ed1a508cf9fea11a93251ca6fb",
+      "name": "gpt-taste",
+      "skillRevision": "rev:4e05289063f4850eb0bf1bbbb08a24d984cf9477af3822b9a1d09d955024ac12",
+      "descriptionHash": "sha256:c185ca8777e548f4402681d7c7b61af50f41b6ee9e6b45c519aee1fb555f4a79"
+    },
+    {
+      "skillId": "skill:edac0df3820fd2895db5f87d186de60833e25b317f40823fa3485fc9fdcbd7ef",
+      "name": "timeline-report",
+      "skillRevision": "rev:2b84a9c0458b19182e324ddad85e023af5a33e1f846fd74b89690dfd44b885bb",
+      "descriptionHash": "sha256:22b07514693bfab98aa8b53fbb0dafb43e7cd6fc3e4ac8245de263192fc8fc03"
+    },
+    {
+      "skillId": "skill:f154a23ea0dd93408880a75d14c460b8511a9fd90cf10af092041884dc1a51ea",
+      "name": "autoglm-generate-image",
+      "skillRevision": "rev:6e8685629ad1e8a0b5c7fa88bbdbd7b70d25c76f65b9ac1db4b743dd920f2f1a",
+      "descriptionHash": "sha256:9752cb0b0ee63c005757037c5c52cd4b621ab57a08be7397e4af66860736a8c1"
+    },
+    {
+      "skillId": "skill:f5292dcab7535c7d1f62448fe3611e3db0bca8fa607ec9500b850be92592309e",
+      "name": "self-reflection",
+      "skillRevision": "rev:6496f7bb93e13e8119f32554b754fcdf4cbbd2b592777441e62bd1d2f2572759",
+      "descriptionHash": "sha256:32ed78ac5f2f69259173339ce09bf9b2ea36f794e93dd8d428c23731dd870576"
+    },
+    {
+      "skillId": "skill:f7ee3af6ab0ce0c5040bb9871fd4b4df370f4256d30f0c465992d3ae9ada0873",
+      "name": "data-analysis",
+      "skillRevision": "rev:f8dd9bcaf61a3b33a11dec9254b71752d1f3d8d31fa62c216b865dfc923f51c0",
+      "descriptionHash": "sha256:783c2a8292f1185564f6cb687349bb68701b213e60eb11b6c44f37db98cb5b48"
+    },
+    {
+      "skillId": "skill:f8e0587f44d60bc94b14b9f557f2b578dff79f6b736385cf034ffe1be03c3fc6",
+      "name": "video-frames",
+      "skillRevision": "rev:73e1792ab8d20721060ec1c9418fafb1fc6552c3b624c6bdd1dd61e4a7b3710d",
+      "descriptionHash": "sha256:e436902df62bd6db76cb5976ddd63f1f48cda58a55522eb66b0de30e54a397ae"
+    },
+    {
+      "skillId": "skill:fa0397d71b9554cd98f793c0bf75bc30af82db6d74077b4369b8783f0e26078e",
+      "name": "github-deep-research",
+      "skillRevision": "rev:6845fa539dc0a811d50c487bf1cfe502a6eaff3402e0ba157d19d32ac1f7fa34",
+      "descriptionHash": "sha256:4d14f18429cd1d863ddd04639480e7f96588917e725f27910bea4cb2934c68f4"
+    },
+    {
+      "skillId": "skill:faa3b0ef810c5c7be39a17782046f8d6c2a1eacb7150d48aa3c1c1006b16fc72",
+      "name": "skill-vetter",
+      "skillRevision": "rev:d45d0c408d58a93490d4c3d4103fd6c710add1e1e7ba1ecd36f41c38c1cb4ceb",
+      "descriptionHash": "sha256:0afe485bf07c1ca787af5655bd9271a6e76b96d7bbc1ab7487a7f109a3127609"
+    }
+  ]
+}
