@@ -1,8 +1,12 @@
 # 已安装 Skill 的经验引导式渐进程序化
 
 日期：2026-08-14  
-状态：**当前权威研究规范**  
+状态：**Superseded for current scope by ADR-0014 — 2026-08-22**
 性质：研究范围与架构合同，不构成实现证明或新颖性声明
+
+Applicability：本文保留为 Procedural Memory 研究历史与 frozen experimental track 的范围说明。
+当前主研究已收缩为低打扰 Discovery 与可归因 Activation Memory；见 ADR-0014 与
+`docs/design/activation-memory-first-architecture.md`。本文不得用于启动新的 procedure active path。
 
 ## 一句话定义
 

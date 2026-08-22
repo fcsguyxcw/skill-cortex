@@ -7,3 +7,5 @@ export * from "./prompt.ts";
 export * from "./runner.ts";
 export * from "./calibration-config.ts";
 export * from "./real-model.ts";
+export * from "./heldout-config.ts";
+export * from "./heldout-runner.ts";

@@ -4,6 +4,9 @@
 
 Accepted — 2026-08-16
 
+Applicability（2026-08-22）：ADR-0014 已冻结 Procedural Memory 主线；本 ADR 继续作为既有
+runtime/procedure 资产的 fail-closed 安全合同，不授权新的 canary/active 接线。
+
 扩展 ADR-0008 的 promotion gate 与 ADR-0006 的 runtime 路径，冻结快路径的宿主释放门控契约。
 
 ## Context

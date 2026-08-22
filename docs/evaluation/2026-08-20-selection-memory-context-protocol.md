@@ -1,7 +1,7 @@
 # Selection Memory-as-Context Experiment Protocol v1
 
 日期：2026-08-20  
-状态：**协议与 Gold v1 已冻结；Memory Card、数据 fixture、prompt、three-arm runner、真实模型 adapter/config 与 dry-run 已通过 component tests；真实模型未调用**
+状态：**协议与 Gold v1 已冻结；real-model calibration 与一次性 held-out 已完成；offline Selection evidence 已收口，production/host E2E 未启动**
 
 ## 1. Research questions
 
@@ -131,6 +131,15 @@ containment `≤0.80` audit。Gold 与 candidate bundles 必须同时绑定父 c
 - provider error 或 aborted response 后立即停止，不继续产生后续付费调用；报告使用 project-local 独占创建，禁止覆盖已有结果。
 
 上述 adapter/config/dry-run 只证明执行边界和报告结构，不能替代真实模型 calibration evidence。
+
+### Frozen held-out run config
+
+- config hash：`sha256:8b41fe8823196b024ec8f28285d44854df5255fdd187e64d9eca8bebb70291b0`；
+- calibration report hash：`sha256:a77aef8bf705e885229f8934ab535b54eb5e5f1b1766bb30d7c6ce6925b3861b`；
+- held-out case hash：`sha256:b93564482ce4c5bdfc3f30e6b56489ace33628fb0ae9dabc491d4836d80d19ac`；
+- held-out Gold-set hash：`sha256:17a9c5d7a527ca0a5f146a9e13bb0e950bcc49455404d8a862034ad088813422`；
+- first-reveal report hash：`sha256:3ad48fbed61c38b266cc4186418288a4493f37776cd56bcf64cf68e69b4406d2`；
+- 30 cases × 2 layers × 3 arms × 3 repeats，共 `540/540` 次真实模型调用。
 
 ## 8. Metrics
 

@@ -1,8 +1,13 @@
 # 双记忆 Skill 系统：数据合同
 
-状态：Accepted design contract — 2026-08-14  
+状态：Partially superseded by ADR-0014 — 2026-08-22
 适用范围：MVP 与后续多 Agent 实施  
 权威决策：ADR-0006、ADR-0007、ADR-0008
+
+Applicability：`SkillRecord`、`SkillCandidate`、`ActivationProfile`、`PracticeEvent`、数据隔离与删除
+继续作为当前主线兼容合同；`CompiledProcedure`、`ExecutionDecision` 和 procedure 状态机冻结，只约束
+既有实验资产。新的 Exposure、Candidate Budget、Learning Admission 与用户控制设计见
+`docs/design/activation-memory-first-architecture.md`，对应 schema 在进入实施阶段时另行冻结。
 
 ## 1. 合同目标
 

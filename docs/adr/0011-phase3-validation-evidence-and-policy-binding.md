@@ -4,6 +4,9 @@
 
 Accepted — 2026-08-16
 
+Applicability（2026-08-22）：ADR-0014 已冻结 Procedural Memory 主线；本 ADR 继续约束既有
+procedure artifact 与历史 validation evidence，不授权新的 promotion 或 active 接线。
+
 澄清并修订 ADR-0008 中"权限清单与 effect 声明"在 effectless/permissionless procedure 上的
 证据要求；不替代 ADR-0008。
 
