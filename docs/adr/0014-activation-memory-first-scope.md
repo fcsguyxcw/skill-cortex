@@ -77,6 +77,21 @@ TaskContext
 `Exposure Gate`、`Candidate Budget` 与 `Learning Admission` 是三个独立 seam。不得用一个综合分数同时
 控制候选展示、Skill 相关性和 Memory 晋升。
 
+第一版 `Exposure Gate` 只建立 **shadow observation seam**，不做任务类型分类，也不立即改变当前
+候选注入行为：
+
+- 不维护“翻译、改写、问答、聊天、简单任务”等手写类别或规则表；
+- 不声称能估计 Skill 的边际收益或任务复杂度；
+- 只记录当前 retriever 是否返回候选、候选数量/分数/匹配字段，以及候选最终是否被选择；
+- retriever 返回空集合时继续不注入候选；返回非空集合时，第一版仍沿用当前 bounded baseline；
+- 只有 shadow 数据证明一个简单、确定性的 retrieval-confidence abstention policy 能在必要 Skill recall
+  非劣时降低 No-Skill exposure，才允许新增 ADR/冻结门槛后进入 active suppress；
+- 用户显式写出已安装 Skill 的精确 name、ID 或声明 alias，可以作为可审计的 bypass evidence，但不得
+  扩展成自然语言意图分类器。
+
+因此第一版的价值是测量和建立 seam，不是假装已经可靠解决“简单任务无需 Skill”。在 active gate
+有证据前，主要通过轻量卡、候选预算实验和强化 Agent 的 No-Skill 指导降低干扰。
+
 ### 4. Memory 准入
 
 “任务完成”与“Skill 有贡献”必须分开表示和验证：
@@ -131,6 +146,9 @@ Skill 的因果贡献证明。
 不得用召回提升抵消 No-Skill、安全、隐私或控制回归，也不得把 evaluation fixture、offline comparator
 或 project-local smoke 描述为生产 learning E2E。
 
+Exposure shadow 指标通过不等于 active suppress 可发布；任何 active policy 必须保持单一、可解释、
+无任务类别词典，并在独立冻结集上证明必要 Skill recall 非劣。
+
 ## Consequences
 
 ### Positive
@@ -166,7 +184,8 @@ Skill 的因果贡献证明。
 
 **只修改候选提示，不增加独立 Exposure Gate**
 
-- 拒绝：No-Skill 任务仍会收到候选区块，不能实现“少打扰 Agent”。
+- 拒绝为最终状态：No-Skill 任务仍会收到候选区块，不能实现“少打扰 Agent”。但第一版 Gate 只做
+  shadow observation；没有可靠 suppress 证据前，不为追求形式完整而加入手写分类规则。
 
 **只保存成功正例**
 
@@ -181,4 +200,3 @@ Skill 的因果贡献证明。
 - `docs/adr/0013-selection-time-skill-memory-context.md`
 - `docs/reports/2026-08-20-activation-memory-calibration.md`
 - `docs/reports/2026-08-20-selection-memory-context-heldout.md`
-

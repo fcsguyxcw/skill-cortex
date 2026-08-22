@@ -83,30 +83,37 @@ interface CatalogCache {
 
 ### 4.2 Exposure Gate module
 
-职责：只回答“是否向 Agent 展示候选”，不选择具体 Skill，也不晋升 Memory。
+职责：为“是否向 Agent 展示候选”提供一个可观察、可替换的 seam；不选择具体 Skill，不晋升 Memory，
+也不判断任务属于翻译、改写、聊天或其他手写类别。
 
 ```ts
-interface ExposureDecision {
-  decision: "show" | "abstain";
-  reason:
-    | "explicit_skill_request"
-    | "required_capability"
-    | "strong_retrieval_evidence"
-    | "insufficient_expected_gain"
-    | "no_relevant_candidate";
-  evidence: readonly string[];
+interface ExposureObservation {
+  baselineWouldInject: boolean;
+  candidateCount: number;
+  topScore?: number;
+  secondScore?: number;
+  topMatchFields: readonly ("name" | "description" | "alias" | "learned_cue")[];
+  exactDeclaredReference: boolean;
 }
 ```
 
+第一版是 **shadow-only**：只产生 observation，不返回 active `show/abstain` 决策，不改变当前 bounded
+候选注入行为。它的目标是收集能否安全 abstain 的证据，而不是先发明一个任务分类器。
+
 第一版约束：
 
-- 用户显式点名 Skill/plugin、适用 skill 规则要求必须使用、或任务文件类型存在已验证强绑定时，不得因
-  “任务简单”而 abstain；
-- 普通问答、寒暄、改写、翻译、可直接回答的简单任务默认 abstain，除非有上述强证据；
-- “简单/复杂”只作为特征，不能成为硬类别门；关键判断是 Skill 是否有明显预期增益或强制流程；
-- gate 只读取允许的 TaskContext、作者 metadata 和已验证 Activation evidence；不读取 procedure maturity、
-  调用次数或历史执行成本；
-- 缺失或低置信证据默认 abstain，但必须保留显式 `search_skills` 补搜能力。
+- 不维护任务类型列表、关键词规则表、正则分类器或“简单/复杂”标签；
+- 不计算 `expected_gain`，不把模型能力、任务难度或 Skill 必要性伪装成可确定计算的字段；
+- 只观察 retriever 已产生的结构化事实，不重新解析用户任务语义；
+- `exactDeclaredReference` 只允许精确匹配当前 catalog 中的 Skill name、ID 或作者声明 alias；不能扩展为
+  同义词/意图规则，也不能把模糊词命中解释为用户显式要求；
+- retriever 为空时 baseline 本来就不注入候选；retriever 非空时仍保持当前行为，直到 frozen shadow
+  evidence 支持一个简单的 active policy；
+- `search_skills` 补搜始终保留，不依赖 Gate 主动猜测。
+
+未来 active policy 的上限也应保持很小，例如只读取候选集合、匹配字段、分数/分差和精确声明引用。
+如果必须增加任务类型词典、几十条规则或额外 Router LLM 才能过门，应判定 Gate 假设失败，继续使用
+shadow + bounded cards，而不是扩大分类器。
 
 ### 4.3 Candidate Budget module
 
@@ -120,7 +127,8 @@ interface CandidateBudgetDecision {
 }
 ```
 
-预算策略：
+以下预算策略是待验证假设，不是第一版 active 行为。第一版同时在 shadow 中比较 K=1/2/3/5，
+不在看到独立评估前改变当前默认 K：
 
 - 单一高置信意图：1 个；
 - 有证据的互补多意图：每个必要意图保留候选，总量通常 2～3 个；
@@ -274,7 +282,7 @@ observation
 | Gate | 必须通过 | 不得替代 |
 |---|---|---|
 | G1 Admission | contribution precision、mixed/unknown 拒绝、revision/provenance/scope | task success rate |
-| G2 Exposure shadow | 必要 Skill recall 非劣、No-Skill exposure FP 降低、显式请求 100% 保留 | 平均候选数下降 |
+| G2 Exposure shadow | 记录完整、可复现；提出的单一 deterministic policy 在冻结集上保持必要 Skill recall 非劣并降低 No-Skill exposure FP | 手写任务规则、平均候选数下降 |
 | G3 Budget/cards | multi full-set recall 非劣、候选/token 明显下降、hard-confuser 不退化 | 固定 Top-1 smoke |
 | G4 Controls | list/pause/resume/delete + 重启持久化 + 级联失效 | store 方法存在 |
 | G5 Cache | 无变化零重建、变化正确失效、load drift fail-closed | 单次延迟 benchmark |
@@ -301,8 +309,9 @@ observation
 
 ### D2：Exposure、No-Skill、候选预算与轻量卡
 
-- 先 shadow exposure decision；
-- 冻结评估后再允许真实 suppress；
+- 第一版只增加 shadow observation，不实现 task classifier 或 active suppress；
+- shadow 数据不足以支持简单 deterministic policy 时，保持 Gate 非 active；
+- 冻结独立评估并新增明确发布决定后，才允许真实 suppress；
 - adaptive budget 与 card projection 分别消融。
 
 ### D3：Catalog/overlay cache
@@ -330,9 +339,23 @@ observation
 Activation-Memory-first 完成证据。未来重新启用必须满足 ADR-0014 的 re-entry evidence，而不是
 仅凭已有代码、绿色测试或离线 break-even。
 
+保留源码不等于允许它进入 Pi 插件运行时。当前 `.pi/extensions/skill-cortex/index.ts` 的静态 import
+路径没有触达 `src/procedures/`、`src/runtime/` 或 `src/adapters/pi/execution-adapter.ts`，且没有注册
+procedure tool；Practice observer 中可选的 compiled-evidence seam 也未由当前入口配置。最终自用发布前
+必须增加并通过以下隔离门：
+
+- 从真实插件 entry 出发的静态 import reachability 不得触达 frozen procedure/runtime 模块；
+- 实际注册的工具和事件 handler 清单不得包含 procedure execution adapter/tool；
+- compiled-evidence observer 配置必须保持 absent；
+- 隔离失败时阻止插件发布，而不是依赖“理论上不会调用”。
+
+只要这些门成立，procedure 文件可以保留在同一仓库，代价主要是 typecheck、测试与安全审计维护面，
+不是运行时行为。若以后维护成本持续出现，才考虑把 frozen track 移到独立 package/archive；当前无需
+为了自用 Pi 插件先做物理删除。
+
 ## 12. 待实施前冻结的问题
 
-1. Exposure Gate 第一版使用哪些确定性特征与阈值；
+1. Exposure shadow 是否能支持一个无需任务分类规则的 deterministic active policy；若不能，是否永久保持 shadow；
 2. `displayDescription` 是作者文本截断、抽取还是带 provenance 的独立摘要；
 3. ambiguity hint 的触发条件和字符预算；
 4. contribution verifier 的最小可验证形状与人工复核入口；
@@ -341,4 +364,3 @@ Activation-Memory-first 完成证据。未来重新启用必须满足 ADR-0014 �
 7. catalog change fingerprint 如何在 Windows 上兼顾正确性与低扫描成本。
 
 这些问题必须在对应实施阶段冻结测试与失败语义；本设计不以未验证假设冒充宿主能力。
-

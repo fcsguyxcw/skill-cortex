@@ -90,7 +90,8 @@ flowchart TD
 
 1. **D0 范围与文档**：ADR-0014、当前设计、旧文档 applicability 同步。
 2. **D1 Learning Admission 与用户控制**：先阻止错误 consolidation，再提供 list/pause/resume/delete。
-3. **D2 Exposure、No-Skill、自适应预算与轻量卡**：先 shadow，再按冻结 gate 决定是否 suppress。
+3. **D2 Exposure、No-Skill、自适应预算与轻量卡**：第一版只做 shadow observation，不写任务类型
+   分类器；只有简单 deterministic policy 通过冻结评估后才决定是否 suppress。
 4. **D3 Catalog/overlay cache**：Skill 库不变时零重建，变化时正确失效。
 5. **D4 受控 active 验证**：分层关闭 admission、exposure、selection、control、cache 与 host E2E gate。
 
@@ -104,5 +105,6 @@ flowchart TD
 - `mixed`、`unknown`、evaluation、synthetic、来源不明或失效证据不能进入 active learning。
 - 全量 catalog、完整 PracticeEvent 与完整 ActivationProfile 留在 prompt 外。
 - 相关不等于必须使用；能直接可靠完成且 Skill 无明显增益时优先 No-Skill。
+- Exposure 第一版不得维护“翻译/改写/问答/聊天”等任务规则表，也不得引入额外 Router LLM。
 - 召回收益不能抵消 No-Skill、安全、隐私、删除或用户控制回归。
 - 所有开发、数据和实验保持 project-local，不修改用户日常 Pi/Codex/Agent 环境或已安装 Skill。
