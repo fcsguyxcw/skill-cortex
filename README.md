@@ -1,95 +1,132 @@
-# Skill Cortex：已安装 Skill 的经验引导式熟练化
+# Skill Cortex：低打扰 Skill Discovery 与可归因 Activation Memory
 
-本项目研究两个相互连接、但职责分离的问题：
+本项目当前研究：在不把完整 Skill catalog 常驻主 Agent 上下文、不增加 Router LLM 的前提下，
+只在 Skill 有明显预期增益时展示最少候选，并且只从经过验证、可归因的真实使用中形成可撤销的
+Activation Memory。
 
-1. 不把全部 Skill metadata 常驻上下文时，Agent 如何发现相关的已安装 Skill。
-2. Agent 如何在真实使用一个已安装 Skill 的过程中，把其中稳定、可验证的部分逐渐固化为程序快路径。
+一句话原则：
 
-项目当前不研究“从自由任务轨迹自动创造全新 Skill”。核心对象始终是用户已经安装的 Skill；程序化产物是它的派生执行表示。
+> 少打扰 Agent、少塞上下文、只记真正有效或经过验证的边界经验。
+
+## 当前范围
+
+当前主线回答三个问题：
+
+1. 这次是否需要向 Agent 展示任何 Skill？
+2. 如果需要，最少展示哪些 Skill？
+3. 哪些证据足以改善以后“什么时候使用该 Skill”的判断？
+
+当前不把 Procedural Memory 作为主线。已有 `CompiledProcedure`、resolver、executor、promotion、
+canary 和 lifecycle 代码保留为 **frozen experimental track**：不删除、不扩展、不接入当前入口，
+也不计入当前完成标准。重新启用必须新增 ADR，并提供真实宿主质量、成本、维护和安全收益证据。
+
+范围决定见 [ADR-0014](docs/adr/0014-activation-memory-first-scope.md)，完整设计见
+[Activation-Memory-first 架构](docs/design/activation-memory-first-architecture.md)。
 
 ## 权威阅读顺序
 
-1. [AGENTS.md](AGENTS.md)：所有 Agent 必须遵守的 project-local、安全和协作规则。
-2. [当前研究规范](docs/research/2026-08-14-experience-guided-installed-skill-proceduralization.md)：当前范围、研究问题和验收原则。
-3. [ADR-0006：双记忆架构](docs/adr/0006-dual-memory-skill-architecture.md)：当前总体架构决定。
-4. [ADR-0007：Prompt 外 Discovery](docs/adr/0007-prompt-external-skill-discovery.md)：当前发现机制决定。
-5. [ADR-0008：证据与 Procedure 晋升](docs/adr/0008-practice-evidence-and-procedure-promotion.md)：当前学习、验证、失效和回退契约。
-6. [双记忆数据合同](docs/design/dual-memory-data-contracts.md)：规范字段、不变量、状态机和数据所有权。
-7. [多 Agent 实施计划](docs/plans/2026-08-14-dual-memory-implementation-plan.md)：Phase 0～7、所有权、gate、验证和停止条件。
-8. [Phase 0：Pi 宿主 API 核验](docs/research/2026-08-14-phase0-pi-api-inventory.md)：当前安装版本允许与不可用的宿主接口。
-9. [Phase 0：Project-local 基线与 Pilot](docs/research/2026-08-14-phase0-project-baseline.md)：技术栈、身份算法、数据政策和首个 pilot 决策。
-10. [Phase 1 Gate P1 验收报告](docs/reports/2026-08-14-phase1-gate-report.md)：Registry、静态 discovery、shadow adapter、测试和限制。
-11. [ADR-0009：Practice Store 事件文件与显式删除](docs/adr/0009-practice-store-event-files-and-deletion.md)：以不可变事件文件、claim 与 tombstone 落实原子身份和物理删除。
-12. [Phase 2 Gate P2 验收报告](docs/reports/2026-08-14-phase2-gate-report.md)：Practice Store、policy、删除、回放、测试与风险边界。
-13. [ADR-0005：Benchmark 数据边界](docs/adr/0005-benchmark-data-boundary.md)：仍有效的评测数据完整性规则，适用范围由 ADR-0007/0008 澄清。
-14. [相关工作与新颖性边界](docs/research/2026-08-14-skill-cortex-related-work.md)：哪些机制已有先行工作，哪些仍只是待验证假设。
-15. [对抗性架构审查](docs/reviews/2026-08-14-skill-cortex-audit.md)：安全、归因、版本、回退和评测风险；其中 routing-only 阶段决定已经失效。
+### 当前主线
 
-[旧版“从轨迹学习新技能”讨论稿](docs/research/2026-08-14-learning-skills-into-programs.md)仅用于追溯项目纠偏过程，不再定义当前范围。
+1. [AGENTS.md](AGENTS.md)：项目安全、范围和协作规则。
+2. [最新实施进度审计](docs/reviews/2026-08-14-implementation-progress-audit.md)：已有实现证据；其中
+   procedure phase 状态只说明历史 project-local 验证，不定义当前主线。
+3. [ADR-0014：Activation-Memory-first 范围](docs/adr/0014-activation-memory-first-scope.md)。
+4. [Activation-Memory-first 架构设计](docs/design/activation-memory-first-architecture.md)。
+5. [ADR-0007：Prompt 外 Discovery](docs/adr/0007-prompt-external-skill-discovery.md)。
+6. [ADR-0008：Practice Evidence](docs/adr/0008-practice-evidence-and-procedure-promotion.md)：当前只适用
+   Practice Event、Activation evidence、污染、版本和删除规则；procedure 部分冻结。
+7. [ADR-0013：Selection Memory Context](docs/adr/0013-selection-time-skill-memory-context.md)：目前仍是
+   evaluation-only comparator，不代表生产接线。
+8. [双记忆数据合同](docs/design/dual-memory-data-contracts.md)：SkillRecord、PracticeEvent 与
+   ActivationProfile 继续适用；procedure/runtime 合同冻结兼容。
 
-## 双记忆架构
+### 冻结实验方向
+
+只有任务明确涉及已有 procedure 资产的审计、安全修复或历史解释时，才继续读取 ADR-0006、
+ADR-0011、ADR-0012、旧双记忆实施计划和 Phase 3～5 报告。不得用这些材料启动新的 procedure
+active path。
+
+## 目标运行路径
 
 ```mermaid
 flowchart TD
-    T["用户任务"] --> D["External Discovery<br/>本地、自动、无 Router LLM"]
-    SR["SkillRecord<br/>作者 metadata + 版本"] --> D
-    AM["Activation Memory<br/>何时应该使用"] --> D
-    D --> C["Top-K Skill Cards"]
-    C --> S["主 Agent 选择 Skill / Multi-Skill / No-Skill"]
-    S --> R["ExecutionResolver"]
-    PM["Procedural Memory<br/>如何低成本执行"] --> R
-    R -->|"守卫满足"| F["CompiledProcedure 快路径"]
-    R -->|"无程序、失效或越界"| L["读取 SKILL.md 的慢路径"]
-    F --> V["独立 verifier / 后置条件"]
-    L --> V
-    V --> P["PracticeStore<br/>不可变、可归因、隔离的证据"]
-    P --> U1["更新 ActivationProfile 提案"]
-    P --> U2["编译或修订 Procedure 提案"]
-    U1 --> AM
-    U2 --> PM
-    F -->|"守卫或不变量失败"| L
+    T[用户任务] --> E[Exposure Gate]
+    E -->|不展示| N[普通执行 / No-Skill]
+    E -->|展示| B[自适应候选预算]
+    R[缓存的 Skill Registry 与索引] --> B
+    A[Active Activation Memory] --> B
+    B --> C[少量轻量候选卡]
+    C --> S[主 Agent: Skill / Skill Set / No-Skill]
+    S -->|选中| L[按 revision 加载完整父 SKILL.md]
+    S -->|No-Skill| O[有界 observation]
+    L --> O
+    O --> P[Learning Admission]
+    P -->|可归因正例或边界| M[draft / shadow / active ActivationProfile]
+    P -->|mixed / unknown| X[不 consolidation]
+    U[用户查看 / 暂停 / 删除] --> P
+    U --> M
 ```
 
-两种记忆不能混为一个分数：
+三个 seam 必须独立：
 
-- **Activation Memory** 改善“什么时候应当选择父 Skill”。
-- **Procedural Memory** 改善“父 Skill 被选中后，哪些步骤可以少用 LLM”。
-- 使用频率、成熟度和 procedure 数量不得直接提高 Skill 的 discovery 相关性。
-- `CompiledProcedure` 不注册为独立 Skill，避免候选爆炸和父子语义漂移。
+- **Exposure Gate**：是否展示任何 Skill；
+- **Candidate Budget**：展示多少、展示哪些；
+- **Learning Admission**：哪些证据可以形成长期 Activation Memory。
 
-## 当前阶段
+不得用一个 maturity/confidence 总分同时控制三者。
 
-**Phase 2 已于 2026-08-14 通过 Gate P2；当前可启动 Phase 3：已有 Skill 的离线部分编译与晋升。** Practice Store、数据 policy、隔离、物理删除和 docx evaluation replay 已实现；真实宿主 observer、docx verifier 与用户环境写入仍未启用，证据见 Phase 2 Gate 报告。
+## 当前证据边界
 
-Phase 0 已冻结：
+- prompt 外 Registry、BM25、Top-K 注入、Practice Store 和 ActivationProfile 链已有 project-local
+  实现与测试证据；具体状态以最新 audit 和代码为准。
+- Activation Memory calibration 只证明 positive lexical memory 能扩大召回，同时暴露严重
+  No-Skill/hard-confuser 污染；它没有通过 promotion。
+- Selection Memory held-out 支持候选已存在时的结构化 Memory Context，但 retrieval miss 仍是端到端
+  瓶颈；该结果不证明真实 PracticeEvent formation、Pi host production 或自动 promotion。
+- 当前 `.pi/extensions/skill-cortex/index.ts` 已接 discovery、Practice observer、D1 用户控制与 D2
+  Exposure shadow observation；没有启动 procedure execution，也没有启用 exposure suppress 或 cache。
 
-- `SkillRecord`、`ActivationProfile`、`PracticeEvent`、`CompiledProcedure` 和 `ExecutionDecision` 的最小合同；
-- prompt 外、自动、无额外 LLM 的本地 discovery 边界；
-- 版本失效、权限继承、独立验证和安全回退规则；
-- Phase 3 pilot 已由 ADR-0010 改为 `supabase-postgres-best-practices` 的只读 SQL pagination 静态检测；installed Skill 保持只读，仓库只保存 provenance、完整哈希和项目原创评测案例。Phase 2 的 synthetic `docx` replay 仅保留为历史 Practice Store 证据。
+## 当前实施顺序
 
-Phase 2 只建立 append-only、脱敏、隔离且可删除的 Practice Store；没有可信 Practice Store 之前，不允许自动编译、调权或进入程序快路径。
+1. **D0 范围与文档**：ADR-0014、当前设计、旧文档 applicability 同步。
+2. **D1 Learning Admission 与用户控制**：先阻止错误 consolidation，再提供 list/pause/resume/delete。
+3. **D2 Exposure、No-Skill、自适应预算与轻量卡**：第一版只做 shadow observation，不写任务类型
+   分类器；只有简单 deterministic policy 通过冻结评估后才决定是否 suppress。
+4. **D3 Catalog/overlay cache**：Skill 库不变时零重建，变化时正确失效。
+5. **D4 受控 active 验证**：分层关闭 admission、exposure、selection、control、cache 与 host E2E gate。
 
-## ADR 状态
+当前已完成 D0。D1 已实现 Admission component、project-local assessment Store，以及真实 Pi 工具入口的
+status/list/pause/resume/forget：pause 跨重启持久化并阻止新 evidence 与 induction/promotion；evidence
+删除级联 suspend 依赖 profile，profile 删除落 retired tombstone。可信真实宿主 contribution verifier
+已新增一个 fail-closed component seam：只有显式注册且精确绑定 parent Skill revision/source 的 verifier，
+在所需 Practice step/result 已通过后再次独立复核，才可写 positive assessment；未注册 catalog Skill、
+binding drift、重复 registration 或复核不通过均保持零 assessment。当前生产入口没有注册可信 verifier，
+也没有观察 Agent 最终任务结果，因此 G1 与 D1 host/end-to-end 仍未完成，不得据此宣称 D1 完成。
 
-| ADR | 当前地位 | 仍可复用的内容 |
-|---|---|---|
-| [ADR-0006](docs/adr/0006-dual-memory-skill-architecture.md) | **当前有效** | Installed Skill 语义来源、双记忆、Practice Store、ExecutionResolver |
-| [ADR-0007](docs/adr/0007-prompt-external-skill-discovery.md) | **当前有效** | prompt 外自动 Top-K、无 Router LLM、候选卡、补搜与安全隔离 |
-| [ADR-0008](docs/adr/0008-practice-evidence-and-procedure-promotion.md) | **当前有效** | Practice Evidence、双记忆更新、Procedure 晋升、失效和回退 |
-| [ADR-0005](docs/adr/0005-benchmark-data-boundary.md) | **Accepted**，scope 由 ADR-0007/0008 澄清 | 人工 Gold、真实 shadow observation 与 synthetic stress 的证据隔离 |
-| [ADR-0001](docs/adr/0001-routing-only-mvp.md) | 历史，已被 ADR-0006 替代 | routing-only 方案演化记录 |
-| [ADR-0002](docs/adr/0002-general-core-pi-shadow.md) | 历史，已被 ADR-0006/0007 替代 | 通用核心、adapter 和 shadow 思路的来源记录 |
-| [ADR-0003](docs/adr/0003-shadow-local-retriever.md) | 历史，已被 ADR-0007 替代 | 本地检索方案与替代项分析的来源记录 |
-| [ADR-0004](docs/adr/0004-promotion-principle.md) | 历史，相关 scope 已被 ADR-0007/0008 替代 | 成本与质量硬门槛的来源记录 |
+D2 第一切片已实现 Exposure shadow observation：真实 Pi 入口把每轮 retriever 的有界结构化事实与最终
+合法 Skill/No-Skill 选择写入 project-local append-only Store，不保存任务原文。它不返回 active
+show/abstain 决策，当前候选注入行为完全不变；G2 冻结评估与 active policy 尚未开始。
 
-范围说明以[当前研究规范](docs/research/2026-08-14-experience-guided-installed-skill-proceduralization.md)为准；具体架构决策以 ADR-0006～0008 为准。
+D2 后续两个 shadow 切片也已接线：Candidate Budget 并行记录 K=1/2/3/5 的候选前缀；轻量卡并行记录
+作者 description 在 120/240/480 字符预算下的成本与截断数量。两者都随真实 run observation 落盘，
+但不选择推荐预算、不改变生产 Top-K/排序/候选卡，也不生成 Memory hint；G3 仍未关闭。
+
+D3 两层 cache component 已接入现有 discovery service：同一宿主 skills 数组且元数据未变化时，查询复用
+Registry 与静态 BM25 索引；active profile 的 revision、status 或 rerank cue 未变化时，discovery 与
+`search_skills` 共享派生 overlay snapshot。资源 reload、宿主元数据变化、promotion/suspend/delete、revision
+或 cue 变化会分别失效对应层；重建失败不复用旧 catalog，`load_skill` 仍执行当次 source/revision 校验。
+隔离的真实 ExtensionRunner resource-refresh E2E 已验证 unchanged hit、install/source refresh miss、旧 revision
+拒绝与未 refresh source drift fail-closed，G5 在 component + project-local host integration 层 PASS。真实自用
+Pi 会话与 G7 仍未关闭。
 
 ## 不可突破的约束
 
-- 作者提供的原始 Skill 文件与 metadata 保持不可变；学习结果只写入派生层。
-- 熟练度不得扩大权限。删除、发送、付款、凭据等动作始终经过独立 authorization gate。
-- Skill source、工具 schema、权限或相关环境变化后，受影响的 procedure 必须失效。
-- 守卫、前置条件或结果不变量失败时，立即停止快路径并回退原始 `SKILL.md` 慢路径。
-- 评测轨迹、秘密和未经归因的成功不得进入学习数据。
-- 任何新颖性表述都必须先经过完整文献、产品、专利检索和逐项 claim chart。
+- 原始 Skill package、作者 description、scope 和权限保持只读；派生资料不得覆盖。
+- “任务完成”不等于 Skill 有贡献；positive Memory 必须有版本绑定的 contribution evidence。
+- verified negative、near-miss 与 boundary evidence 可以保留，用于 No-Skill 与 hard-confuser 判断。
+- `mixed`、`unknown`、evaluation、synthetic、来源不明或失效证据不能进入 active learning。
+- 全量 catalog、完整 PracticeEvent 与完整 ActivationProfile 留在 prompt 外。
+- 相关不等于必须使用；能直接可靠完成且 Skill 无明显增益时优先 No-Skill。
+- Exposure 第一版不得维护“翻译/改写/问答/聊天”等任务规则表，也不得引入额外 Router LLM。
+- 召回收益不能抵消 No-Skill、安全、隐私、删除或用户控制回归。
+- 所有开发、数据和实验保持 project-local，不修改用户日常 Pi/Codex/Agent 环境或已安装 Skill。

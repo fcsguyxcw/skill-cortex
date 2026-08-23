@@ -1,0 +1,68 @@
+{
+  "kind": "phase3_validation_evidence_envelope",
+  "schemaVersion": 1,
+  "sourceMode": "formal_real_store",
+  "replaySource": "evaluation/envelope_replay",
+  "provesRealProvenance": false,
+  "promotionEligible": false,
+  "parent": {
+    "skillId": "skill:670b8f65dca2ceda3de0d70e92ccd8b5cb832e7c4fd2e5d845b58b19e230cbe2",
+    "skillRevision": "rev:ce271d3393e3f1ee836ab48419f33e4337098ecf809e936b969a8ea8af2a8dec",
+    "sourceHash": "sha256:8e5a86aa92990a706512a6454e3a6a6345a950b454e75a11d048210d0a2ca830",
+    "selectedReferenceHash": "sha256:73c9fa10a3d439bedea0e11b640bd25bf30dd50f0d9006cf85baf7c3151543fa",
+    "procedureRevision": "rev:e782a7f22c885305e5dd1d75022c09181db471a15616175fd7f210af481a14c2",
+    "artifactHash": "sha256:43c1401df70024ae6c8aeede4df756aa57608ede30ed9a13ff3dd5600a5fdd8c"
+  },
+  "evidenceIds": [
+    "obs-79b95a7214bcc42134378bef3428132e2582e32e",
+    "obs-9ee1fe7756f2334733d47fcb67aa16463393401b"
+  ],
+  "operation": {
+    "class": "detect-offset-pagination",
+    "verifierId": "phase3-pagination-structured-finding"
+  },
+  "metrics": {
+    "accuracy": 1,
+    "offsetRecall": 1,
+    "offsetFpr": 0,
+    "expectedAbstainRecall": 1,
+    "abstainRate": 0.2,
+    "unexpectedAbstainRate": 0,
+    "counts": {
+      "total": 15,
+      "offsetExpected": 5,
+      "nonOffsetExpected": 10,
+      "abstainExpected": 3,
+      "nonAbstainExpected": 12,
+      "offsetPredicted": 5,
+      "abstainPredicted": 3,
+      "passed": 15
+    }
+  },
+  "costSummary": {
+    "unit": "latency_ms",
+    "compileAndValidationCost": 0.4633099999999994,
+    "meanSlowPathCost": 5355.19436888889,
+    "meanFastPathCost": 0.0024472740000000006,
+    "meanFallbackCost": 1116.133231111111,
+    "nBreakEven": 0.00010929549077437722,
+    "sampleSize": 45
+  },
+  "gates": [
+    { "gateId": "offset_recall", "status": "pass", "evidenceClasses": ["automated"] },
+    { "gateId": "practice_evidence", "status": "pass", "evidenceClasses": ["automated", "owner_attested"] },
+    { "gateId": "artifact_safety", "status": "pass", "evidenceClasses": ["static_review"] },
+    { "gateId": "source_binding", "status": "pass", "evidenceClasses": ["automated"] },
+    { "gateId": "evidence_independence", "status": "pass", "evidenceClasses": ["owner_attested"] },
+    { "gateId": "verifier_independence", "status": "pass", "evidenceClasses": ["static_review"] },
+    { "gateId": "correctness", "status": "pass", "evidenceClasses": ["automated"] },
+    { "gateId": "fallback", "status": "pass", "evidenceClasses": ["automated"] },
+    { "gateId": "cost", "status": "pass", "evidenceClasses": ["automated"] },
+    { "gateId": "real_cost_evidence", "status": "pass", "evidenceClasses": ["automated", "owner_attested"] },
+    { "gateId": "scope_conformance", "status": "pass", "evidenceClasses": ["static_review"] }
+  ],
+  "envelopeId": "envelope:839811d87efd2f25671e5b7414b0e312",
+  "integrity": {
+    "canonicalBytesHash": "b7003b8854e86b5e41fe60551578acd8755f06c422df52cf72cadc7d9d5ee99c"
+  }
+}

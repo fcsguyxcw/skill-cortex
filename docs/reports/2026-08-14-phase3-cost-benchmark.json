@@ -1,0 +1,418 @@
+{
+  "frozenBasis": {
+    "inputSet": "HELDOUT_CASES (src/evaluation/phase3/cases.ts, 15 frozen cases)",
+    "compileRepeats": 30,
+    "compileComponents": [
+      "inducePhase3ProcedureDraft (frozen contract events, measurement-only input)",
+      "replayHeldoutPagination (detector + evaluate; evaluate 内含每例独立 verify())"
+    ],
+    "fastRounds": 5,
+    "fastIterationsPerCase": 2000,
+    "slowBatches": 3,
+    "slowInvocation": "node <PI_CLI_PATH> -p -ne --no-session --provider <provider> --model <model> --thinking off",
+    "fallbackAbstainCaseIds": [
+      "H12",
+      "H13",
+      "H14"
+    ],
+    "nBreakEvenThreshold": 10
+  },
+  "slowPathConfig": {
+    "piCliPath": "C:/Users/a1324/AppData/Roaming/npm/node_modules/@earendil-works/pi-coding-agent/dist/cli.js",
+    "skillDir": "C:/Users/a1324/.agents/skills/supabase-postgres-best-practices",
+    "provider": "deepseek",
+    "model": "deepseek-v4-flash"
+  },
+  "measuredAt": "2026-08-15T16:26:57.981Z",
+  "compileValidation": {
+    "component": "compile_validation",
+    "meanMs": 0.4633099999999994,
+    "stddevMs": 1.1072836811703706,
+    "samples": 30
+  },
+  "fastPath": {
+    "component": "fast_path",
+    "meanMs": 0.0024472740000000006,
+    "stddevMs": 0.001369919301214493,
+    "samples": 75,
+    "perCase": {
+      "H01": {
+        "meanMs": 0.0023526899999999898,
+        "stddevMs": 0.0003147186171804911,
+        "samples": 5
+      },
+      "H02": {
+        "meanMs": 0.002350659999999993,
+        "stddevMs": 0.00036508968144827273,
+        "samples": 5
+      },
+      "H03": {
+        "meanMs": 0.0031797799999999966,
+        "stddevMs": 0.00045692071877952124,
+        "samples": 5
+      },
+      "H04": {
+        "meanMs": 0.003718680000000009,
+        "stddevMs": 0.000348733785644579,
+        "samples": 5
+      },
+      "H05": {
+        "meanMs": 0.004008470000000008,
+        "stddevMs": 0.0004034342551767292,
+        "samples": 5
+      },
+      "H06": {
+        "meanMs": 0.0011351099999999973,
+        "stddevMs": 0.00022522851839852556,
+        "samples": 5
+      },
+      "H07": {
+        "meanMs": 0.001298490000000001,
+        "stddevMs": 0.0002726182183934174,
+        "samples": 5
+      },
+      "H08": {
+        "meanMs": 0.0014715499999999964,
+        "stddevMs": 0.00031309379784659057,
+        "samples": 5
+      },
+      "H09": {
+        "meanMs": 0.0034874100000000055,
+        "stddevMs": 0.0006096715523542072,
+        "samples": 5
+      },
+      "H10": {
+        "meanMs": 0.005137500000000001,
+        "stddevMs": 0.0010713215547864224,
+        "samples": 5
+      },
+      "H11": {
+        "meanMs": 0.0035427200000000053,
+        "stddevMs": 0.0006658386653311696,
+        "samples": 5
+      },
+      "H12": {
+        "meanMs": 0.0020841499999999964,
+        "stddevMs": 0.00028496875925265757,
+        "samples": 5
+      },
+      "H13": {
+        "meanMs": 0.0011665999999999883,
+        "stddevMs": 0.00016827098680402563,
+        "samples": 5
+      },
+      "H14": {
+        "meanMs": 0.000017220000000008895,
+        "stddevMs": 0.000010515203279071546,
+        "samples": 5
+      },
+      "H15": {
+        "meanMs": 0.001758080000000001,
+        "stddevMs": 0.0003766106105780909,
+        "samples": 5
+      }
+    }
+  },
+  "slowPath": {
+    "component": "slow_path",
+    "meanMs": 5355.19436888889,
+    "stddevMs": 678.2441217301716,
+    "samples": 45,
+    "perCase": {
+      "H01": {
+        "meanMs": 5661.846599999993,
+        "stddevMs": 263.6869940076376,
+        "samples": 3
+      },
+      "H02": {
+        "meanMs": 4787.757533333338,
+        "stddevMs": 1262.2006995273427,
+        "samples": 3
+      },
+      "H03": {
+        "meanMs": 5829.620233333338,
+        "stddevMs": 96.9003806114474,
+        "samples": 3
+      },
+      "H04": {
+        "meanMs": 5339.013033333336,
+        "stddevMs": 1052.4129235195442,
+        "samples": 3
+      },
+      "H05": {
+        "meanMs": 5352.741233333337,
+        "stddevMs": 1047.3328486200421,
+        "samples": 3
+      },
+      "H06": {
+        "meanMs": 5846.815100000003,
+        "stddevMs": 202.13200450633738,
+        "samples": 3
+      },
+      "H07": {
+        "meanMs": 4233.857166666664,
+        "stddevMs": 212.73654824707947,
+        "samples": 3
+      },
+      "H08": {
+        "meanMs": 5539.612833333337,
+        "stddevMs": 842.4629003867918,
+        "samples": 3
+      },
+      "H09": {
+        "meanMs": 6689.003166666676,
+        "stddevMs": 549.0648536380565,
+        "samples": 3
+      },
+      "H10": {
+        "meanMs": 4163.9058000000105,
+        "stddevMs": 56.186006354166395,
+        "samples": 3
+      },
+      "H11": {
+        "meanMs": 5400.542499999999,
+        "stddevMs": 1284.8309840138074,
+        "samples": 3
+      },
+      "H12": {
+        "meanMs": 5193.002100000001,
+        "stddevMs": 1024.8936821691589,
+        "samples": 3
+      },
+      "H13": {
+        "meanMs": 5380.448833333328,
+        "stddevMs": 1169.9382512816014,
+        "samples": 3
+      },
+      "H14": {
+        "meanMs": 6168.547533333335,
+        "stddevMs": 74.58188326238975,
+        "samples": 3
+      },
+      "H15": {
+        "meanMs": 4741.201866666665,
+        "stddevMs": 1248.8221149746241,
+        "samples": 3
+      }
+    },
+    "rawSamplesMs": [
+      5610.6239,
+      6243.5499,
+      5940.499900000001,
+      5833.580300000001,
+      4146.272499999999,
+      5654.1896000000015,
+      4235.059500000003,
+      4572.1888000000035,
+      7318.244000000006,
+      4117.105900000002,
+      5909.082900000001,
+      5712.327299999997,
+      6138.07680000001,
+      6104.12509999999,
+      6172.635599999994,
+      5427.5291,
+      4120.2935,
+      5761.181999999986,
+      6053.0437999999995,
+      5883.649999999994,
+      5828.983600000007,
+      4445.989999999991,
+      5934.940499999997,
+      6441.570500000016,
+      4148.393100000016,
+      3939.279899999994,
+      5854.2809000000125,
+      5970.270699999994,
+      6250.253900000011,
+      4176.497499999998,
+      5947.386799999978,
+      3999.429200000013,
+      5787.178800000023,
+      4130.415000000008,
+      6028.301200000016,
+      6057.272100000002,
+      4020.521999999997,
+      6111.709200000012,
+      6307.195000000007,
+      4226.2184000000125,
+      6353.2647,
+      4012.3980999999912,
+      4032.9989999999816,
+      6151.263600000006,
+      3874.4725000000035
+    ]
+  },
+  "fallback": {
+    "component": "fallback",
+    "meanMs": 1116.133231111111,
+    "stddevMs": 2318.8848657098897,
+    "samples": 9,
+    "perCase": {
+      "H01": {
+        "meanMs": 0,
+        "stddevMs": 0,
+        "samples": 0
+      },
+      "H02": {
+        "meanMs": 0,
+        "stddevMs": 0,
+        "samples": 0
+      },
+      "H03": {
+        "meanMs": 0,
+        "stddevMs": 0,
+        "samples": 0
+      },
+      "H04": {
+        "meanMs": 0,
+        "stddevMs": 0,
+        "samples": 0
+      },
+      "H05": {
+        "meanMs": 0,
+        "stddevMs": 0,
+        "samples": 0
+      },
+      "H06": {
+        "meanMs": 0,
+        "stddevMs": 0,
+        "samples": 0
+      },
+      "H07": {
+        "meanMs": 0,
+        "stddevMs": 0,
+        "samples": 0
+      },
+      "H08": {
+        "meanMs": 0,
+        "stddevMs": 0,
+        "samples": 0
+      },
+      "H09": {
+        "meanMs": 0,
+        "stddevMs": 0,
+        "samples": 0
+      },
+      "H10": {
+        "meanMs": 0,
+        "stddevMs": 0,
+        "samples": 0
+      },
+      "H11": {
+        "meanMs": 0,
+        "stddevMs": 0,
+        "samples": 0
+      },
+      "H12": {
+        "meanMs": 5193.002100000001,
+        "stddevMs": 1024.8936821691589,
+        "samples": 3
+      },
+      "H13": {
+        "meanMs": 5380.448833333328,
+        "stddevMs": 1169.9382512816014,
+        "samples": 3
+      },
+      "H14": {
+        "meanMs": 6168.547533333335,
+        "stddevMs": 74.58188326238975,
+        "samples": 3
+      },
+      "H15": {
+        "meanMs": 0,
+        "stddevMs": 0,
+        "samples": 0
+      }
+    }
+  },
+  "realCostEvidence": {
+    "unit": "latency_ms",
+    "compileAndValidationCost": 0.4633099999999994,
+    "meanSlowPathCost": 5355.19436888889,
+    "meanFastPathCost": 0.0024472740000000006,
+    "meanFallbackCost": 1116.133231111111,
+    "nBreakEven": 0.00010929549077437722,
+    "sampleSize": 45
+  },
+  "evidenceValidation": {
+    "ok": true
+  },
+  "slowPathOutputClasses": {
+    "H01": [
+      "uses_offset",
+      "uses_offset",
+      "uses_offset"
+    ],
+    "H02": [
+      "uses_offset",
+      "uses_offset",
+      "uses_offset"
+    ],
+    "H03": [
+      "uses_offset",
+      "uses_offset",
+      "uses_offset"
+    ],
+    "H04": [
+      "uses_offset",
+      "uses_offset",
+      "uses_offset"
+    ],
+    "H05": [
+      "uses_offset",
+      "uses_offset",
+      "uses_offset"
+    ],
+    "H06": [
+      "abstain",
+      "no_pagination",
+      "abstain"
+    ],
+    "H07": [
+      "abstain",
+      "no_pagination",
+      "no_pagination"
+    ],
+    "H08": [
+      "uses_keyset",
+      "uses_offset",
+      "no_pagination"
+    ],
+    "H09": [
+      "uses_offset",
+      "uses_offset",
+      "no_pagination"
+    ],
+    "H10": [
+      "uses_keyset",
+      "uses_keyset",
+      "abstain"
+    ],
+    "H11": [
+      "uses_keyset",
+      "uses_keyset",
+      "uses_keyset"
+    ],
+    "H12": [
+      "uses_offset",
+      "uses_offset",
+      "uses_offset"
+    ],
+    "H13": [
+      "uses_offset",
+      "uses_offset",
+      "abstain"
+    ],
+    "H14": [
+      "abstain",
+      "abstain",
+      "abstain"
+    ],
+    "H15": [
+      "no_pagination",
+      "no_pagination",
+      "abstain"
+    ]
+  }
+}

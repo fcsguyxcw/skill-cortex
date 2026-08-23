@@ -1,8 +1,20 @@
 # 双记忆 Skill 系统：数据合同
 
-状态：Accepted design contract — 2026-08-14  
+状态：Partially superseded by ADR-0014 — 2026-08-22
 适用范围：MVP 与后续多 Agent 实施  
 权威决策：ADR-0006、ADR-0007、ADR-0008
+
+Applicability：`SkillRecord`、`SkillCandidate`、`ActivationProfile`、`PracticeEvent`、数据隔离与删除
+继续作为当前主线兼容合同；`CompiledProcedure`、`ExecutionDecision` 和 procedure 状态机冻结，只约束
+既有实验资产。新的 Exposure、Candidate Budget、Learning Admission 与用户控制设计见
+`docs/design/activation-memory-first-architecture.md`，对应 schema 在进入实施阶段时另行冻结。
+
+D2 已冻结并实现 `ExposureObservationRecord`：它只保存 retriever 派生的候选数量、前两名分数、首候选
+匹配字段、精确作者声明引用、同 run 的最终合法 `selectedSkillIds`，以及 tenant/route/time 审计字段；
+不保存任务原文，不产生 `show/abstain` 决策。Store 为 project-local、append-only、tenant hash 隔离。
+同一记录可选携带两个独立 shadow comparator：`candidateBudget` 保存 K=1/2/3/5 的有序候选 ID 前缀；
+`cardProjection` 保存 description 120/240/480 字符臂的总字符数与截断数量。两者都不是 active decision，
+不修改生产候选集合、排序或模型可见作者 description。
 
 ## 1. 合同目标
 
@@ -52,6 +64,12 @@ interface DependencyFingerprint {
 ```
 
 纯确定性 procedure 不得因为无关模型变更而失效；含 `llm_holes` 的 procedure 必须绑定相关模型与 prompt。
+
+`permissionPolicyHash` 的省略/必填语义（ADR-0011）：
+
+- effectless/permissionless procedure（`declaredEffects=[]` 且 `requiredPermissions=[]`）必须**显式省略**该字段；省略语义为“procedure 未绑定该字段 ⇒ 依赖指纹匹配不构成约束”。不得使用占位值（如 `sha256:4f…`）代替省略。
+- 任一 `declaredEffects` 或 `requiredPermissions` 非空 ⇒ `permissionPolicyHash` 必填，且必须是可核验 policy 来源的真实指纹（fail-closed；缺失/占位 ⇒ 不满足快路径 eligibility）。
+- 省略 fingerprint 不降低授权要求：运行时授权仍由 procedure 之外的宿主 gate 逐次检查（ADR-0008、ADR-0012 §5）。
 
 ## 4. 核心实体
 
@@ -207,6 +225,43 @@ interface PracticeEvent {
 - 把 `evaluation` 或 `synthetic` 事件混入生产学习数据。
 - 默认保存秘密、完整文件、完整对话或工具原始输出。
 
+#### 4.4.1 LearningEvidenceAssessment（D1 第一切片）
+
+`PracticeEvent` 只表示 observation。Activation induction 不再直接信任事件中的任务成功、verifier pass
+或 caller 自报 attribution；必须另外收到一个独立、版本绑定的评估：
+
+```ts
+interface LearningEvidenceAssessment {
+  schemaVersion: 1;
+  assessmentId: string;
+  eventId: string;
+  tenantScope: string;
+  parentSkillId: string;
+  parentSkillRevision: string;
+  sourceHash: string;
+  taskOutcome: "verified_success" | "verified_failure" | "unknown";
+  skillContribution: "verified" | "disproved" | "mixed" | "unknown";
+  evidenceKind: "positive" | "near_miss" | "boundary" | "external_failure";
+  verifier: {
+    kind: "independent_verifier" | "user_confirmation";
+    result: "pass" | "fail" | "unknown";
+  };
+  assessedAt: string;
+}
+```
+
+该评估必须精确绑定 `tenantScope + eventId + parentSkillId + parentSkillRevision + sourceHash`。缺失、绑定失配、
+verifier 非 pass、`mixed/unknown`、evaluation/synthetic、frozen procedure 或 external failure 均不得
+进入 consolidation。
+
+所有者：Learning Assessment Store。写入语义为 project-local、append-only、tenant hash 隔离；
+assessmentId 与 eventId 在 tenant 内均不可覆盖，且写入前必须从 Practice Store 读回已存在的 real
+`skill_md` event 并完成绑定校验。host induction 只能按 tenant/event 从 Store read seam 消费。
+用户控制已实现为 project-local 持久化状态与真实 Pi 工具：暂停阻止新 PracticeEvent 以及
+induction/promotion；evidence 删除同时失效 PracticeEvent/assessment 并级联 suspend 依赖 profile；
+profile 删除保留 retired tombstone。可信真实宿主 contribution verifier 尚未实现；在该边界关闭前
+不得宣称 G1 或 D1 end-to-end complete。
+
 ### 4.5 CompiledProcedure
 
 `CompiledProcedure` 是父 Skill 的部分执行快路径，而不是替代 Skill 的新 Skill。
@@ -258,6 +313,8 @@ procedure 必须满足：
 - 每个 covered step 必须映射到父 `SKILL.md` 条款；禁止自动化步骤不得出现在 artifact 的可执行路径中。
 - 任一 runtime guard 为 `fail` 或 `unknown` 时，必须在下一 effectful step 前停止快路径并记录 `PracticeEvent`；只能在不会重复既有副作用时回退。
 - 中途失败不得自动重放已发生的非幂等动作；MVP 直接禁止此类 procedure。
+- 选中 Skill 身份必须与 procedure 绑定一致：`selectedSkill.skillId === procedure.parentSkillId`；不一致 ⇒ `parent_skill_mismatch`，不得执行（ADR-0012 §3）。
+- artifact 执行必须返回结构化 `disposition ∈ {completed, abstained}`；`abstained` 表示无副作用放弃/越界，走回退路径（ADR-0012 §4）。
 
 ### 4.6 ExecutionDecision
 
@@ -266,6 +323,7 @@ interface ExecutionDecision {
   decisionId: string;
   skillId: string;
   skillRevision: string;
+  executionContext: "shadow_replay" | "canary" | "active" | "unknown";
   mode: "compiled_procedure" | "skill_md" | "abstain";
   procedureId?: string;
   checkedPreconditions: Array<{ predicateId: string; result: boolean | "unknown" }>;
@@ -273,6 +331,7 @@ interface ExecutionDecision {
   reason:
     | "eligible_procedure"
     | "no_procedure"
+    | "parent_skill_mismatch"
     | "revision_mismatch"
     | "dependency_mismatch"
     | "precondition_failed"
@@ -286,6 +345,18 @@ interface ExecutionDecision {
 
 所有者：Execution Resolver。  
 `authorizationRequired` 只是声明，真正授权由外部 gate 完成。
+
+`executionContext` 声明本次执行所处的释放门控上下文（ADR-0012）：`shadow_replay` 允许
+`validated/canary/active` 且不产生用户可见 effect；`canary` 只允许 `canary`；`active` 只允许
+`active`；resolver 将缺失/非法输入规范化为 `unknown` 并 fail closed（不进入快路径）。
+
+每次执行须携带显式的 authorization claims 对象，同时包含 `effects` 与 `permissions` 两数组
+（两维分离，不合并、不写“并集”）；数组为空当且仅当 procedure 对应声明为空；不得用占位
+字符串（ADR-0012 §5）。当前 artifact 没有 step-level effect plan，`requestedEffects` 必须与
+`declaredEffects` 精确相等；Phase 4 resolver 已按该契约实现集合精确相等检查（顺序不敏感，子集、超集与重复项均不放行）。
+
+`parent_skill_mismatch` 表示 `selectedSkill.skillId !== procedure.parentSkillId`（选中了错误的
+父 Skill），在 revision 检查之前判定（ADR-0012 §3）。
 
 ## 5. 逻辑接口
 
@@ -360,7 +431,12 @@ draft → validated → canary → active → suspended → retired
 - [ ] Evaluation trace 不进入生产学习库。
 - [ ] `firstAttributableFailureStepId` 若存在，必须引用当次 `stepSummaries` 中失败的步骤；未知时保持空值。
 - [ ] 权限 gate 在快慢路径中行为一致。
+- [ ] Authorization claims 同时携带 `effects` 与 `permissions` 两数组（两维分离，不合并）；数组为空当且仅当 procedure 对应声明为空；不得用占位字符串（ADR-0012 §5）。
 - [ ] 失败可回到父 Skill 或合法 abstain，且不重复非幂等副作用。
+- [ ] ExecutionContext 缺失/unknown 时不进入快路径（fail-closed）；`shadow_replay` 不产生用户可见 effect；`canary` 只允许 `canary`；`active` 只允许 `active`（ADR-0012）。
+- [ ] `selectedSkill.skillId === procedure.parentSkillId` 不成立时返回 `parent_skill_mismatch` 并走慢路径/拒绝（ADR-0012）。
+- [ ] effectless/permissionless procedure 显式省略 `permissionPolicyHash`；声明非空权限时该字段必填且为真实指纹；占位值不得作为 binding evidence（ADR-0011）。
+- [ ] artifact 执行返回结构化 `disposition ∈ {completed, abstained}`（ADR-0012）。
 - [ ] ActivationProfile 和 Procedure 均可按 evidence 删除、暂停与回滚。
 
 ## 10. 仍待 Phase 0 冻结的决定

@@ -1,8 +1,12 @@
 # 双记忆 Skill 系统：多 Agent 实施计划
 
-状态：Accepted plan — 2026-08-14  
+状态：Frozen historical plan — 2026-08-22
 目标：在项目目录内实现并验证 prompt 外 discovery，以及已安装 Skill 的经验驱动、渐进式部分程序化。  
 执行方式：每个 Phase 可在新的 Agent 上下文中独立执行；上游 gate 未通过不得启动下游 active path。
+
+Applicability：本计划记录 Phase 0～7 的历史实施与验收结构，不再授权新的 procedure 主线工作。
+当前实施顺序以 ADR-0014 与 `docs/design/activation-memory-first-architecture.md` 的 D0～D4/G1～G7
+为准。已有 procedure gate 继续作为 frozen 资产的安全合同。
 
 ## 1. 目标与成功定义
 
@@ -302,6 +306,8 @@ N_break-even = 编译与验证总成本
 - 不用成本收益抵消成功率、安全、授权或回退回归。
 
 Gate P3：一个 procedure 达到 `validated`，完整证据、回放报告和上一稳定回退点存在。
+
+**实施状态：BLOCKED — 2026-08-14。** Phase 3 detector、draft、独立 verifier 与 held-out replay 已完成，但 Gate P3 因真实 Practice evidence 为 0、且首个完整延迟样本 `N_break-even=10.129724 > 10` 未通过。procedure 保持 `draft`；不得启动 Phase 4。证据见 `docs/reports/2026-08-14-phase3-gate-report.md`。
 
 ## 9. Phase 4：Execution Resolver、Guard 与安全回退
 

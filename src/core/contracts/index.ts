@@ -1,5 +1,10 @@
 export type SkillScope = "project" | "user" | "temporary";
 
+/** 释放门控上下文（ADR-0012 §1）：合法请求上下文三态。 */
+export type ExecutionContext = "shadow_replay" | "canary" | "active";
+/** 决策可观察上下文：合法三态 + unknown（resolver 对缺失/非法输入规范化，绝不伪造合法值）。 */
+export type DecisionExecutionContext = ExecutionContext | "unknown";
+
 export interface DependencyFingerprint {
   sourceHash: string;
   toolSchemaHash?: string;
@@ -41,6 +46,52 @@ export interface SkillCandidate {
     | { kind: "declared_text"; field: "name" | "description" | "alias" }
     | { kind: "learned_cue"; cueId: string }
   >;
+}
+
+export type ExposureMatchField = "name" | "description" | "alias" | "learned_cue";
+
+/** D2 shadow-only Exposure Gate observation；只含检索派生事实，不含任务原文或 active 决策。 */
+export interface ExposureObservation {
+  baselineWouldInject: boolean;
+  candidateCount: number;
+  topScore?: number;
+  secondScore?: number;
+  topMatchFields: readonly ExposureMatchField[];
+  exactDeclaredReference: boolean;
+}
+
+export type ShadowCandidateBudget = 1 | 2 | 3 | 5;
+export interface CandidateBudgetShadowObservation {
+  variants: ReadonlyArray<{
+    budget: ShadowCandidateBudget;
+    candidateSkillIds: readonly string[];
+  }>;
+}
+
+export interface LightweightSkillCard {
+  skillId: string;
+  skillRevision: string;
+  name: string;
+  displayDescription: string;
+}
+
+export interface CardProjectionShadowObservation {
+  baselineDescriptionChars: number;
+  variants: ReadonlyArray<{
+    maxDescriptionChars: 120 | 240 | 480;
+    totalDescriptionChars: number;
+    truncatedCandidateCount: number;
+  }>;
+}
+
+export interface ExposureObservationRecord extends ExposureObservation {
+  schemaVersion: 1;
+  routeDecisionId: string;
+  tenantScope: string;
+  observedAt: string;
+  selectedSkillIds: readonly string[];
+  candidateBudget?: CandidateBudgetShadowObservation;
+  cardProjection?: CardProjectionShadowObservation;
 }
 
 export interface ActivationProfile {
@@ -110,6 +161,40 @@ export interface PracticeEvent {
   retentionClass: string;
 }
 
+export type LearningTaskOutcome = "verified_success" | "verified_failure" | "unknown";
+export type SkillContribution = "verified" | "disproved" | "mixed" | "unknown";
+export type LearningEvidenceKind = "positive" | "near_miss" | "boundary" | "external_failure";
+
+/**
+ * PracticeEvent 之外的独立学习评估。事件只记录 observation；本评估才声明任务结果、
+ * Skill 贡献与 evidence kind，并绑定父 Skill revision/source。
+ */
+export interface LearningEvidenceAssessment {
+  schemaVersion: 1;
+  assessmentId: string;
+  eventId: string;
+  tenantScope: string;
+  parentSkillId: string;
+  parentSkillRevision: string;
+  sourceHash: string;
+  taskOutcome: LearningTaskOutcome;
+  skillContribution: SkillContribution;
+  evidenceKind: LearningEvidenceKind;
+  verifier: {
+    kind: "independent_verifier" | "user_confirmation";
+    result: "pass" | "fail" | "unknown";
+  };
+  assessedAt: string;
+}
+
+export interface LearningAdmissionDecision {
+  decision: "positive" | "boundary" | "reject";
+  taskOutcome: LearningTaskOutcome;
+  skillContribution: SkillContribution;
+  reason: string;
+  evidenceIds: readonly string[];
+}
+
 export interface CompiledProcedure {
   schemaVersion: 1;
   procedureId: string;
@@ -140,6 +225,23 @@ export interface CompiledProcedure {
   artifactHash: string;
   evidenceIds: string[];
   validationReportId: string;
+  /** canary 晋升绑定的 shadow replay 报告 ID（仅 canary 及以上状态写入；validated 无此字段）。 */
+  canaryReportId?: string;
+  /** active 晋升绑定的 canary→active 发布报告 ID（仅 active 及以上状态写入）。 */
+  activeReportId?: string;
+  /**
+   * suspended 的来源发布状态（suspended 时必填，显式保存，不靠自由文本推断）：
+   * validated/canary/active 之一（suspend 输入 status 自动派生，不可伪造）。
+   * 恢复资格判定依据：resume 仅允许 suspendedFrom="active"（曾发布为 active）。
+   */
+  suspendedFrom?: "validated" | "canary" | "active";
+  /**
+   * 受控暂停类别（suspended 时必填）：manual（可逆）/ dependency_drift / evidence_cascade。
+   * 恢复资格判定依据：drift/evidence 暂停必须重新验证，不得直接 resume。
+   */
+  suspendKind?: "manual" | "dependency_drift" | "evidence_cascade";
+  /** suspended/retired 的失效/废弃原因（仅人类可读审计，不作恢复判定）。 */
+  lifecycleReason?: string;
   previousStableRevision?: string;
   createdAt: string;
 }
@@ -148,6 +250,8 @@ export interface ExecutionDecision {
   decisionId: string;
   skillId: string;
   skillRevision: string;
+  /** 本次执行所处的释放门控上下文（ADR-0012）；unknown = 缺失/非法输入规范化的 fail-closed 值。 */
+  executionContext: DecisionExecutionContext;
   mode: "compiled_procedure" | "skill_md" | "abstain";
   procedureId?: string;
   checkedPreconditions: Array<{ predicateId: string; result: boolean | "unknown" }>;
@@ -155,6 +259,7 @@ export interface ExecutionDecision {
   reason:
     | "eligible_procedure"
     | "no_procedure"
+    | "parent_skill_mismatch"
     | "revision_mismatch"
     | "dependency_mismatch"
     | "precondition_failed"

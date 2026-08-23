@@ -8,7 +8,7 @@
  * 临时数据：mkdtemp 于项目根（project-local），after() 用 fs/promises.rm 清理。
  */
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import path from "node:path";
 import { after, describe, it } from "node:test";
@@ -18,9 +18,13 @@ import {
   clampTopK,
   createDiscoveryServices,
   mapSkills,
+  MAX_SKILL_MD_BYTES,
+  runLoadSkill,
   runSearchTool,
   type AdapterState,
+  type LoadableSkill,
 } from "./core.ts";
+import type { ActivationProfile } from "../../core/contracts/index.ts";
 import type { HostSkillLike, HostToolResultLike } from "./host.ts";
 
 /** 断言辅助：把窄接口的 details: unknown 具象化为 search_skills 返回形状。 */
@@ -136,6 +140,76 @@ describe("createDiscoveryServices.run（摄入 + BM25）", () => {
     assert.equal(outcome.recordCount, 6);
     assert.equal(services.state.ready, true);
     assert.equal(services.state.recordCount, 6);
+  });
+
+  it("同一宿主 catalog 的 query 变化复用 Registry 与静态索引", async () => {
+    const services = createDiscoveryServices({ topK: 3 });
+    const skills = makeDocxFamily(3);
+
+    const first = await services.run("docx report", skills);
+    assert.equal(first.ok, true);
+    assert.equal(first.cache?.catalog, "miss");
+    const firstIndex = services.state.index;
+    const firstCatalog = services.state.catalog;
+
+    const second = await services.run("word document", skills);
+    assert.equal(second.ok, true);
+    assert.equal(second.cache?.catalog, "hit");
+    assert.strictEqual(services.state.index, firstIndex, "query 变化不得重建静态索引");
+    assert.strictEqual(services.state.catalog, firstCatalog, "query 变化不得重新摄入 catalog");
+  });
+
+  it("资源 reload 的新数组即使元数据相同也重建，以重新核验 package revision", async () => {
+    const services = createDiscoveryServices({ topK: 3 });
+    const skills = makeDocxFamily(2);
+    await services.run("docx", skills);
+    const firstIndex = services.state.index;
+
+    const refreshedSkills = [...skills];
+    const refreshed = await services.run("docx", refreshedSkills);
+    assert.equal(refreshed.ok, true);
+    assert.equal(refreshed.cache?.catalog, "miss");
+    assert.notStrictEqual(services.state.index, firstIndex, "宿主 reload 不得复用旧 revision snapshot");
+  });
+
+  it("同一数组的宿主元数据变化会失效 cache 并更新候选", async () => {
+    const services = createDiscoveryServices({ topK: 3 });
+    const skills = makeDocxFamily(2);
+    await services.run("docx", skills);
+    const firstIndex = services.state.index;
+
+    skills[0]!.name = "pdf-tools";
+    skills[0]!.description = "Read and inspect PDF documents.";
+    const changed = await services.run("pdf", skills);
+    assert.equal(changed.ok, true);
+    assert.equal(changed.cache?.catalog, "miss");
+    assert.notStrictEqual(services.state.index, firstIndex);
+    assert.ok(changed.candidates.some((candidate) => candidate.name === "pdf-tools"));
+  });
+
+  it("catalog 失效后重建失败必须清空旧 snapshot，不得继续服务 stale index", async () => {
+    const services = createDiscoveryServices({ topK: 3 });
+    const skills = makeDocxFamily(2);
+    const first = await services.run("docx", skills);
+    assert.equal(first.ok, true);
+
+    skills[0]!.filePath = path.join(skills[0]!.baseDir, "missing-SKILL.md");
+    const failed = await services.run("docx", skills);
+    assert.equal(failed.ok, false);
+    assert.equal(services.state.ready, false);
+    assert.equal(services.state.index, undefined);
+    assert.equal(services.state.catalog, undefined);
+    assert.deepEqual(detailsOf(runSearchTool(services.state, { query: "docx" })).matches, []);
+  });
+
+  it("shadow comparators 不改变生产 topK：topK=1 仍只返回 1，但并行观察到 K=5", async () => {
+    const services = createDiscoveryServices({ topK: 1 });
+    const outcome = await services.run("docx report", makeDocxFamily(6));
+    assert.equal(outcome.ok, true);
+    assert.equal(outcome.candidates.length, 1);
+    assert.deepEqual(outcome.candidateBudget?.variants.map((item) => item.budget), [1, 2, 3, 5]);
+    assert.ok((outcome.candidateBudget?.variants.at(-1)?.candidateSkillIds.length ?? 0) > 1);
+    assert.deepEqual(outcome.cardProjection?.variants.map((item) => item.maxDescriptionChars), [120, 240, 480]);
   });
 
   it("disableModelInvocation=true 被过滤（不进 Registry、不进候选）", async () => {
@@ -260,5 +334,379 @@ describe("runSearchTool（search_skills 执行逻辑）", () => {
     const details = detailsOf(result);
     assert.equal(details.count, 0);
     assert.deepEqual(details.matches, []);
+  });
+
+  it("overlayProfiles 生效：revision 匹配的 active profile 追加 learned_cue evidence", async () => {
+    // 先摄入拿到真实 skillId/revision，再把 profile 挂到 createDiscoveryServices options
+    // （state 初始化时写入 overlayProfiles/overlayOptions，runSearchTool 从 state 读取）。
+    let profile: ActivationProfile | undefined;
+    const services = createDiscoveryServices({
+      topK: 5,
+      overlayOptions: { aliasBoost: 1 },
+      overlayProfiles: () => (profile ? [profile] : []),
+    });
+    await services.run("docx", makeDocxFamily(3));
+    const entry = [...services.state.catalog!.values()].find((e) => e.record.name === "docx-a")!;
+    profile = {
+      schemaVersion: 1,
+      profileId: "profile-docx-a",
+      parentSkillId: entry.record.skillId,
+      parentSkillRevision: entry.record.skillRevision,
+      status: "active",
+      learnedAliases: [{ cueId: "cue-docx", text: "docx", evidenceIds: [] }],
+      positiveExamples: [],
+      nearMissExamples: [],
+      environmentCues: [],
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    };
+    const result = runSearchTool(services.state, { query: "docx" });
+    const details = detailsOf(result);
+    const target = details.matches.find(
+      (candidate) => (candidate as { skillId: string }).skillId === entry.record.skillId,
+    ) as { evidence: Array<{ kind: string; cueId?: string }> } | undefined;
+    assert.ok(target, "docx-a 候选必须在 matches 中");
+    assert.ok(
+      target.evidence.some(
+        (evidence) => evidence.kind === "learned_cue" && evidence.cueId === "cue-docx",
+      ),
+      "active profile 命中应追加 learned_cue evidence",
+    );
+  });
+
+  it("overlay snapshot：同内容新数组复用；cue/status 变化分别失效", async () => {
+    let profiles: ActivationProfile[] = [];
+    const skills = makeDocxFamily(2);
+    const services = createDiscoveryServices({
+      topK: 5,
+      overlayOptions: { aliasBoost: 1 },
+      overlayProfiles: () => profiles,
+    });
+    await services.run("docx", skills);
+    const entry = [...services.state.catalog!.values()].find((item) => item.record.name === "docx-a")!;
+    const active: ActivationProfile = {
+      schemaVersion: 1,
+      profileId: "profile-cache-docx-a",
+      parentSkillId: entry.record.skillId,
+      parentSkillRevision: entry.record.skillRevision,
+      status: "active",
+      learnedAliases: [{ cueId: "cue-cache-docx", text: "word-cache", evidenceIds: [] }],
+      positiveExamples: [],
+      nearMissExamples: [],
+      environmentCues: [],
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    };
+
+    profiles = [active];
+    const first = await services.run("docx word-cache", skills);
+    assert.ok(first.candidates.some((candidate) => candidate.name === "docx-a"));
+    assert.equal(first.cache?.overlay, "miss");
+    const firstSnapshot = services.state.overlaySnapshot;
+    assert.ok(firstSnapshot, "active profile 应建立派生 overlay snapshot");
+
+    profiles = [{ ...active, learnedAliases: active.learnedAliases.map((cue) => ({ ...cue })) }];
+    await services.run("docx word-cache", skills);
+    assert.equal(services.state.lastOverlayCacheStatus, "hit");
+    runSearchTool(services.state, { query: "docx word-cache" });
+    assert.strictEqual(services.state.overlaySnapshot, firstSnapshot, "同内容的新数组不得重建 overlay snapshot");
+
+    profiles = [{
+      ...active,
+      learnedAliases: [{ cueId: "cue-cache-updated", text: "updated-cache", evidenceIds: [] }],
+      updatedAt: "2026-01-02T00:00:00.000Z",
+    }];
+    const updated = runSearchTool(services.state, { query: "docx updated-cache" });
+    assert.notStrictEqual(services.state.overlaySnapshot, firstSnapshot, "cue 变化必须失效 overlay snapshot");
+    assert.ok(
+      detailsOf(updated).matches.some((candidate) =>
+        (candidate as { evidence: Array<{ kind: string; cueId?: string }> }).evidence.some(
+          (evidence) => evidence.kind === "learned_cue" && evidence.cueId === "cue-cache-updated",
+        )),
+    );
+    const updatedSnapshot = services.state.overlaySnapshot;
+
+    profiles = [{ ...profiles[0]!, status: "suspended" }];
+    const suspended = runSearchTool(services.state, { query: "docx updated-cache" });
+    assert.notStrictEqual(services.state.overlaySnapshot, updatedSnapshot, "suspend 必须失效 active overlay snapshot");
+    assert.ok(
+      detailsOf(suspended).matches.every((candidate) =>
+        !(candidate as { evidence: Array<{ kind: string }> }).evidence.some(
+          (evidence) => evidence.kind === "learned_cue",
+        )),
+    );
+  });
+
+  it("无 overlayProfiles：结果与静态一致（无 learned_cue evidence）", async () => {
+    const services = createDiscoveryServices({ topK: 5 });
+    await services.run("docx", makeDocxFamily(3));
+    const result = runSearchTool(services.state, { query: "docx" });
+    const details = detailsOf(result);
+    assert.ok(details.matches.length > 0, "静态 BM25 应有候选");
+    for (const match of details.matches) {
+      const evidence = (match as { evidence: Array<{ kind: string }> }).evidence;
+      assert.ok(
+        !evidence.some((e) => e.kind === "learned_cue"),
+        "无 overlay 时不得含 learned_cue evidence",
+      );
+    }
+  });
+});
+
+/** runLoadSkill 测试辅助：load_skill 返回的 details 形状。 */
+interface LoadDetails {
+  ready: boolean;
+  category?: string;
+  name?: string;
+  scope?: string;
+  source_hash?: string;
+  bytes?: number;
+}
+
+function loadDetailsOf(result: HostToolResultLike): LoadDetails {
+  return result.details as LoadDetails;
+}
+
+function loadText(result: HostToolResultLike): string {
+  return result.content[0]!.text;
+}
+
+/** 从成功摄入的 catalog 中取指定 name 的 skill_id/skill_revision。 */
+function loadParams(state: AdapterState, name: string): { skill_id: string; skill_revision: string } {
+  const entry = [...(state.catalog?.values() ?? [])].find((e) => e.record.name === name);
+  assert.ok(entry, `catalog 必须包含 ${name}`);
+  return { skill_id: entry.record.skillId, skill_revision: entry.record.skillRevision };
+}
+
+/** 用单个 fixture skill 摄入，返回 services（state 已含 catalog）。 */
+async function ingestOne(name: string, opts: { skillMd?: string } = {}): Promise<{
+  services: ReturnType<typeof createDiscoveryServices>;
+  skill: HostSkillLike;
+}> {
+  const skill = makeSkill({ name, skillMd: opts.skillMd });
+  const services = createDiscoveryServices({ topK: 5 });
+  await services.run(name, [skill]);
+  return { services, skill };
+}
+
+describe("runLoadSkill（load_skill 执行）", () => {
+  it("成功：返回 SKILL.md 正文 + 最小 provenance（name/scope/revision），content 不泄漏绝对路径", async () => {
+    const { services, skill } = await ingestOne("pdf", { skillMd: "# PDF\n\nmerge and read PDF documents.\n" });
+    const params = loadParams(services.state, "pdf");
+    const result = await runLoadSkill(services.state, params);
+    assert.equal(loadDetailsOf(result).category, "ok");
+    assert.equal(loadDetailsOf(result).name, "pdf");
+    assert.equal(loadDetailsOf(result).scope, "user");
+    const text = loadText(result);
+    assert.match(text, /merge and read PDF documents\./);
+    assert.ok(!text.includes(skill.baseDir), "content 不得泄漏绝对路径");
+    assert.ok(!text.includes(skill.filePath), "content 不得泄漏 sourceLocator 绝对路径");
+  });
+
+  it("成功 details 返回 source_hash（内容指纹 sha256:…，非路径/正文/declared*）", async () => {
+    const { services, skill } = await ingestOne("hash-skill", { skillMd: "# hash\n\nfingerprint\n" });
+    const entry = [...services.state.catalog!.values()].find((e) => e.record.name === "hash-skill")!;
+    const params = loadParams(services.state, "hash-skill");
+    const result = await runLoadSkill(services.state, params);
+    const details = loadDetailsOf(result);
+    assert.equal(details.category, "ok");
+    assert.equal(details.source_hash, entry.record.sourceHash);
+    assert.match(details.source_hash!, /^sha256:[0-9a-f]{64}$/);
+    const rest = JSON.stringify(details);
+    assert.ok(!rest.includes(skill.baseDir), "details 不得泄漏绝对路径");
+    assert.ok(!rest.includes(skill.filePath), "details 不得泄漏 sourceLocator");
+    assert.ok(!rest.includes("declaredPermissions") && !rest.includes("declaredEffects"), "details 不得携带 declared*");
+  });
+
+  it("未初始化 → not_initialized；摄入失败 → ingest_failed（fail closed）", async () => {
+    const fresh: AdapterState = { ready: false, recordCount: 0 };
+    const notInit = await runLoadSkill(fresh, { skill_id: "skill:x", skill_revision: "rev:y" });
+    assert.equal(loadDetailsOf(notInit).category, "not_initialized");
+
+    const failed: AdapterState = { ready: false, recordCount: 0, lastErrorCategory: "skill_ingest_failed" };
+    const ingestFailed = await runLoadSkill(failed, { skill_id: "skill:x", skill_revision: "rev:y" });
+    assert.equal(loadDetailsOf(ingestFailed).category, "ingest_failed");
+  });
+
+  it("unknown skill_id → unknown_skill", async () => {
+    const { services } = await ingestOne("pdf");
+    const result = await runLoadSkill(services.state, { skill_id: "skill:unknown", skill_revision: "rev:whatever" });
+    assert.equal(loadDetailsOf(result).category, "unknown_skill");
+  });
+
+  it("revision 不匹配 → revision_mismatch", async () => {
+    const { services } = await ingestOne("pdf");
+    const params = loadParams(services.state, "pdf");
+    const result = await runLoadSkill(services.state, { skill_id: params.skill_id, skill_revision: "rev:wrong" });
+    assert.equal(loadDetailsOf(result).category, "revision_mismatch");
+  });
+
+  it("catalog 重建后旧 revision 拒绝（源变化 → 新 revision）", async () => {
+    const { services, skill } = await ingestOne("pdf", { skillMd: "# PDF\n\nv1\n" });
+    const oldParams = loadParams(services.state, "pdf");
+    writeFileSync(skill.filePath, "# PDF\n\nv2\n");
+    await services.run("pdf", [skill]);
+    const result = await runLoadSkill(services.state, oldParams);
+    assert.equal(loadDetailsOf(result).category, "revision_mismatch");
+  });
+
+  it("source drift（文件内容变化但未重建）→ source_drift", async () => {
+    const { services, skill } = await ingestOne("pdf", { skillMd: "# PDF\n\nv1\n" });
+    const params = loadParams(services.state, "pdf");
+    const ok = await runLoadSkill(services.state, params);
+    assert.equal(loadDetailsOf(ok).category, "ok");
+    writeFileSync(skill.filePath, "# PDF\n\ntampered\n");
+    const drift = await runLoadSkill(services.state, params);
+    assert.equal(loadDetailsOf(drift).category, "source_drift");
+  });
+
+  it("大小超限 → size_exceeded", async () => {
+    const { services, skill } = await ingestOne("big-skill");
+    writeFileSync(skill.filePath, "x".repeat(MAX_SKILL_MD_BYTES + 1));
+    await services.run("big-skill", [skill]);
+    const params = loadParams(services.state, "big-skill");
+    const result = await runLoadSkill(services.state, params);
+    assert.equal(loadDetailsOf(result).category, "size_exceeded");
+  });
+
+  it("大小边界：恰好 MAX_SKILL_MD_BYTES 可通过（边界不含误杀）", async () => {
+    const { services, skill } = await ingestOne("boundary-skill");
+    writeFileSync(skill.filePath, "y".repeat(MAX_SKILL_MD_BYTES));
+    await services.run("boundary-skill", [skill]);
+    const params = loadParams(services.state, "boundary-skill");
+    const result = await runLoadSkill(services.state, params);
+    assert.equal(loadDetailsOf(result).category, "ok");
+    assert.equal(loadDetailsOf(result).bytes, MAX_SKILL_MD_BYTES);
+  });
+
+  it("dependency drift：scripts 摄入后变化（SKILL.md 未变）→ revision_drift", async () => {
+    const root = makeTempDir();
+    writeFileSync(path.join(root, "SKILL.md"), "# dep-skill\n\nbody\n");
+    const scriptDir = path.join(root, "scripts");
+    mkdirSync(scriptDir, { recursive: true });
+    writeFileSync(path.join(scriptDir, "util.js"), "// v1\n");
+    const skill: HostSkillLike = {
+      name: "dep-skill",
+      description: "dependency drift skill",
+      filePath: path.join(root, "SKILL.md"),
+      baseDir: root,
+      sourceInfo: { scope: "user" },
+      disableModelInvocation: false,
+    };
+    const services = createDiscoveryServices({ topK: 5 });
+    await services.run("dep-skill", [skill]);
+    const params = loadParams(services.state, "dep-skill");
+
+    // 摄入后未变化：ok。
+    const ok = await runLoadSkill(services.state, params);
+    assert.equal(loadDetailsOf(ok).category, "ok");
+
+    // 只改 scripts（不动 SKILL.md）：完整 manifest 重算 → 缓存 revision 失效。
+    writeFileSync(path.join(scriptDir, "util.js"), "// v2\n");
+    const drift = await runLoadSkill(services.state, params);
+    assert.equal(loadDetailsOf(drift).category, "revision_drift");
+    assert.match(loadText(drift), /revision drift/);
+  });
+
+  it("dependency drift：references 文件被删除 → revision_drift（fail closed）", async () => {
+    const root = makeTempDir();
+    writeFileSync(path.join(root, "SKILL.md"), "# ref-skill\n\nbody\n");
+    const refDir = path.join(root, "references");
+    mkdirSync(refDir, { recursive: true });
+    const refPath = path.join(refDir, "guide.md");
+    writeFileSync(refPath, "guide v1\n");
+    const skill: HostSkillLike = {
+      name: "ref-skill",
+      description: "reference drift skill",
+      filePath: path.join(root, "SKILL.md"),
+      baseDir: root,
+      sourceInfo: { scope: "user" },
+      disableModelInvocation: false,
+    };
+    const services = createDiscoveryServices({ topK: 5 });
+    await services.run("ref-skill", [skill]);
+    const params = loadParams(services.state, "ref-skill");
+
+    await rm(refPath, { force: true });
+    const drift = await runLoadSkill(services.state, params);
+    assert.equal(loadDetailsOf(drift).category, "revision_drift");
+  });
+
+  it("权限边界：load_skill 只读 SKILL.md，不执行 scripts、不返回脚本内容/declared*", async () => {
+    const root = makeTempDir();
+    writeFileSync(path.join(root, "SKILL.md"), "# perm-skill\n\nbody only\n");
+    const scriptDir = path.join(root, "scripts");
+    mkdirSync(scriptDir, { recursive: true });
+    // 若被任何路径执行会写出标记文件（本实现只读 SKILL.md，脚本永不执行）。
+    writeFileSync(
+      path.join(scriptDir, "side-effect.js"),
+      `require("fs").writeFileSync(require("path").join(__dirname, "ran"), "x")`,
+    );
+    const skill: HostSkillLike = {
+      name: "perm-skill",
+      description: "permission boundary skill",
+      filePath: path.join(root, "SKILL.md"),
+      baseDir: root,
+      sourceInfo: { scope: "user" },
+      disableModelInvocation: false,
+    };
+    const services = createDiscoveryServices({ topK: 5 });
+    await services.run("perm-skill", [skill]);
+    const params = loadParams(services.state, "perm-skill");
+
+    const result = await runLoadSkill(services.state, params);
+    assert.equal(loadDetailsOf(result).category, "ok");
+    const text = loadText(result);
+    assert.match(text, /body only/);
+    assert.ok(!text.includes("side-effect"), "content 不得返回 scripts 内容");
+    assert.ok(!text.includes("writeFileSync"), "content 不得包含脚本正文");
+    const rest = JSON.stringify(loadDetailsOf(result));
+    assert.ok(!rest.includes("declaredPermissions") && !rest.includes("declaredEffects"), "details 不得携带权限/effect");
+    assert.ok(!existsSync(path.join(scriptDir, "ran")), "load_skill 不得执行脚本");
+  });
+
+  it("非 UTF-8 → encoding_failed", async () => {
+    const { services, skill } = await ingestOne("bin-skill");
+    writeFileSync(skill.filePath, Buffer.from([0xff, 0xfe, 0x80, 0x81]));
+    await services.run("bin-skill", [skill]);
+    const params = loadParams(services.state, "bin-skill");
+    const result = await runLoadSkill(services.state, params);
+    assert.equal(loadDetailsOf(result).category, "encoding_failed");
+  });
+
+  it("SKILL.md 被删除 → path_failure", async () => {
+    const { services, skill } = await ingestOne("del-skill");
+    const params = loadParams(services.state, "del-skill");
+    await rm(skill.filePath, { force: true });
+    const result = await runLoadSkill(services.state, params);
+    assert.equal(loadDetailsOf(result).category, "path_failure");
+  });
+
+  it("sourceLocator 非绝对路径 → path_failure（防御分支）", async () => {
+    const { services } = await ingestOne("rel-skill");
+    const entry = [...services.state.catalog!.values()].find((e) => e.record.name === "rel-skill")!;
+    const badRecord = { ...entry.record, sourceLocator: "relative/SKILL.md" };
+    const state: AdapterState = {
+      ready: true,
+      recordCount: 1,
+      catalog: new Map([[badRecord.skillId, { record: badRecord, baseDir: entry.baseDir }]]),
+    };
+    const result = await runLoadSkill(state, { skill_id: badRecord.skillId, skill_revision: badRecord.skillRevision });
+    assert.equal(loadDetailsOf(result).category, "path_failure");
+  });
+
+  it("symlink/junction 逃逸 → path_failure（Windows 无权限则跳过）", async (t) => {
+    const { services, skill } = await ingestOne("link-skill");
+    const external = makeSkill({ name: "external-skill", skillMd: "# External\n" });
+    const params = loadParams(services.state, "link-skill");
+    await rm(skill.filePath, { force: true });
+    try {
+      symlinkSync(external.filePath, skill.filePath, "file");
+    } catch {
+      t.skip("当前环境无 symlink 权限（与本套件既有 skip 一致）");
+      return;
+    }
+    const result = await runLoadSkill(services.state, params);
+    assert.equal(loadDetailsOf(result).category, "path_failure");
   });
 });

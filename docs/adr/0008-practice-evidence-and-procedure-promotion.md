@@ -2,7 +2,11 @@
 
 ## Status
 
-Accepted — 2026-08-14
+Partially superseded by ADR-0014 — 2026-08-22
+
+Practice Event、Activation evidence、污染、版本、删除与“任务成功不等于 Skill 有贡献”的条款继续
+适用。Compiled Procedure proposal、promotion 与 runtime 条款仅约束 frozen experimental track，
+不再定义当前主线交付范围。
 
 Supersedes the procedure-promotion scope of ADR-0004 and extends ADR-0005.
 
