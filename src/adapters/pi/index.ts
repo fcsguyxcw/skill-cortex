@@ -19,6 +19,7 @@ import { defineTool, formatSkillsForPrompt } from "@earendil-works/pi-coding-age
 import type { BeforeAgentStartEvent, ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "@earendil-works/pi-ai";
 
+import type { SkillCandidate } from "../../core/contracts/index.ts";
 import { MAX_TOP_K } from "../../discovery/index.ts";
 import {
   buildInjectionBlock,
@@ -55,6 +56,7 @@ export function registerSkillCortex(pi: ExtensionAPI, options: RegisterOptions =
   });
   const onShadow = options.onShadow;
   const onDiscovery = options.onDiscovery;
+  const onSearchExposure = options.onSearchExposure;
   const onCatalog = options.onCatalog;
   const onError = options.onError;
 
@@ -179,7 +181,12 @@ export function registerSkillCortex(pi: ExtensionAPI, options: RegisterOptions =
         ),
       }),
       async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-        return runSearchTool(services.state, params);
+        const result = runSearchTool(services.state, params);
+        const details = result.details as { ready?: unknown; matches?: unknown } | undefined;
+        if (details?.ready === true && Array.isArray(details.matches)) {
+          onSearchExposure?.(details.matches as SkillCandidate[]);
+        }
+        return result;
       },
     }),
   );

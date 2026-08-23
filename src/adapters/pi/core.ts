@@ -52,6 +52,8 @@ export interface RegisterOptions {
   onShadow?: (result: ShadowResult) => void;
   /** 每次成功摄入+检索后触发的有界快照回调（inject 与 shadow 都触发；B3 observer 用当次候选快照）。 */
   onDiscovery?: (result: DiscoveryResult) => void;
+  /** search_skills 实际返回给 Agent 的 bounded candidates；供同 run attribution 合并。 */
+  onSearchExposure?: (candidates: readonly SkillCandidate[]) => void;
   /** 每次成功摄入后回调（当次 catalog SkillRecord；供 Phase 6 induction 取父 SkillRecord 作者字段）。 */
   onCatalog?: (records: readonly SkillRecord[]) => void;
   /** active discovery overlay：返回当次 active ActivationProfile（静态 BM25 候选后软重排）。 */

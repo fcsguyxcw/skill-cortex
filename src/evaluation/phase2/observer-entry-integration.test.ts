@@ -82,7 +82,7 @@ after(async () => {
 });
 
 describe("B3 observer 生产入口集成（真实 loader 加载 .pi/extensions/skill-cortex）", () => {
-  it("入口接线完整：cortex→snapshot→observer→project-local PracticeStore，产生 1 个 policy-valid real event", async () => {
+  it("入口接线完整：初始与 bounded search fallback 均进入同 run exposed attribution", async () => {
     const { skills } = loadSkillsFromDir({ dir: fixtureRoot, source: "user" });
     assert.equal(skills.length, 3, "fixture 必须解析出 3 个真实 Skill");
 
@@ -201,6 +201,33 @@ describe("B3 observer 生产入口集成（真实 loader 加载 .pi/extensions/s
     });
     await runner.emit({ type: "agent_settled" });
 
+    // 第三轮初始只召回 PDF；bounded search_skills 补搜暴露 1 个 docx 后再 load，应可归因。
+    await runner.emitBeforeAgentStart("merge PDF documents", undefined, basePrompt, {
+      cwd: fixtureRoot, skills, contextFiles: [],
+    });
+    const fallbackSearch = await searchDef.execute(
+      "fallback-search", { query: "docx", limit: 1 }, undefined, undefined, ctx,
+    );
+    const fallbackMatches = (fallbackSearch.details as {
+      matches: Array<{ skillId: string; skillRevision: string }>;
+    }).matches;
+    assert.equal(fallbackMatches.length, 1, "补搜必须保持 bounded limit=1");
+    const fallbackSkill = fallbackMatches[0]!;
+    const fallbackLoad = await loadDef.execute(
+      "fallback-load", { skill_id: fallbackSkill.skillId, skill_revision: fallbackSkill.skillRevision },
+      undefined, undefined, ctx,
+    );
+    await runner.emitToolCall({
+      type: "tool_call", toolCallId: "fallback-load", toolName: "load_skill",
+      input: { skill_id: fallbackSkill.skillId, skill_revision: fallbackSkill.skillRevision },
+    });
+    await runner.emitToolResult({
+      type: "tool_result", toolCallId: "fallback-load", toolName: "load_skill",
+      input: { skill_id: fallbackSkill.skillId }, content: [{ type: "text", text: "ok" }],
+      isError: false, details: fallbackLoad.details,
+    });
+    await runner.emit({ type: "agent_settled" });
+
     // 第二轮有候选但 Main Agent 选择 No-Skill：仍需形成 exposure observation，不能只记录 Skill 调用。
     await runner.emitBeforeAgentStart("PDF", undefined, basePrompt, {
       cwd: fixtureRoot, skills, contextFiles: [],
@@ -214,8 +241,13 @@ describe("B3 observer 生产入口集成（真实 loader 加载 .pi/extensions/s
     });
     const tenantScope = defaultTenantScope(fixtureRoot);
     const events = await store.queryEvidence(tenantScope);
-    assert.equal(events.length, 1, "生产入口必须经完整链路产生且仅产生 1 个 real 事件");
-    const event: PracticeEvent = events[0]!;
+    assert.equal(events.length, 2, "初始候选与 search_skills 补搜选择都必须形成 real event");
+    const event: PracticeEvent = events.find((item) => item.parentSkillId === skillId)!;
+    const fallbackEvent = events.find((item) => item.parentSkillId === fallbackSkill.skillId);
+    assert.ok(fallbackEvent, "实际由 bounded search_skills 暴露并成功 load 的 Skill 必须可归因");
+    assert.ok(fallbackEvent.candidateSkillIds.includes(fallbackSkill.skillId));
+    assert.equal(fallbackEvent.candidateSkillIds.length, 2,
+      "exposed set 只能是初始 PDF + bounded fallback 1 项，不能放宽为 3 项全 catalog");
 
     const expectedSourceHash = computeSourceHash(await readFile(path.join(fixtureRoot, "pdf", "SKILL.md")));
     assert.equal(event.sourceHash, expectedSourceHash, "source 必须绑定真实 load details.source_hash");
@@ -238,13 +270,15 @@ describe("B3 observer 生产入口集成（真实 loader 加载 .pi/extensions/s
       rootDir: path.join(fixtureRoot, ".skill-cortex", "exposure"), projectRoot: fixtureRoot,
     });
     const observations = await exposureStore.list(tenantScope);
-    assert.equal(observations.length, 2, "Skill 选择与 No-Skill 两轮都必须持久化 shadow observation");
+    assert.equal(observations.length, 3, "Skill、No-Skill 与 fallback Skill 三轮都必须持久化 shadow observation");
     assert.equal(observations.every((item) => item.baselineWouldInject), true);
     assert.equal(observations.every((item) => item.exactDeclaredReference), true);
     assert.equal(observations.some((item) => item.selectedSkillIds.length === 0), true,
       "No-Skill 轮必须保留空 selectedSkillIds");
     assert.equal(observations.some((item) => item.selectedSkillIds.includes(skillId)), true,
       "Skill 轮必须关联最终合法选择");
+    assert.equal(observations.some((item) => item.selectedSkillIds.includes(fallbackSkill.skillId)), true,
+      "fallback Skill 轮必须关联最终合法选择");
     assert.equal(observations.every((item) =>
       item.candidateBudget?.variants.map((variant) => variant.budget).join(",") === "1,2,3,5"), true,
     "每轮必须记录 K=1/2/3/5 shadow comparator");

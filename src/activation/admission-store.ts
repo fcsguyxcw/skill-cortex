@@ -198,6 +198,11 @@ export class LearningAssessmentStore {
     try {
       await writeFile(record, JSON.stringify(persisted), { encoding: "utf8", flag: "wx" });
     } catch (error) {
+      try {
+        await rm(claim, { force: true });
+      } catch {
+        throw new Error("learning_assessment_claim_rollback_failed");
+      }
       if (isErrnoCode(error, "EEXIST")) throw new Error("learning_assessment_event_already_assessed");
       throw error;
     }
@@ -243,6 +248,7 @@ export class LearningAssessmentStore {
     const invalidatedEventIds: string[] = [];
     for (const evidenceId of [...new Set(evidenceIds)]) {
       let eventId = evidenceId;
+      let resolvedByAssessmentClaim = false;
       if (!(await exists(recordPath(this.rootDir, tenantScope, eventId))) &&
           !(await exists(tombstonePath(this.rootDir, tenantScope, eventId)))) {
         const rawClaim = await readFile(claimPath(this.rootDir, tenantScope, evidenceId), "utf8").catch(
@@ -266,11 +272,18 @@ export class LearningAssessmentStore {
           throw new Error("learning_assessment_corrupt: invalid_claim");
         }
         eventId = (claim as { eventId: string }).eventId;
+        resolvedByAssessmentClaim = true;
       }
       const record = recordPath(this.rootDir, tenantScope, eventId);
       const tombstone = tombstonePath(this.rootDir, tenantScope, eventId);
       const alreadyDeleted = await exists(tombstone);
       if (!alreadyDeleted && !(await exists(record))) continue;
+      if (resolvedByAssessmentClaim) {
+        if (alreadyDeleted) continue;
+        const rawRecord = await readFile(record, "utf8");
+        const stored = parseStoredAssessment(rawRecord, tenantScope, hash(eventId));
+        if (stored.assessmentId !== evidenceId) continue;
+      }
       if (!alreadyDeleted) {
         await mkdir(path.dirname(tombstone), { recursive: true });
         await writeFile(

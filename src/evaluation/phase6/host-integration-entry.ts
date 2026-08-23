@@ -101,6 +101,7 @@ export default function phase6HostIntegrationEntry(pi: ExtensionAPI): void {
   registerSkillCortex(pi, {
     mode: "inject",
     onDiscovery: (result) => source.push(result),
+    onSearchExposure: (candidates) => source.exposeSearchCandidates(candidates),
     onCatalog: (records) => {
       catalogRecords = records;
     },

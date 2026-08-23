@@ -418,10 +418,13 @@ export class RunCollector {
 export interface DiscoverySnapshotSource extends RouteSnapshotSource {
   /** 供 registerSkillCortex 的 onDiscovery 接线。 */
   push(result: DiscoveryResult): void;
+  /** 合并 search_skills 已实际返回的 bounded candidates；仅作用于已开始且未 settled 的当前 run。 */
+  exposeSearchCandidates(candidates: readonly { skillId: string; skillRevision: string }[]): void;
 }
 
 export function createDiscoverySnapshotSource(): DiscoverySnapshotSource {
   let pending: RouteSnapshot | undefined;
+  let active: RouteSnapshot | undefined;
   return {
     push(result: DiscoveryResult) {
       pending = {
@@ -438,10 +441,22 @@ export function createDiscoverySnapshotSource(): DiscoverySnapshotSource {
     takeRouteSnapshot(): RouteSnapshot | undefined {
       const snapshot = pending;
       pending = undefined;
+      active = snapshot;
       return snapshot;
+    },
+    exposeSearchCandidates(candidates) {
+      if (active?.exposedToAgent !== true) return;
+      for (const candidate of candidates) {
+        if (active.candidateSkills.some((skill) => skill.skillId === candidate.skillId)) continue;
+        (active.candidateSkills as RouteSnapshotSkill[]).push({
+          skillId: candidate.skillId,
+          skillRevision: candidate.skillRevision,
+        });
+      }
     },
     clear(): void {
       pending = undefined;
+      active = undefined;
     },
   };
 }

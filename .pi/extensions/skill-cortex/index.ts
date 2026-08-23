@@ -66,6 +66,7 @@ export default function skillCortexEntry(pi: ExtensionAPI): void {
   registerSkillCortex(pi, {
     mode: "inject",
     onDiscovery: (result) => source.push(result),
+    onSearchExposure: (candidates) => source.exposeSearchCandidates(candidates),
   });
 
   registerLearningControls(

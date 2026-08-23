@@ -138,6 +138,33 @@ describe("LearningAssessmentStore", () => {
     );
   });
 
+  it("record 写入冲突时回滚本次 claim，assessmentId 可用于其他 event", async () => {
+    const { assessments, events } = makeStores();
+    await events.append(event("event-1"));
+    await events.append(event("event-2"));
+    await assessments.append(assessment("event-1"), events);
+    await assert.rejects(
+      assessments.append(assessment("event-1", { assessmentId: "assessment:reusable" }), events),
+      /learning_assessment_event_already_assessed/,
+    );
+    await assessments.append(assessment("event-2", { assessmentId: "assessment:reusable" }), events);
+    assert.equal((await assessments.getAssessment(TENANT, "event-2"))?.assessmentId, "assessment:reusable");
+  });
+
+  it("invalidate(assessmentId) 必须复核 record 绑定，伪造 claim 不得误删其他 assessment", async () => {
+    const { assessments, events, root } = makeStores();
+    await events.append(event("event-1"));
+    await events.append(event("event-2"));
+    await assessments.append(assessment("event-1"), events);
+    await assessments.append(assessment("event-2"), events);
+    const forgedClaim = path.join(root, "assessments", sha(TENANT), "claims", `${sha("assessment:event-1")}.json`);
+    await writeFile(forgedClaim, JSON.stringify({ assessmentId: "assessment:event-1", eventId: "event-2" }), "utf8");
+
+    assert.deepEqual(await assessments.invalidate(TENANT, ["assessment:event-1"]), { invalidatedEventIds: [] });
+    assert.equal((await assessments.getAssessment(TENANT, "event-2"))?.assessmentId, "assessment:event-2");
+    assert.equal((await assessments.getAssessment(TENANT, "event-1"))?.assessmentId, "assessment:event-1");
+  });
+
   it("仅绑定已落盘 real skill_md event；缺失/绑定失配均零 assessment", async () => {
     const { assessments, events } = makeStores();
     await assert.rejects(
