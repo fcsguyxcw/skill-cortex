@@ -98,7 +98,10 @@ flowchart TD
 当前已完成 D0。D1 已实现 Admission component、project-local assessment Store，以及真实 Pi 工具入口的
 status/list/pause/resume/forget：pause 跨重启持久化并阻止新 evidence 与 induction/promotion；evidence
 删除级联 suspend 依赖 profile，profile 删除落 retired tombstone。可信真实宿主 contribution verifier
-仍未实现，因此 G1 与 D1 end-to-end 仍未完成，不得据此宣称 D1 完成。
+已新增一个 fail-closed component seam：只有显式注册且精确绑定 parent Skill revision/source 的 verifier，
+在所需 Practice step/result 已通过后再次独立复核，才可写 positive assessment；未注册 catalog Skill、
+binding drift、重复 registration 或复核不通过均保持零 assessment。当前生产入口没有注册可信 verifier，
+也没有观察 Agent 最终任务结果，因此 G1 与 D1 host/end-to-end 仍未完成，不得据此宣称 D1 完成。
 
 D2 第一切片已实现 Exposure shadow observation：真实 Pi 入口把每轮 retriever 的有界结构化事实与最终
 合法 Skill/No-Skill 选择写入 project-local append-only Store，不保存任务原文。它不返回 active
@@ -107,6 +110,14 @@ show/abstain 决策，当前候选注入行为完全不变；G2 冻结评估与 
 D2 后续两个 shadow 切片也已接线：Candidate Budget 并行记录 K=1/2/3/5 的候选前缀；轻量卡并行记录
 作者 description 在 120/240/480 字符预算下的成本与截断数量。两者都随真实 run observation 落盘，
 但不选择推荐预算、不改变生产 Top-K/排序/候选卡，也不生成 Memory hint；G3 仍未关闭。
+
+D3 两层 cache component 已接入现有 discovery service：同一宿主 skills 数组且元数据未变化时，查询复用
+Registry 与静态 BM25 索引；active profile 的 revision、status 或 rerank cue 未变化时，discovery 与
+`search_skills` 共享派生 overlay snapshot。资源 reload、宿主元数据变化、promotion/suspend/delete、revision
+或 cue 变化会分别失效对应层；重建失败不复用旧 catalog，`load_skill` 仍执行当次 source/revision 校验。
+隔离的真实 ExtensionRunner resource-refresh E2E 已验证 unchanged hit、install/source refresh miss、旧 revision
+拒绝与未 refresh source drift fail-closed，G5 在 component + project-local host integration 层 PASS。真实自用
+Pi 会话与 G7 仍未关闭。
 
 ## 不可突破的约束
 

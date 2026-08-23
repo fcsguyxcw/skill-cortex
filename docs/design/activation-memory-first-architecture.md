@@ -2,7 +2,7 @@
 
 状态：Accepted design — 2026-08-22  
 权威范围：ADR-0014  
-实现状态：D0 完成；D1 控制切片已实现但可信 contribution verifier 仍缺失；D2 Exposure shadow observation 已接真实入口
+实现状态：D0 完成；D1 已有 fail-closed contribution verifier component seam，但可信生产 verifier/host 接线仍缺失；D2 Exposure shadow observation 已接真实入口
 
 ## 1. 目标
 
@@ -232,9 +232,18 @@ eventId 在 tenant 内不可覆盖，写入前必须绑定 Practice Store 中已
 损坏 fail closed。host induction 只按 `tenantScope + eventId` 从 Store/read seam 取 assessment，不接收
 caller 临时数组或 Map。
 
-本切片尚未提供可信真实宿主 contribution verifier。当前隔离 ExtensionRunner 验收证明“load + result
-verifier pass 但 Store 中缺独立贡献 assessment ⇒ 零 ActivationProfile”；因此这里只能报告 Admission
-component、assessment persistence、用户控制与 host fail-closed seam，不能报告 G1 或 D1 end-to-end complete。
+当前新增 `verifyAndStorePositiveContribution` component seam：它重新从 Practice Store 读取事件，要求
+real `skill_md`、候选/选择/attribution 完整，精确匹配 catalog 中的 parent revision/source，并且只接受
+该 immutable binding 唯一、显式注册的 verifier。事件中 registration 声明的 step 与 result verifier
+必须先通过，随后注册 verifier 仍须独立返回 `verified_contribution`，才会创建并 append positive
+assessment。任意 catalog Skill 不会自动获得归因资格；binding drift、重复 registration、缺证据或
+复核不通过均 fail closed。
+
+这仍不是可信真实宿主 contribution verifier 完成：当前生产入口没有任何 registration，现有 Pi observer
+也没有向该 seam 提供可独立验证 Agent 最终任务结果的宿主证据。当前隔离 ExtensionRunner 验收仍证明
+“load + result verifier pass 但 Store 中缺独立贡献 assessment ⇒ 零 ActivationProfile”。因此这里只能
+报告 verifier component、Admission component、assessment persistence、用户控制与 host fail-closed seam，
+不能报告 G1、D1 host integration 或 D1 end-to-end complete。
 
 准入矩阵：
 
@@ -330,6 +339,16 @@ observation
 - 查询变化 -> 只执行轻量 search，不重建任一索引。
 
 不得通过每轮全扫描来简化一致性，也不得为追求 cache hit 跳过 `load_skill` 的当次 source/revision 校验。
+
+当前 D3 两层 cache component 已实现。Catalog 层基于经核验的 Pi 0.84.1 session 合同：
+`systemPromptOptions.skills` 数组保持稳定，resource reload 会生成新数组。因此同一数组且宿主元数据未变时
+复用 Registry 与静态 BM25 索引；新数组、元数据变化或重建失败均失效旧 snapshot。该 cache 不扫描
+Skill package 来判定命中，且不削弱 `load_skill` 的 manifest/source/revision 当次复核。Overlay 层对实际
+影响 rerank 的 active profile revision/status/cue 内容生成内存 fingerprint；内容不变时 discovery 与
+`search_skills` 复用 `parentSkillId → active profile` 派生 snapshot，promotion/suspend/delete、revision 或
+cue 变化时失效。隔离的真实 ExtensionRunner resource-refresh E2E 已覆盖 unchanged hit、install/source refresh
+miss、旧 revision 拒绝和未 refresh source drift fail-closed，因此 G5 在 component + project-local host integration
+层 PASS。当前主入口仍未配置 active overlay；真实自用 Pi 会话与 G7 仍未关闭。
 
 ## 8. 安全与隐私
 

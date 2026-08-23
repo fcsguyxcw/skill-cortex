@@ -2,6 +2,7 @@
 export * from "./induction.ts";
 export * from "./admission.ts";
 export * from "./admission-store.ts";
+export * from "./contribution-verifier.ts";
 export * from "./learning-control-store.ts";
 export * from "./learning-controls.ts";
 export * from "./rerank.ts";

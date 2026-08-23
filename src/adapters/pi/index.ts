@@ -71,7 +71,12 @@ export function registerSkillCortex(pi: ExtensionAPI, options: RegisterOptions =
       onError?.(outcome.error, { phase: "ingest" });
       return undefined;
     }
-    if (outcome.exposure === undefined || outcome.candidateBudget === undefined || outcome.cardProjection === undefined) {
+    if (
+      outcome.exposure === undefined ||
+      outcome.candidateBudget === undefined ||
+      outcome.cardProjection === undefined ||
+      outcome.cache === undefined
+    ) {
       onError?.(new Error("Exposure observation missing"), { phase: "ingest" });
       return undefined;
     }
@@ -93,6 +98,7 @@ export function registerSkillCortex(pi: ExtensionAPI, options: RegisterOptions =
         exposure: outcome.exposure,
         candidateBudget: outcome.candidateBudget,
         cardProjection: outcome.cardProjection,
+        cache: outcome.cache,
       });
       const result: ShadowResult = {
         candidateCount: outcome.candidates.length,
@@ -152,6 +158,7 @@ export function registerSkillCortex(pi: ExtensionAPI, options: RegisterOptions =
       exposure: outcome.exposure,
       candidateBudget: outcome.candidateBudget,
       cardProjection: outcome.cardProjection,
+      cache: outcome.cache,
     });
     return { systemPrompt: finalPrompt };
   });

@@ -142,6 +142,66 @@ describe("createDiscoveryServices.run（摄入 + BM25）", () => {
     assert.equal(services.state.recordCount, 6);
   });
 
+  it("同一宿主 catalog 的 query 变化复用 Registry 与静态索引", async () => {
+    const services = createDiscoveryServices({ topK: 3 });
+    const skills = makeDocxFamily(3);
+
+    const first = await services.run("docx report", skills);
+    assert.equal(first.ok, true);
+    assert.equal(first.cache?.catalog, "miss");
+    const firstIndex = services.state.index;
+    const firstCatalog = services.state.catalog;
+
+    const second = await services.run("word document", skills);
+    assert.equal(second.ok, true);
+    assert.equal(second.cache?.catalog, "hit");
+    assert.strictEqual(services.state.index, firstIndex, "query 变化不得重建静态索引");
+    assert.strictEqual(services.state.catalog, firstCatalog, "query 变化不得重新摄入 catalog");
+  });
+
+  it("资源 reload 的新数组即使元数据相同也重建，以重新核验 package revision", async () => {
+    const services = createDiscoveryServices({ topK: 3 });
+    const skills = makeDocxFamily(2);
+    await services.run("docx", skills);
+    const firstIndex = services.state.index;
+
+    const refreshedSkills = [...skills];
+    const refreshed = await services.run("docx", refreshedSkills);
+    assert.equal(refreshed.ok, true);
+    assert.equal(refreshed.cache?.catalog, "miss");
+    assert.notStrictEqual(services.state.index, firstIndex, "宿主 reload 不得复用旧 revision snapshot");
+  });
+
+  it("同一数组的宿主元数据变化会失效 cache 并更新候选", async () => {
+    const services = createDiscoveryServices({ topK: 3 });
+    const skills = makeDocxFamily(2);
+    await services.run("docx", skills);
+    const firstIndex = services.state.index;
+
+    skills[0]!.name = "pdf-tools";
+    skills[0]!.description = "Read and inspect PDF documents.";
+    const changed = await services.run("pdf", skills);
+    assert.equal(changed.ok, true);
+    assert.equal(changed.cache?.catalog, "miss");
+    assert.notStrictEqual(services.state.index, firstIndex);
+    assert.ok(changed.candidates.some((candidate) => candidate.name === "pdf-tools"));
+  });
+
+  it("catalog 失效后重建失败必须清空旧 snapshot，不得继续服务 stale index", async () => {
+    const services = createDiscoveryServices({ topK: 3 });
+    const skills = makeDocxFamily(2);
+    const first = await services.run("docx", skills);
+    assert.equal(first.ok, true);
+
+    skills[0]!.filePath = path.join(skills[0]!.baseDir, "missing-SKILL.md");
+    const failed = await services.run("docx", skills);
+    assert.equal(failed.ok, false);
+    assert.equal(services.state.ready, false);
+    assert.equal(services.state.index, undefined);
+    assert.equal(services.state.catalog, undefined);
+    assert.deepEqual(detailsOf(runSearchTool(services.state, { query: "docx" })).matches, []);
+  });
+
   it("shadow comparators 不改变生产 topK：topK=1 仍只返回 1，但并行观察到 K=5", async () => {
     const services = createDiscoveryServices({ topK: 1 });
     const outcome = await services.run("docx report", makeDocxFamily(6));
@@ -311,6 +371,69 @@ describe("runSearchTool（search_skills 执行逻辑）", () => {
         (evidence) => evidence.kind === "learned_cue" && evidence.cueId === "cue-docx",
       ),
       "active profile 命中应追加 learned_cue evidence",
+    );
+  });
+
+  it("overlay snapshot：同内容新数组复用；cue/status 变化分别失效", async () => {
+    let profiles: ActivationProfile[] = [];
+    const skills = makeDocxFamily(2);
+    const services = createDiscoveryServices({
+      topK: 5,
+      overlayOptions: { aliasBoost: 1 },
+      overlayProfiles: () => profiles,
+    });
+    await services.run("docx", skills);
+    const entry = [...services.state.catalog!.values()].find((item) => item.record.name === "docx-a")!;
+    const active: ActivationProfile = {
+      schemaVersion: 1,
+      profileId: "profile-cache-docx-a",
+      parentSkillId: entry.record.skillId,
+      parentSkillRevision: entry.record.skillRevision,
+      status: "active",
+      learnedAliases: [{ cueId: "cue-cache-docx", text: "word-cache", evidenceIds: [] }],
+      positiveExamples: [],
+      nearMissExamples: [],
+      environmentCues: [],
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    };
+
+    profiles = [active];
+    const first = await services.run("docx word-cache", skills);
+    assert.ok(first.candidates.some((candidate) => candidate.name === "docx-a"));
+    assert.equal(first.cache?.overlay, "miss");
+    const firstSnapshot = services.state.overlaySnapshot;
+    assert.ok(firstSnapshot, "active profile 应建立派生 overlay snapshot");
+
+    profiles = [{ ...active, learnedAliases: active.learnedAliases.map((cue) => ({ ...cue })) }];
+    await services.run("docx word-cache", skills);
+    assert.equal(services.state.lastOverlayCacheStatus, "hit");
+    runSearchTool(services.state, { query: "docx word-cache" });
+    assert.strictEqual(services.state.overlaySnapshot, firstSnapshot, "同内容的新数组不得重建 overlay snapshot");
+
+    profiles = [{
+      ...active,
+      learnedAliases: [{ cueId: "cue-cache-updated", text: "updated-cache", evidenceIds: [] }],
+      updatedAt: "2026-01-02T00:00:00.000Z",
+    }];
+    const updated = runSearchTool(services.state, { query: "docx updated-cache" });
+    assert.notStrictEqual(services.state.overlaySnapshot, firstSnapshot, "cue 变化必须失效 overlay snapshot");
+    assert.ok(
+      detailsOf(updated).matches.some((candidate) =>
+        (candidate as { evidence: Array<{ kind: string; cueId?: string }> }).evidence.some(
+          (evidence) => evidence.kind === "learned_cue" && evidence.cueId === "cue-cache-updated",
+        )),
+    );
+    const updatedSnapshot = services.state.overlaySnapshot;
+
+    profiles = [{ ...profiles[0]!, status: "suspended" }];
+    const suspended = runSearchTool(services.state, { query: "docx updated-cache" });
+    assert.notStrictEqual(services.state.overlaySnapshot, updatedSnapshot, "suspend 必须失效 active overlay snapshot");
+    assert.ok(
+      detailsOf(suspended).matches.every((candidate) =>
+        !(candidate as { evidence: Array<{ kind: string }> }).evidence.some(
+          (evidence) => evidence.kind === "learned_cue",
+        )),
     );
   });
 

@@ -33,7 +33,12 @@ import {
   type DiscoveryIndex,
 } from "../../discovery/index.ts";
 import { formatCandidateCards, observeCandidateBudgets, observeCardProjections } from "../../discovery/index.ts";
-import { applyActiveProfiles } from "../../activation/overlay.ts";
+import {
+  applyActiveProfileSnapshot,
+  buildActiveProfileOverlaySnapshot,
+  fingerprintActiveProfiles,
+  type ActiveProfileOverlaySnapshot,
+} from "../../activation/overlay.ts";
 import type { RerankOptions } from "../../activation/rerank.ts";
 import { observeExposure } from "../../exposure/index.ts";
 import type { HostSkillLike, HostToolResultLike } from "./host.ts";
@@ -100,6 +105,13 @@ export interface DiscoveryResult {
   exposure: ExposureObservation;
   candidateBudget: CandidateBudgetShadowObservation;
   cardProjection: CardProjectionShadowObservation;
+  /** D3 cache 诊断；只进入本地回调，不进入候选卡或模型 prompt。 */
+  cache: DiscoveryCacheObservation;
+}
+
+export interface DiscoveryCacheObservation {
+  catalog: "hit" | "miss";
+  overlay: "hit" | "miss" | "disabled";
 }
 
 /** 摄入/索引构建失败的稳定错误类别（模型可见诊断只用类别，绝不泄漏路径/内容/原始 message）。 */
@@ -169,6 +181,12 @@ export interface AdapterState {
   overlayProfiles?: () => readonly ActivationProfile[];
   /** overlay 重排参数（与 before_agent_start 路径一致；未提供用默认关闭）。 */
   overlayOptions?: RerankOptions;
+  /** 当前 active profile 集合的派生检索 snapshot；供 discovery 与 search_skills 共享。 */
+  overlaySnapshot?: ActiveProfileOverlaySnapshot;
+  /** 只覆盖实际影响 rerank 的 active profile 内容。 */
+  overlaySnapshotFingerprint?: string;
+  /** 最近一次 overlay snapshot 查询的可审计状态；不进入模型输出。 */
+  lastOverlayCacheStatus?: DiscoveryCacheObservation["overlay"];
 }
 
 export interface DiscoveryOutcome {
@@ -181,6 +199,7 @@ export interface DiscoveryOutcome {
   exposure?: ExposureObservation;
   candidateBudget?: CandidateBudgetShadowObservation;
   cardProjection?: CardProjectionShadowObservation;
+  cache?: DiscoveryCacheObservation;
 }
 
 export interface DiscoveryServices {
@@ -214,8 +233,25 @@ export function mapSkills(skills: readonly HostSkillLike[]): SkillPackageInput[]
   }));
 }
 
+function currentOverlaySnapshot(state: AdapterState): ActiveProfileOverlaySnapshot | undefined {
+  if (state.overlayProfiles === undefined) {
+    state.lastOverlayCacheStatus = "disabled";
+    return undefined;
+  }
+  const profiles = state.overlayProfiles();
+  const fingerprint = fingerprintActiveProfiles(profiles);
+  const cacheHit = state.overlaySnapshot !== undefined && state.overlaySnapshotFingerprint === fingerprint;
+  if (!cacheHit) {
+    state.overlaySnapshot = buildActiveProfileOverlaySnapshot(profiles);
+    state.overlaySnapshotFingerprint = fingerprint;
+  }
+  state.lastOverlayCacheStatus = cacheHit ? "hit" : "miss";
+  return state.overlaySnapshot;
+}
+
 /**
- * 创建摄入+检索服务。每次 run() 重新摄入并重建索引（反映最新 skills）；
+ * 创建摄入+检索服务。同一宿主 session 的 skills 数组及元数据未变化时复用 catalog 与静态索引；
+ * 宿主资源 reload 会提供新的 skills 数组并强制重建，以重新核验 package revision；
  * 失败时 state 置为不可用（ready=false、index 清空），绝不静默复用旧索引；
  * state 只记录稳定错误类别（脱敏），原始 error 保留在 outcome.error 供 onError 本地处理，
  * 不进入模型可见诊断、不持久化、不注入。
@@ -231,31 +267,66 @@ export function createDiscoveryServices(options: {
     overlayProfiles: options.overlayProfiles,
     overlayOptions: options.overlayOptions,
   };
+  let cachedSkills: readonly HostSkillLike[] | undefined;
+  let cachedMetadata = "";
+
+  const metadataOf = (skills: readonly HostSkillLike[]): string =>
+    JSON.stringify(
+      skills.map((skill) => [
+        skill.name,
+        skill.description,
+        skill.filePath,
+        skill.baseDir,
+        skill.sourceInfo.scope,
+        skill.disableModelInvocation,
+      ]),
+    );
+
   return {
     topK: options.topK,
     state,
     async run(prompt, skills): Promise<DiscoveryOutcome> {
       const started = Date.now();
       try {
-        const inputs = mapSkills(skills);
-        const catalog = new Map<string, LoadableSkill>();
-        for (const input of inputs) {
-          if (input.disableModelInvocation === true) continue;
-          const record = await buildSkillRecord(input);
-          catalog.set(record.skillId, { record, baseDir: input.baseDir });
+        const metadata = metadataOf(skills);
+        const cacheHit =
+          cachedSkills === skills &&
+          cachedMetadata === metadata &&
+          state.ready &&
+          state.index !== undefined &&
+          state.catalog !== undefined;
+
+        let catalog: ReadonlyMap<string, LoadableSkill>;
+        let index: DiscoveryIndex;
+        if (cacheHit) {
+          catalog = state.catalog!;
+          index = state.index!;
+        } else {
+          const inputs = mapSkills(skills);
+          const nextCatalog = new Map<string, LoadableSkill>();
+          for (const input of inputs) {
+            if (input.disableModelInvocation === true) continue;
+            const record = await buildSkillRecord(input);
+            nextCatalog.set(record.skillId, { record, baseDir: input.baseDir });
+          }
+          const nextRecords = [...nextCatalog.values()].map((entry) => entry.record);
+          catalog = nextCatalog;
+          index = buildIndex(nextRecords);
+          cachedSkills = skills;
+          cachedMetadata = metadata;
         }
         const records = [...catalog.values()].map((entry) => entry.record);
-        const index = buildIndex(records);
         const staticCandidates = index.search(prompt, { limit: options.topK });
         // active discovery overlay：静态候选后软重排（仅 revision 匹配的 active profile 生效；
         // 未提供 overlayProfiles ⇒ 纯静态，无损回静态）。
-        const candidates = options.overlayProfiles
-          ? applyActiveProfiles(staticCandidates, options.overlayProfiles(), prompt, options.overlayOptions)
+        const overlaySnapshot = currentOverlaySnapshot(state);
+        const candidates = overlaySnapshot
+          ? applyActiveProfileSnapshot(staticCandidates, overlaySnapshot, prompt, options.overlayOptions)
           : staticCandidates;
         // Shadow comparator 独立观察到 K=5；生产 candidates 仍严格沿用原 topK 检索/overlay 路径。
         const shadowStatic = options.topK >= 5 ? staticCandidates : index.search(prompt, { limit: 5 });
-        const shadowRanked = options.overlayProfiles
-          ? applyActiveProfiles(shadowStatic, options.overlayProfiles(), prompt, options.overlayOptions)
+        const shadowRanked = overlaySnapshot
+          ? applyActiveProfileSnapshot(shadowStatic, overlaySnapshot, prompt, options.overlayOptions)
           : shadowStatic;
         state.ready = true;
         state.lastErrorCategory = undefined;
@@ -265,8 +336,14 @@ export function createDiscoveryServices(options: {
         return { ok: true, candidates, recordCount: records.length, durationMs: Date.now() - started,
           exposure: observeExposure(prompt, records, candidates),
           candidateBudget: observeCandidateBudgets(shadowRanked),
-          cardProjection: observeCardProjections(candidates) };
+          cardProjection: observeCardProjections(candidates),
+          cache: { catalog: cacheHit ? "hit" : "miss", overlay: state.lastOverlayCacheStatus ?? "disabled" } };
       } catch (error) {
+        cachedSkills = undefined;
+        cachedMetadata = "";
+        state.overlaySnapshot = undefined;
+        state.overlaySnapshotFingerprint = undefined;
+        state.lastOverlayCacheStatus = undefined;
         state.ready = false;
         state.index = undefined;
         state.catalog = undefined;
@@ -330,8 +407,9 @@ export function runSearchTool(state: AdapterState, params: SearchParams): HostTo
   const matches = state.index.search(query, { limit });
   // active discovery overlay：与 before_agent_start 路径同源（revision 匹配才生效；
   // 未注入 overlayProfiles ⇒ 纯静态，无损回静态）。
-  const candidates = state.overlayProfiles
-    ? applyActiveProfiles(matches, state.overlayProfiles(), query, state.overlayOptions)
+  const overlaySnapshot = currentOverlaySnapshot(state);
+  const candidates = overlaySnapshot
+    ? applyActiveProfileSnapshot(matches, overlaySnapshot, query, state.overlayOptions)
     : matches;
   const text =
     candidates.length === 0

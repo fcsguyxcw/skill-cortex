@@ -21,6 +21,41 @@ import {
   type RerankOptions,
 } from "./rerank.ts";
 
+/** 只包含 active profile 的派生检索结构；不持久化、不包含任务 query。 */
+export interface ActiveProfileOverlaySnapshot {
+  readonly activeBySkill: ReadonlyMap<string, ActivationProfile>;
+}
+
+/**
+ * 只对实际影响 rerank 的 active 内容生成稳定 fingerprint。
+ * evidenceIds、environmentCues 与时间戳不参与 rerank，因此不触发派生结构重建。
+ */
+export function fingerprintActiveProfiles(profiles: readonly ActivationProfile[]): string {
+  return JSON.stringify(
+    profiles
+      .filter((profile) => profile.status === "active")
+      .map((profile) => ({
+        profileId: profile.profileId,
+        parentSkillId: profile.parentSkillId,
+        parentSkillRevision: profile.parentSkillRevision,
+        learnedAliases: profile.learnedAliases.map(({ cueId, text }) => ({ cueId, text })),
+        positiveExamples: profile.positiveExamples.map(({ cueId, features }) => ({ cueId, features })),
+        nearMissExamples: profile.nearMissExamples.map(({ cueId, features }) => ({ cueId, features })),
+      })),
+  );
+}
+
+export function buildActiveProfileOverlaySnapshot(
+  profiles: readonly ActivationProfile[],
+): ActiveProfileOverlaySnapshot {
+  const activeBySkill = new Map<string, ActivationProfile>();
+  for (const profile of profiles) {
+    if (profile.status !== "active") continue;
+    activeBySkill.set(profile.parentSkillId, profile);
+  }
+  return { activeBySkill };
+}
+
 /**
  * 对静态候选应用 active profiles 的 learned overlay（多 profile，每父 Skill 一条）。
  * 只有 revision 匹配的 active profile 才影响 discovery；其余候选保持静态分数。
@@ -31,12 +66,23 @@ export function applyActiveProfiles(
   query: string,
   options: RerankOptions = {},
 ): SkillCandidate[] {
+  return applyActiveProfileSnapshot(
+    staticCandidates,
+    buildActiveProfileOverlaySnapshot(profiles),
+    query,
+    options,
+  );
+}
+
+/** 对已派生的 active profile snapshot 应用 rerank；供 query 路径复用缓存。 */
+export function applyActiveProfileSnapshot(
+  staticCandidates: readonly SkillCandidate[],
+  snapshot: ActiveProfileOverlaySnapshot,
+  query: string,
+  options: RerankOptions = {},
+): SkillCandidate[] {
   const opts = { ...DEFAULT_RERANK_OPTIONS, ...options };
-  const activeBySkill = new Map<string, ActivationProfile>();
-  for (const profile of profiles) {
-    if (profile.status !== "active") continue;
-    activeBySkill.set(profile.parentSkillId, profile);
-  }
+  const activeBySkill = snapshot.activeBySkill;
   const overlayEnabled =
     activeBySkill.size > 0 &&
     (opts.aliasBoost > 0 || opts.positiveBoost > 0 || opts.nearMissPenalty > 0);
