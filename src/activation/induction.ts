@@ -2,9 +2,8 @@
  * Phase 6 第一批 —— Activation cue induction（纯函数，project-local，不做 rerank/active）。
  *
  * plan §11 任务 1/2 + 数据合同 §4.3/§4.4：
- * - 只从 attribution=verified_skill_effect 的事件生成 learnedAliases 与 positiveExamples；
- * - 从明确 near-miss/boundary 事件（skill ∈ candidateSkillIds 但未选中；或 boundary
- *   failureClass 且为候选）生成 nearMissExamples——只作降权/解释证据，绝不硬过滤；
+ * - 只从 Learning Admission=positive 的事件生成 learnedAliases 与 positiveExamples；
+ * - 只从 Learning Admission=boundary 的 near-miss/boundary 事件生成 nearMissExamples；
  * - environmentCues 从 environmentFingerprint（若可可靠取得）派生 valueClass，缺失省略；
  * - 不保存未经批准的完整用户文本：只落脱敏特征（redactedTaskFeatures）+ evidence 引用；
  * - 作者 metadata（SkillRecord.name/description/declaredAliases）与 learned overlay 分栏：
@@ -13,16 +12,17 @@
  *   cueId 确定性派生（删除级联与 shadow rerank 属后续 batch，本模块只产出 cueId）。
  *
  * 边界：不写 store、不调 LLM、不启动 shadow rerank / active promotion；不改 discovery 索引。
- * evaluation/synthetic 事件禁止混入（fail-closed）；失败类别不得直接复制成 active cue。
+ * 缺少独立 assessment、evaluation/synthetic、mixed/unknown 与 external failure 均不得形成 cue。
  */
 import { createHash } from "node:crypto";
 
 import type {
   ActivationProfile,
+  LearningEvidenceAssessment,
   PracticeEvent,
   SkillRecord,
 } from "../core/contracts/index.ts";
-import { validatePracticeEvent } from "../practice/policy/index.ts";
+import { decideLearningAdmission } from "./admission.ts";
 
 const SKILL_ID_RE = /^skill:[0-9a-f]{64}$/;
 const REVISION_RE = /^rev:[0-9a-f]{64}$/;
@@ -39,18 +39,6 @@ export const MAX_CUE_TEXT_LENGTH = 120;
  * 派生特征前缀（observer 生成的受控特征，不含可作 alias 的自然语言语义，提取时排除）。
  */
 const DERIVED_FEATURE_PREFIXES = ["prompt-hash:", "candidate-count:", "selected-count:"];
-
-/**
- * boundary failure 类别（skill 相关但条件不满足/环境漂移，可作 near-miss 降权证据）。
- * permission_denied / tool_failure / user_interruption / procedure_error 是 external/执行
- * 失败（不能归因给 Skill，数据合同 §4.4：external failure 不产生 cue），不进入 near-miss。
- */
-const BOUNDARY_FAILURE_CLASSES = new Set([
-  "precondition_mismatch",
-  "runtime_guard_failure",
-  "postcondition_failure",
-  "environment_drift",
-]);
 
 function sha256Hex(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
@@ -121,20 +109,11 @@ function isSameParent(event: PracticeEvent, parentSkill: SkillRecord): boolean {
   );
 }
 
-/** near-miss 判定：skill 被考虑但未选中；或 boundary failure 且为候选。 */
-function isNearMiss(event: PracticeEvent, parentSkillId: string): boolean {
-  const isCandidate = event.candidateSkillIds.includes(parentSkillId);
-  if (!isCandidate) return false;
-  if (!event.selectedSkillIds.includes(parentSkillId)) return true; // 强候选未选中
-  if (event.failureClass !== undefined && BOUNDARY_FAILURE_CLASSES.has(event.failureClass)) {
-    return true; // 选中但条件不满足/环境漂移（boundary）
-  }
-  return false;
-}
-
 export interface ActivationInductionInput {
   /** 同一父 Skill 版本（parentSkillId/revision/sourceHash 一致）的真实 PracticeEvent 集。 */
   events: readonly PracticeEvent[];
+  /** 与事件逐一绑定的独立学习评估；缺失/重复/未通过均不得 consolidation。 */
+  assessments: readonly LearningEvidenceAssessment[];
   /** 父 SkillRecord（作者声明的 name/description/declaredAliases，分栏基准）。 */
   parentSkill: SkillRecord;
   /** 可选覆盖 profile createdAt；缺省 = max(occurredAt)。 */
@@ -185,35 +164,40 @@ export function induceActivationProfile(
 
   let passed = 0;
   let sourceHash: string | undefined;
-  const verified: PracticeEvent[] = [];
-  const nearMisses: PracticeEvent[] = [];
+  const assessmentByEventId = new Map<string, LearningEvidenceAssessment>();
+  for (const assessment of input.assessments) {
+    if (assessmentByEventId.has(assessment.eventId)) {
+      return fail("duplicate_assessment", 0);
+    }
+    assessmentByEventId.set(assessment.eventId, assessment);
+  }
+  const verified: Array<{ event: PracticeEvent; evidenceIds: readonly string[] }> = [];
+  const nearMisses: Array<{ event: PracticeEvent; evidenceIds: readonly string[] }> = [];
 
   for (const event of events) {
-    const policy = validatePracticeEvent(event);
-    if (!policy.ok) return fail("practice_event_policy_invalid", passed);
-    if (event.provenance !== "real") {
-      return fail("practice_event_not_real", passed); // evaluation/synthetic 禁止混入
-    }
-    if (!isSameParent(event, parentSkill)) {
-      return fail("parent_binding_mismatch", passed); // 不同父 revision 证据不得混入
-    }
+    if (!isSameParent(event, parentSkill)) return fail("parent_binding_mismatch", passed);
     if (sourceHash === undefined) {
       sourceHash = event.sourceHash;
     } else if (event.sourceHash !== sourceHash) {
       return fail("source_hash_mismatch", passed);
     }
 
-    if (event.attribution === "verified_skill_effect") {
-      verified.push(event);
-      passed += 1;
-      continue;
+    const admission = decideLearningAdmission({
+      event,
+      parentSkill,
+      assessment: assessmentByEventId.get(event.eventId),
+    });
+    if (
+      admission.reason === "practice_event_policy_invalid" ||
+      admission.reason === "practice_event_not_real"
+    ) {
+      return fail(admission.reason, passed);
     }
-    if (isNearMiss(event, parentSkill.skillId)) {
-      nearMisses.push(event);
-      passed += 1;
-      continue;
+    if (admission.decision === "positive") {
+      verified.push({ event, evidenceIds: admission.evidenceIds });
+    } else if (admission.decision === "boundary") {
+      nearMisses.push({ event, evidenceIds: admission.evidenceIds });
     }
-    // 无关事件：未选中且非 boundary / external failure / unknown 归因 ⇒ 跳过不产 cue。
     passed += 1;
   }
 
@@ -226,10 +210,10 @@ export function induceActivationProfile(
   // learnedAliases：跨 verified 事件按文本聚合（作者 alias/name 去重）。
   // -------------------------------------------------------------------------
   const aliasTextToEvents = new Map<string, string[]>();
-  for (const event of verified) {
+  for (const { event, evidenceIds } of verified) {
     for (const candidate of extractAliasCandidates(event.redactedTaskFeatures)) {
       if (isAuthorOverlap(candidate, parentSkill)) continue; // 不覆盖作者原文
-      aliasTextToEvents.set(candidate, [...(aliasTextToEvents.get(candidate) ?? []), event.eventId]);
+      aliasTextToEvents.set(candidate, [...(aliasTextToEvents.get(candidate) ?? []), ...evidenceIds]);
     }
   }
   const learnedAliases: ActivationProfile["learnedAliases"] = [];
@@ -245,11 +229,13 @@ export function induceActivationProfile(
   // positiveExamples：每个 verified 事件一条（features = 当次脱敏特征，可追溯）。
   // -------------------------------------------------------------------------
   const positiveExamples: ActivationProfile["positiveExamples"] = [];
-  for (const event of [...verified].sort((a, b) => (a.eventId < b.eventId ? -1 : 1))) {
+  for (const { event, evidenceIds } of [...verified].sort((a, b) =>
+    a.event.eventId < b.event.eventId ? -1 : 1,
+  )) {
     positiveExamples.push({
       cueId: cueIdOf(parentSkill.skillId, "positive", event.eventId),
       features: [...event.redactedTaskFeatures],
-      evidenceIds: [event.eventId],
+      evidenceIds: [...evidenceIds],
     });
   }
 
@@ -257,11 +243,13 @@ export function induceActivationProfile(
   // nearMissExamples：每个 near-miss/boundary 事件一条（只作降权/解释，绝不硬过滤）。
   // -------------------------------------------------------------------------
   const nearMissExamples: ActivationProfile["nearMissExamples"] = [];
-  for (const event of [...nearMisses].sort((a, b) => (a.eventId < b.eventId ? -1 : 1))) {
+  for (const { event, evidenceIds } of [...nearMisses].sort((a, b) =>
+    a.event.eventId < b.event.eventId ? -1 : 1,
+  )) {
     nearMissExamples.push({
       cueId: cueIdOf(parentSkill.skillId, "near_miss", event.eventId),
       features: [...event.redactedTaskFeatures],
-      evidenceIds: [event.eventId],
+      evidenceIds: [...evidenceIds],
     });
   }
 
@@ -272,13 +260,13 @@ export function induceActivationProfile(
   // 未冻结；shadow rerank 暂不消费 environmentCues（仅存储供后续环境敏感评估）。
   // -------------------------------------------------------------------------
   const envFingerprintToEvents = new Map<string, string[]>();
-  for (const event of [...verified, ...nearMisses]) {
+  for (const { event, evidenceIds } of [...verified, ...nearMisses]) {
     if (event.environmentFingerprint === undefined) continue;
     const normalized = sanitizeText(event.environmentFingerprint, 200);
     if (normalized.length === 0) continue;
     envFingerprintToEvents.set(
       normalized,
-      [...(envFingerprintToEvents.get(normalized) ?? []), event.eventId],
+      [...(envFingerprintToEvents.get(normalized) ?? []), ...evidenceIds],
     );
   }
   const environmentCues: ActivationProfile["environmentCues"] = [];

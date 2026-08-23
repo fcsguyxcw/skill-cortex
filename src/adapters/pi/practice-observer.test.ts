@@ -246,6 +246,7 @@ async function createHarness(options: {
   source?: FakeSnapshotSource;
   verifyLoadResult?: (details: unknown, snapshot: RouteSnapshotSkill) => boolean;
   compiledTool?: CompiledToolOptions;
+  learningEnabled?: () => boolean | Promise<boolean>;
 }): Promise<ObserverHarness> {
   const projectRoot = makeTempProject();
   const store = await makeStore(projectRoot);
@@ -262,6 +263,7 @@ async function createHarness(options: {
     routeSnapshotSource: source,
     verifyLoadResult: options.verifyLoadResult,
     compiledTool: options.compiledTool,
+    learningEnabled: options.learningEnabled,
     onEvent: (event) => events.push(event),
     onStatus: (status) => statuses.push(status),
     onError: (error, phase) => errors.push({ error, phase }),
@@ -378,6 +380,31 @@ describe("registerPracticeObserver", () => {
     assert.equal(listed.length, 1);
     const queried = await harness.store.queryEvidence(event.tenantScope);
     assert.equal(queried.length, 1, "production evidence query 必须能看到该 real 事件");
+  });
+
+  it("learning pause 在摄入前与落盘前均 fail closed", async () => {
+    const skill = makeSkill(3);
+    let enabled = false;
+    const harness = await createHarness({
+      snapshot: { exposedToAgent: true, candidateSkills: [skill] },
+      learningEnabled: () => enabled,
+    });
+    await runWithLoadSkill(harness, "paused-before", skill);
+    assert.equal(harness.events.length, 0);
+    assert.equal(harness.statuses.at(-1)?.reason, "learning_paused");
+
+    enabled = true;
+    harness.source.pending = { exposedToAgent: true, candidateSkills: [skill] };
+    await harness.emitBeforeAgentStart("merge PDF documents", "paused-mid-run");
+    await harness.emitToolCall(loadSkillCall("c1", skill), "paused-mid-run");
+    await harness.emitToolResult(
+      loadSkillResult("c1", skill, okLoadDetails(`sha256:${HASH_64}`)),
+      "paused-mid-run",
+    );
+    enabled = false;
+    await harness.emitAgentSettled("paused-mid-run");
+    assert.equal(harness.events.length, 0);
+    assert.equal(harness.statuses.at(-1)?.reason, "learning_paused");
   });
 
   it("seam 未接线（无 routeSnapshotSource）⇒ fail-closed：0 事件，onStatus 报告 unwired", async () => {

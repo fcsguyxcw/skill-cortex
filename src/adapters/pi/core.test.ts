@@ -142,6 +142,16 @@ describe("createDiscoveryServices.run（摄入 + BM25）", () => {
     assert.equal(services.state.recordCount, 6);
   });
 
+  it("shadow comparators 不改变生产 topK：topK=1 仍只返回 1，但并行观察到 K=5", async () => {
+    const services = createDiscoveryServices({ topK: 1 });
+    const outcome = await services.run("docx report", makeDocxFamily(6));
+    assert.equal(outcome.ok, true);
+    assert.equal(outcome.candidates.length, 1);
+    assert.deepEqual(outcome.candidateBudget?.variants.map((item) => item.budget), [1, 2, 3, 5]);
+    assert.ok((outcome.candidateBudget?.variants.at(-1)?.candidateSkillIds.length ?? 0) > 1);
+    assert.deepEqual(outcome.cardProjection?.variants.map((item) => item.maxDescriptionChars), [120, 240, 480]);
+  });
+
   it("disableModelInvocation=true 被过滤（不进 Registry、不进候选）", async () => {
     const services = createDiscoveryServices({ topK: 5 });
     const family = makeDocxFamily(3);

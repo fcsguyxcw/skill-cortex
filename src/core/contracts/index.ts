@@ -48,6 +48,52 @@ export interface SkillCandidate {
   >;
 }
 
+export type ExposureMatchField = "name" | "description" | "alias" | "learned_cue";
+
+/** D2 shadow-only Exposure Gate observation；只含检索派生事实，不含任务原文或 active 决策。 */
+export interface ExposureObservation {
+  baselineWouldInject: boolean;
+  candidateCount: number;
+  topScore?: number;
+  secondScore?: number;
+  topMatchFields: readonly ExposureMatchField[];
+  exactDeclaredReference: boolean;
+}
+
+export type ShadowCandidateBudget = 1 | 2 | 3 | 5;
+export interface CandidateBudgetShadowObservation {
+  variants: ReadonlyArray<{
+    budget: ShadowCandidateBudget;
+    candidateSkillIds: readonly string[];
+  }>;
+}
+
+export interface LightweightSkillCard {
+  skillId: string;
+  skillRevision: string;
+  name: string;
+  displayDescription: string;
+}
+
+export interface CardProjectionShadowObservation {
+  baselineDescriptionChars: number;
+  variants: ReadonlyArray<{
+    maxDescriptionChars: 120 | 240 | 480;
+    totalDescriptionChars: number;
+    truncatedCandidateCount: number;
+  }>;
+}
+
+export interface ExposureObservationRecord extends ExposureObservation {
+  schemaVersion: 1;
+  routeDecisionId: string;
+  tenantScope: string;
+  observedAt: string;
+  selectedSkillIds: readonly string[];
+  candidateBudget?: CandidateBudgetShadowObservation;
+  cardProjection?: CardProjectionShadowObservation;
+}
+
 export interface ActivationProfile {
   schemaVersion: 1;
   profileId: string;
@@ -113,6 +159,40 @@ export interface PracticeEvent {
   firstAttributableFailureStepId?: string;
   sensitivity: "none" | "internal" | "confidential";
   retentionClass: string;
+}
+
+export type LearningTaskOutcome = "verified_success" | "verified_failure" | "unknown";
+export type SkillContribution = "verified" | "disproved" | "mixed" | "unknown";
+export type LearningEvidenceKind = "positive" | "near_miss" | "boundary" | "external_failure";
+
+/**
+ * PracticeEvent 之外的独立学习评估。事件只记录 observation；本评估才声明任务结果、
+ * Skill 贡献与 evidence kind，并绑定父 Skill revision/source。
+ */
+export interface LearningEvidenceAssessment {
+  schemaVersion: 1;
+  assessmentId: string;
+  eventId: string;
+  tenantScope: string;
+  parentSkillId: string;
+  parentSkillRevision: string;
+  sourceHash: string;
+  taskOutcome: LearningTaskOutcome;
+  skillContribution: SkillContribution;
+  evidenceKind: LearningEvidenceKind;
+  verifier: {
+    kind: "independent_verifier" | "user_confirmation";
+    result: "pass" | "fail" | "unknown";
+  };
+  assessedAt: string;
+}
+
+export interface LearningAdmissionDecision {
+  decision: "positive" | "boundary" | "reject";
+  taskOutcome: LearningTaskOutcome;
+  skillContribution: SkillContribution;
+  reason: string;
+  evidenceIds: readonly string[];
 }
 
 export interface CompiledProcedure {

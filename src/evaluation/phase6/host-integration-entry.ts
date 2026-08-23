@@ -8,7 +8,7 @@
  *   pi.on("before_agent_start")            // 先刷新 active profiles（注册顺序先于 cortex）
  *     → registerSkillCortex({ inject, onDiscovery: push, onCatalog, overlayProfiles, overlayOptions })
  *     → registerPracticeObserver({ store, routeSnapshotSource, evidenceHook: pagination, onEvent })
- *     → pi.on("agent_settled")             // 冲刷 verified 事件 → induction → shadow → 受控 promotion
+ *     → pi.on("agent_settled")             // D1 admission 缺失时阻止 consolidation
  *
  * 受控 promotion（Seam 3）：report 只能来自冻结 real-skill 评估 provider（buildFrozenEvaluation）
  * + evaluateProfileForPromotion 重算；caller 无法注入手搓评估集/report/verdict。
@@ -25,8 +25,10 @@ import path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 import { registerSkillCortex } from "../../adapters/pi/index.ts";
+import { registerLearningControls } from "../../adapters/pi/learning-controls.ts";
 import {
   createDiscoverySnapshotSource,
+  defaultTenantScope,
   registerPracticeObserver,
 } from "../../adapters/pi/practice-observer.ts";
 import { createPaginationEvidenceHook } from "../../adapters/pi/practice-pagination-hook.ts";
@@ -34,6 +36,9 @@ import {
   FROZEN_PROMOTION_OVERLAY,
   runActivationHostLifecycle,
 } from "../../activation/host.ts";
+import { LearningAssessmentStore } from "../../activation/admission-store.ts";
+import { LearningControlStore } from "../../activation/learning-control-store.ts";
+import { LearningControls } from "../../activation/learning-controls.ts";
 import { ActivationProfileStore } from "../../activation/store.ts";
 import type {
   ActivationProfile,
@@ -42,6 +47,7 @@ import type {
 } from "../../core/contracts/index.ts";
 import { resolveAttribution } from "../../practice/policy/index.ts";
 import { PracticeStore } from "../../practice/store/index.ts";
+import { ExposureObservationStore } from "../../exposure/index.ts";
 
 export const PHASE6_SHADOW_REPORT_ID = "shadow:phase6-host-001" as const;
 export const PHASE6_PROMOTION_REPORT_ID = "promotion:phase6-host-001" as const;
@@ -57,6 +63,29 @@ export default function phase6HostIntegrationEntry(pi: ExtensionAPI): void {
     rootDir: path.join(projectRoot, ".skill-cortex", "activation"),
     projectRoot,
   });
+  const assessmentStore = new LearningAssessmentStore({
+    rootDir: path.join(projectRoot, ".skill-cortex", "learning-assessments"),
+    projectRoot,
+  });
+  const controlStore = new LearningControlStore({
+    rootDir: path.join(projectRoot, ".skill-cortex", "control"),
+    projectRoot,
+    tenantScope: defaultTenantScope(projectRoot),
+  });
+  const exposureStore = new ExposureObservationStore({
+    rootDir: path.join(projectRoot, ".skill-cortex", "exposure"),
+    projectRoot,
+  });
+  registerLearningControls(
+    pi,
+    new LearningControls(
+      controlStore,
+      assessmentStore,
+      practiceStore,
+      activationStore,
+      defaultTenantScope(projectRoot),
+    ),
+  );
 
   // 内存管线状态（store 为唯一持久化真源；activeProfiles 每次 run 前从 store 刷新）。
   let catalogRecords: readonly SkillRecord[] = [];
@@ -84,6 +113,8 @@ export default function phase6HostIntegrationEntry(pi: ExtensionAPI): void {
     projectRoot,
     routeSnapshotSource: source,
     evidenceHook: createPaginationEvidenceHook(),
+    learningEnabled: async () => (await controlStore.status()).learningEnabled,
+    onExposure: (record) => exposureStore.append(record),
     onEvent: (event) => {
       if (event.provenance !== "real") return;
       // observer 落盘时 store 用 policy 正规化 attribution（onEvent 收到的是 append 前原始值，
@@ -101,6 +132,9 @@ export default function phase6HostIntegrationEntry(pi: ExtensionAPI): void {
     await runActivationHostLifecycle({
       store: activationStore,
       eventsByParent,
+      assessmentSource: assessmentStore,
+      tenantScope: defaultTenantScope(projectRoot),
+      learningEnabled: (await controlStore.status()).learningEnabled,
       catalogRecords,
       shadowReportId: PHASE6_SHADOW_REPORT_ID,
       promotionReportId: PHASE6_PROMOTION_REPORT_ID,
@@ -121,6 +155,22 @@ export function phase6ActivationStore(root: string): ActivationProfileStore {
 export function phase6PracticeStore(root: string): PracticeStore {
   return new PracticeStore({
     rootDir: path.join(root, ".skill-cortex", "practice"),
+    projectRoot: root,
+  });
+}
+
+/** 供 E2E 测试验证暂停/恢复在宿主重载后的持久状态。 */
+export function phase6LearningControlStore(root: string): LearningControlStore {
+  return new LearningControlStore({
+    rootDir: path.join(root, ".skill-cortex", "control"),
+    projectRoot: root,
+    tenantScope: defaultTenantScope(root),
+  });
+}
+
+export function phase6ExposureStore(root: string): ExposureObservationStore {
+  return new ExposureObservationStore({
+    rootDir: path.join(root, ".skill-cortex", "exposure"),
     projectRoot: root,
   });
 }

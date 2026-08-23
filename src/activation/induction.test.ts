@@ -14,7 +14,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import type { ActivationProfile, PracticeEvent, SkillRecord } from "../core/contracts/index.ts";
+import type {
+  ActivationProfile,
+  LearningEvidenceAssessment,
+  PracticeEvent,
+  SkillRecord,
+} from "../core/contracts/index.ts";
 import { validatePracticeEvent } from "../practice/policy/index.ts";
 import { induceActivationProfile } from "./index.ts";
 
@@ -86,6 +91,37 @@ function nearMissEvent(id: string, overrides: Partial<PracticeEvent> = {}): Prac
   });
 }
 
+function assessmentFor(event: PracticeEvent): LearningEvidenceAssessment {
+  const selected = event.selectedSkillIds.includes(event.parentSkillId);
+  const boundary = new Set(["precondition_mismatch", "runtime_guard_failure", "postcondition_failure"])
+    .has(event.failureClass ?? "");
+  const external = new Set([
+    "tool_failure",
+    "environment_drift",
+    "permission_denied",
+    "user_interruption",
+    "procedure_error",
+  ]).has(event.failureClass ?? "");
+  return {
+    schemaVersion: 1,
+    assessmentId: `assessment:${event.eventId}`,
+    eventId: event.eventId,
+    tenantScope: event.tenantScope,
+    parentSkillId: event.parentSkillId,
+    parentSkillRevision: event.parentSkillRevision,
+    sourceHash: event.sourceHash,
+    taskOutcome: boundary || external ? "verified_failure" : "verified_success",
+    skillContribution: selected && !boundary && !external ? "verified" : "disproved",
+    evidenceKind: !selected ? "near_miss" : boundary ? "boundary" : external ? "external_failure" : "positive",
+    verifier: { kind: "independent_verifier", result: "pass" },
+    assessedAt: "2026-08-23T00:01:00.000Z",
+  };
+}
+
+function assessmentsFor(events: readonly PracticeEvent[]): LearningEvidenceAssessment[] {
+  return events.map(assessmentFor);
+}
+
 describe("Activation cue induction：verified 事件", () => {
   it("verified 事件 ⇒ draft profile：父绑定 + positiveExamples 每事件一条（features 受控、evidenceIds 可追溯）", () => {
     const events = [
@@ -95,7 +131,7 @@ describe("Activation cue induction：verified 事件", () => {
     for (const event of events) {
       assert.equal(validatePracticeEvent(event).ok, true, `${event.eventId} 必须通过 policy`);
     }
-    const result = induceActivationProfile({ events, parentSkill: parentSkill() });
+    const result = induceActivationProfile({ events, assessments: assessmentsFor(events), parentSkill: parentSkill() });
     assert.equal(result.ok, true);
     if (!result.ok) return;
     const profile = result.profile;
@@ -107,7 +143,7 @@ describe("Activation cue induction：verified 事件", () => {
     assert.equal(profile.positiveExamples.length, 2);
     for (const example of profile.positiveExamples) {
       assert.match(example.cueId, /^cue:[0-9a-f]{24}$/);
-      assert.equal(example.evidenceIds.length, 1);
+      assert.equal(example.evidenceIds.length, 2);
       assert.ok(example.features.length > 0);
       assert.ok(example.features.every((f) => f.startsWith("prompt-hash:") || f.startsWith("candidate-count:") || f.startsWith("selected-count:") || f === "pagination-check"));
     }
@@ -116,7 +152,11 @@ describe("Activation cue induction：verified 事件", () => {
       profile.learnedAliases.map((alias) => alias.text),
       ["pagination-check"],
     );
-    assert.deepEqual(profile.learnedAliases[0]!.evidenceIds, ["obs-1", "obs-2"], "同文本跨事件聚合证据");
+    assert.deepEqual(
+      profile.learnedAliases[0]!.evidenceIds,
+      ["assessment:obs-1", "assessment:obs-2", "obs-1", "obs-2"],
+      "同文本跨事件聚合 observation 与独立评估证据",
+    );
     // 时间戳确定性。
     assert.equal(profile.createdAt, "2026-08-15T00:00:00.000Z");
     assert.equal(profile.updatedAt, profile.createdAt);
@@ -128,7 +168,7 @@ describe("Activation cue induction：verified 事件", () => {
         redactedTaskFeatures: ["prompt-hash:ccc", "pagination-check", "POSTGRES-BEST-PRACTICES", "supabase-pg"],
       }),
     ];
-    const result = induceActivationProfile({ events, parentSkill: parentSkill() });
+    const result = induceActivationProfile({ events, assessments: assessmentsFor(events), parentSkill: parentSkill() });
     assert.equal(result.ok, true);
     if (!result.ok) return;
     const profile = result.profile;
@@ -148,7 +188,7 @@ describe("Activation cue induction：verified 事件", () => {
         redactedTaskFeatures: ["prompt-hash:ddd", "分页检测:offset"],
       }),
     ];
-    const result = induceActivationProfile({ events, parentSkill: parentSkill() });
+    const result = induceActivationProfile({ events, assessments: assessmentsFor(events), parentSkill: parentSkill() });
     assert.equal(result.ok, true);
     if (!result.ok) return;
     const serialized = JSON.stringify(result.profile);
@@ -166,7 +206,7 @@ describe("Activation cue induction：near-miss / boundary", () => {
       verifiedEvent("obs-5"),
       nearMissEvent("obs-6", { redactedTaskFeatures: ["prompt-hash:eee", "candidate-count:2", "selected-count:0"] }),
     ];
-    const result = induceActivationProfile({ events, parentSkill: parentSkill() });
+    const result = induceActivationProfile({ events, assessments: assessmentsFor(events), parentSkill: parentSkill() });
     assert.equal(result.ok, true);
     if (!result.ok) return;
     const profile = result.profile;
@@ -188,7 +228,7 @@ describe("Activation cue induction：near-miss / boundary", () => {
       verifierResults: [{ verifierId: "v1", result: "fail" }],
     });
     const events = [boundary, external];
-    const result = induceActivationProfile({ events, parentSkill: parentSkill() });
+    const result = induceActivationProfile({ events, assessments: assessmentsFor(events), parentSkill: parentSkill() });
     assert.equal(result.ok, true);
     if (!result.ok) return;
     // 无 verified ⇒ 只有 near-miss 也可生成 profile（降权证据）。
@@ -210,7 +250,7 @@ describe("Activation cue induction：near-miss / boundary", () => {
         verifierResults: [{ verifierId: "v1", result: "fail" }],
       }),
     ];
-    const result = induceActivationProfile({ events, parentSkill: parentSkill() });
+    const result = induceActivationProfile({ events, assessments: assessmentsFor(events), parentSkill: parentSkill() });
     assert.equal(result.ok, false, "无 verified 且无 near-miss ⇒ no_eligible_events");
     if (!result.ok) assert.equal(result.reason, "no_eligible_events");
   });
@@ -223,13 +263,16 @@ describe("Activation cue induction：environmentCues 与 fail-closed", () => {
       verifiedEvent("obs-11", { environmentFingerprint: "os:win32 runtime:node24" }),
       verifiedEvent("obs-12"), // 无 fingerprint
     ];
-    const result = induceActivationProfile({ events, parentSkill: parentSkill() });
+    const result = induceActivationProfile({ events, assessments: assessmentsFor(events), parentSkill: parentSkill() });
     assert.equal(result.ok, true);
     if (!result.ok) return;
     assert.equal(result.profile.environmentCues.length, 1, "同 fingerprint 聚合为一条 cue");
     assert.equal(result.profile.environmentCues[0]!.key, "environment");
     assert.equal(result.profile.environmentCues[0]!.valueClass, "os:win32 runtime:node24");
-    assert.deepEqual(result.profile.environmentCues[0]!.evidenceIds, ["obs-10", "obs-11"]);
+    assert.deepEqual(
+      result.profile.environmentCues[0]!.evidenceIds,
+      ["assessment:obs-10", "assessment:obs-11", "obs-10", "obs-11"],
+    );
   });
 
   it("evaluation/synthetic 事件禁止混入 ⇒ fail practice_event_not_real", () => {
@@ -237,7 +280,7 @@ describe("Activation cue induction：environmentCues 与 fail-closed", () => {
       verifiedEvent("obs-13"),
       { ...verifiedEvent("eval-1"), provenance: "evaluation" as const },
     ];
-    const result = induceActivationProfile({ events, parentSkill: parentSkill() });
+    const result = induceActivationProfile({ events, assessments: assessmentsFor(events), parentSkill: parentSkill() });
     assert.equal(result.ok, false);
     if (!result.ok) assert.equal(result.reason, "practice_event_not_real");
   });
@@ -247,7 +290,7 @@ describe("Activation cue induction：environmentCues 与 fail-closed", () => {
       verifiedEvent("obs-14"),
       { ...verifiedEvent("obs-15"), parentSkillId: OTHER_SKILL_ID },
     ];
-    const result = induceActivationProfile({ events, parentSkill: parentSkill() });
+    const result = induceActivationProfile({ events, assessments: assessmentsFor(events), parentSkill: parentSkill() });
     assert.equal(result.ok, false);
     if (!result.ok) assert.equal(result.reason, "parent_binding_mismatch");
   });
@@ -258,7 +301,7 @@ describe("Activation cue induction：environmentCues 与 fail-closed", () => {
     ];
     // 该事件本身 policy 非法（绝对路径特征）。
     assert.equal(validatePracticeEvent(events[0]!).ok, false);
-    const result = induceActivationProfile({ events, parentSkill: parentSkill() });
+    const result = induceActivationProfile({ events, assessments: assessmentsFor(events), parentSkill: parentSkill() });
     assert.equal(result.ok, false);
     if (!result.ok) assert.equal(result.reason, "practice_event_policy_invalid");
   });
@@ -269,8 +312,9 @@ describe("Activation cue induction：environmentCues 与 fail-closed", () => {
       nearMissEvent("obs-18"),
       makeEvent("obs-19", { attribution: "mixed", failureClass: "environment_drift", verifierResults: [{ verifierId: "v1", result: "fail" }] }),
     ];
-    const first = induceActivationProfile({ events, parentSkill: parentSkill() });
-    const second = induceActivationProfile({ events: [...events].reverse(), parentSkill: parentSkill() });
+    const assessments = assessmentsFor(events);
+    const first = induceActivationProfile({ events, assessments, parentSkill: parentSkill() });
+    const second = induceActivationProfile({ events: [...events].reverse(), assessments: [...assessments].reverse(), parentSkill: parentSkill() });
     assert.equal(first.ok, true);
     assert.ok(second.ok);
     assert.deepEqual(second, first, "输入顺序不影响输出");

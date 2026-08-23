@@ -12,6 +12,13 @@ export type {
 } from "./bm25.ts";
 export { formatCandidateCards } from "./candidate-card.ts";
 export {
+  observeCandidateBudgets,
+  observeCardProjections,
+  projectLightweightCards,
+  SHADOW_CANDIDATE_BUDGETS,
+  SHADOW_DESCRIPTION_LIMITS,
+} from "./shadow-comparators.ts";
+export {
   buildQueryExpansionIndex,
   DEFAULT_QUERY_EXPANSION_RULES,
   expandQuery,

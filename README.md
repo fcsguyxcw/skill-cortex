@@ -83,8 +83,8 @@ flowchart TD
   No-Skill/hard-confuser 污染；它没有通过 promotion。
 - Selection Memory held-out 支持候选已存在时的结构化 Memory Context，但 retrieval miss 仍是端到端
   瓶颈；该结果不证明真实 PracticeEvent formation、Pi host production 或自动 promotion。
-- 当前 `.pi/extensions/skill-cortex/index.ts` 只接 discovery 与 Practice observer，没有启动 procedure
-  execution，也没有因 ADR-0014 自动获得新的 exposure、control 或 cache 能力。
+- 当前 `.pi/extensions/skill-cortex/index.ts` 已接 discovery、Practice observer、D1 用户控制与 D2
+  Exposure shadow observation；没有启动 procedure execution，也没有启用 exposure suppress 或 cache。
 
 ## 当前实施顺序
 
@@ -95,7 +95,18 @@ flowchart TD
 4. **D3 Catalog/overlay cache**：Skill 库不变时零重建，变化时正确失效。
 5. **D4 受控 active 验证**：分层关闭 admission、exposure、selection、control、cache 与 host E2E gate。
 
-当前只完成 D0 设计，不得把设计合同表述为已实现能力。
+当前已完成 D0。D1 已实现 Admission component、project-local assessment Store，以及真实 Pi 工具入口的
+status/list/pause/resume/forget：pause 跨重启持久化并阻止新 evidence 与 induction/promotion；evidence
+删除级联 suspend 依赖 profile，profile 删除落 retired tombstone。可信真实宿主 contribution verifier
+仍未实现，因此 G1 与 D1 end-to-end 仍未完成，不得据此宣称 D1 完成。
+
+D2 第一切片已实现 Exposure shadow observation：真实 Pi 入口把每轮 retriever 的有界结构化事实与最终
+合法 Skill/No-Skill 选择写入 project-local append-only Store，不保存任务原文。它不返回 active
+show/abstain 决策，当前候选注入行为完全不变；G2 冻结评估与 active policy 尚未开始。
+
+D2 后续两个 shadow 切片也已接线：Candidate Budget 并行记录 K=1/2/3/5 的候选前缀；轻量卡并行记录
+作者 description 在 120/240/480 字符预算下的成本与截断数量。两者都随真实 run observation 落盘，
+但不选择推荐预算、不改变生产 Top-K/排序/候选卡，也不生成 Memory hint；G3 仍未关闭。
 
 ## 不可突破的约束
 

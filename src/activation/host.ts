@@ -19,10 +19,12 @@
  */
 import type {
   ActivationProfile,
+  LearningEvidenceAssessment,
   PracticeEvent,
   SkillRecord,
 } from "../core/contracts/index.ts";
 import { PROFILE_SHADOW_REASON_PARENT_REVISION } from "./cascade.ts";
+import type { LearningAssessmentReader } from "./admission-store.ts";
 import {
   evaluateOverlay,
   type EvaluateOptions,
@@ -129,11 +131,16 @@ export type InduceResult =
 export async function induceAndStoreShadow(
   store: ActivationProfileStore,
   events: readonly PracticeEvent[],
+  assessmentSource: LearningAssessmentReader,
+  tenantScope: string,
   parentSkill: SkillRecord,
   shadowReportId: string,
   trigger: TriggerSource = "procedure",
 ): Promise<InduceResult> {
-  const induced = induceActivationProfile({ events, parentSkill });
+  const assessments = (
+    await Promise.all(events.map((event) => assessmentSource.getAssessment(tenantScope, event.eventId)))
+  ).filter((assessment): assessment is LearningEvidenceAssessment => assessment !== undefined);
+  const induced = induceActivationProfile({ events, assessments, parentSkill });
   if (!induced.ok) {
     return { ok: false, reason: induced.reason };
   }
@@ -196,6 +203,11 @@ export interface ActivationHostLifecycleInput {
   store: ActivationProfileStore;
   /** verified_skill_effect 事件按 parentSkillId 分组（observer onEvent 累积）。 */
   eventsByParent: ReadonlyMap<string, readonly PracticeEvent[]>;
+  /** project-local assessment Store/read seam；host 不直接接收 caller 临时 assessment 对象。 */
+  assessmentSource: LearningAssessmentReader;
+  tenantScope: string;
+  /** false 时仍执行 revision 失效，但禁止 induction/promotion。 */
+  learningEnabled?: boolean;
   /** 当次 discovery catalog（父 SkillRecord 作者字段 + revision 漂移判定）。 */
   catalogRecords: readonly SkillRecord[];
   shadowReportId: string;
@@ -230,6 +242,9 @@ export async function runActivationHostLifecycle(
     currentRevisionBySkillId,
     trigger,
   );
+  if (input.learningEnabled === false) {
+    return { reverted, inducedProfileIds: [], promotedProfileIds: [] };
+  }
 
   // 2. induction → shadow；3. promotion → active（冻结 real-skill 评估 provider）。
   const inducedProfileIds: string[] = [];
@@ -240,6 +255,8 @@ export async function runActivationHostLifecycle(
     const induced = await induceAndStoreShadow(
       input.store,
       events,
+      input.assessmentSource,
+      input.tenantScope,
       record,
       input.shadowReportId,
       trigger,

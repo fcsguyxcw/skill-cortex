@@ -40,7 +40,7 @@ import type {
   ToolResultEvent,
 } from "@earendil-works/pi-coding-agent";
 
-import type { PracticeEvent } from "../../core/contracts/index.ts";
+import type { CandidateBudgetShadowObservation, CardProjectionShadowObservation, ExposureObservation, ExposureObservationRecord, PracticeEvent } from "../../core/contracts/index.ts";
 import { sha256Hex } from "../../core/registry/index.ts";
 import { resolveAttribution } from "../../practice/policy/index.ts";
 import { PracticeStore } from "../../practice/store/index.ts";
@@ -58,6 +58,7 @@ export interface ObserverStatus {
     | "no_route_snapshot_source"
     | "no_route_snapshot"
     | "not_exposed_to_agent"
+    | "learning_paused"
     | "ok";
   /** 最近一次 finalize 成功落盘的事件数。 */
   appendedEvents?: number;
@@ -122,6 +123,9 @@ export interface AttributableSelection {
 export interface RouteSnapshot {
   exposedToAgent: boolean;
   candidateSkills: readonly RouteSnapshotSkill[];
+  exposure?: ExposureObservation;
+  candidateBudget?: CandidateBudgetShadowObservation;
+  cardProjection?: CardProjectionShadowObservation;
 }
 
 /**
@@ -164,6 +168,10 @@ export interface PracticeObserverOptions {
   onEvent?: (event: PracticeEvent) => void;
   /** 接线状态回调。 */
   onStatus?: (status: ObserverStatus) => void;
+  /** 持久化前学习开关；false 时不保留 run、不写 PracticeEvent。缺省=true。 */
+  learningEnabled?: () => boolean | Promise<boolean>;
+  /** D2 shadow-only observation 落盘 seam；只接收脱敏检索事实与最终合法选择。 */
+  onExposure?: (record: ExposureObservationRecord) => void | Promise<void>;
   now?: () => Date;
 }
 
@@ -422,6 +430,9 @@ export function createDiscoverySnapshotSource(): DiscoverySnapshotSource {
           skillId: candidate.skillId,
           skillRevision: candidate.skillRevision,
         })),
+        exposure: result.exposure,
+        candidateBudget: result.candidateBudget,
+        cardProjection: result.cardProjection,
       };
     },
     takeRouteSnapshot(): RouteSnapshot | undefined {
@@ -751,6 +762,12 @@ export function registerPracticeObserver(
     try {
       const sessionId = getSessionId(ctx);
       if (sessionId === undefined) return; // 无 session 关联 ⇒ 不采集（fail-closed）
+      if ((await options.learningEnabled?.()) === false) {
+        currentRunBySession.delete(sessionId);
+        options.routeSnapshotSource?.clear();
+        onStatus?.({ wired: true, reason: "learning_paused", appendedEvents: 0 });
+        return;
+      }
       const seq = (runSeqBySession.get(sessionId) ?? 0) + 1;
       runSeqBySession.set(sessionId, seq);
       const runKey = `${sessionId}:${seq}`;
@@ -822,6 +839,11 @@ export function registerPracticeObserver(
       // settled 后清空 pending，防止旧快照残留串到下一轮（下一轮 cortex 会重新 push）。
       options.routeSnapshotSource?.clear();
 
+      if ((await options.learningEnabled?.()) === false) {
+        onStatus?.({ wired: true, reason: "learning_paused", appendedEvents: 0 });
+        return;
+      }
+
       const snapshot = run.snapshot;
       if (snapshot === undefined) {
         onStatus?.({
@@ -837,12 +859,29 @@ export function registerPracticeObserver(
       // compiled 对同 skill 优先：被 compiled 覆盖的 load 选中不重复生成事件。
       const compiledBySkill = new Map(compiled.map((s) => [s.skillId, s] as const));
       const loadOnly = selected.filter((s) => !compiledBySkill.has(s.skillId));
+      const routeDecisionId = deriveRouteDecisionId(run.runKey);
+      if (snapshot.exposure !== undefined && options.onExposure !== undefined) {
+        try {
+          await options.onExposure({
+            schemaVersion: 1,
+            routeDecisionId,
+            tenantScope: run.tenantScope,
+            observedAt: run.startedAt,
+            ...snapshot.exposure,
+            selectedSkillIds: [...new Set([...compiled, ...loadOnly].map((item) => item.skillId))].sort(),
+            ...(snapshot.candidateBudget !== undefined ? { candidateBudget: snapshot.candidateBudget } : {}),
+            ...(snapshot.cardProjection !== undefined ? { cardProjection: snapshot.cardProjection } : {}),
+          });
+        } catch (error) {
+          // Exposure telemetry 与 Practice evidence 是独立 seam；记录失败可见，但不吞掉合法 evidence。
+          onError?.(error, "finalize");
+        }
+      }
       if (compiled.length === 0 && loadOnly.length === 0) {
         onStatus?.({ wired: true, reason: "ok", appendedEvents: 0 });
         return; // 无选中证据 ⇒ 不产生事件
       }
 
-      const routeDecisionId = deriveRouteDecisionId(run.runKey);
       const totalSelected = compiled.length + loadOnly.length;
       let appended = 0;
       for (const selection of compiled) {

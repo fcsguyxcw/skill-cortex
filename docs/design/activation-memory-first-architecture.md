@@ -2,7 +2,7 @@
 
 状态：Accepted design — 2026-08-22  
 权威范围：ADR-0014  
-实现状态：设计完成；本文件不证明任何新增宿主能力已经实现
+实现状态：D0 完成；D1 控制切片已实现但可信 contribution verifier 仍缺失；D2 Exposure shadow observation 已接真实入口
 
 ## 1. 目标
 
@@ -97,6 +97,10 @@ interface ExposureObservation {
 }
 ```
 
+持久化记录在上述字段外只增加 `schemaVersion`、`routeDecisionId`、tenant、时间与最终合法
+`selectedSkillIds`。它不保存任务原文，也不返回 active decision；`routeDecisionId` 与 PracticeEvent
+使用同一真实 run 标识，使有 Skill 与 No-Skill 两类选择都可审计。
+
 第一版是 **shadow-only**：只产生 observation，不返回 active `show/abstain` 决策，不改变当前 bounded
 候选注入行为。它的目标是收集能否安全 abstain 的证据，而不是先发明一个任务分类器。
 
@@ -110,6 +114,12 @@ interface ExposureObservation {
 - retriever 为空时 baseline 本来就不注入候选；retriever 非空时仍保持当前行为，直到 frozen shadow
   evidence 支持一个简单的 active policy；
 - `search_skills` 补搜始终保留，不依赖 Gate 主动猜测。
+
+当前第一切片已实现纯 `observeExposure` 投影、project-local append-only tenant 分区 Store，以及真实
+Pi discovery snapshot → observer settled 接线。生产入口在 learning enabled 时记录 Skill/No-Skill 两类
+run；pause 时不创建记录。当前仍沿用 bounded inject baseline，没有 suppress、任务分类器、Router LLM、
+`expected_gain` 或 active Gate policy，因此只能报告 D2 Exposure observation component + host integration，
+不能报告 G2 或 active Exposure 完成。
 
 未来 active policy 的上限也应保持很小，例如只读取候选集合、匹配字段、分数/分差和精确声明引用。
 如果必须增加任务类型词典、几十条规则或额外 Router LLM 才能过门，应判定 Gate 假设失败，继续使用
@@ -136,6 +146,10 @@ interface CandidateBudgetDecision {
 - 5 个只用于显式补搜、诊断或冻结 comparator，不作为每轮默认；
 - 不允许用固定 Top-1 换取低 token，因为这会破坏 multi-skill full-set recall；
 - 候选合并必须有全局上限，并报告被预算挤出的 Gold/互补意图。
+
+当前已实现 K=1/2/3/5 的确定性前缀 comparator，并随同一 `routeDecisionId` 的 Exposure record
+持久化各臂 candidate Skill IDs。它不输出推荐预算或 reason；即使生产 `topK=1`，也只在旁路读取
+最多 5 个候选用于观察，生产返回仍保持 1 个。没有独立 Gold/Selection 评估前不得据此改变预算。
 
 ### 4.4 Candidate Presentation module
 
@@ -165,6 +179,10 @@ interface LightweightSkillCard {
   `avoidWhen`，且受独立字符预算约束；
 - Agent 选中后才通过现有 fail-closed 加载 seam 读取完整 `SKILL.md`。
 
+当前轻量卡切片仅在 shadow 中比较作者 description 的 120/240/480 UTF-16 字符投影，记录每臂总字符
+数与被截断候选数；生产候选卡仍使用现有作者 description，不注入投影，不生成 `activationHint`。
+这些长度只是并行实验臂，不是发布阈值；需要 G3 的 multi-skill/hard-confuser/字符成本证据后才能选择。
+
 ### 4.5 Learning Admission module
 
 职责：把 observation 分类为可学习正例、可学习边界或不可 consolidation，隐藏 attribution、版本、
@@ -179,6 +197,44 @@ interface LearningAdmissionDecision {
   evidenceIds: readonly string[];
 }
 ```
+
+第一切片冻结以下最小独立评估形状；它与 append-only `PracticeEvent` 分开，避免事件中的任务结果或
+caller 自报 attribution 直接成为学习许可：
+
+```ts
+interface LearningEvidenceAssessment {
+  schemaVersion: 1;
+  assessmentId: string;
+  eventId: string;
+  tenantScope: string;
+  parentSkillId: string;
+  parentSkillRevision: string;
+  sourceHash: string;
+  taskOutcome: "verified_success" | "verified_failure" | "unknown";
+  skillContribution: "verified" | "disproved" | "mixed" | "unknown";
+  evidenceKind: "positive" | "near_miss" | "boundary" | "external_failure";
+  verifier: {
+    kind: "independent_verifier" | "user_confirmation";
+    result: "pass" | "fail" | "unknown";
+  };
+  assessedAt: string;
+}
+```
+
+当前 component 规则：assessment 必须通过 verifier，并精确绑定 event、父 Skill revision 与 source；
+positive 还必须同时满足真实事件、父 Skill 被候选和选中、`skill_md` 路径、verified task success 与
+verified contribution。near-miss/boundary 必须有明确的 disproved contribution 与结构化边界；
+环境、工具、权限、用户中断等外部失败只作 observation。`mixed/unknown`、evaluation/synthetic、
+compiled-procedure evidence 或缺 assessment 一律 reject。
+
+assessment 已由 project-local append-only Store 持久化：tenant 使用 hash 目录隔离，assessmentId 与
+eventId 在 tenant 内不可覆盖，写入前必须绑定 Practice Store 中已经存在的 real `skill_md` event，读取
+损坏 fail closed。host induction 只按 `tenantScope + eventId` 从 Store/read seam 取 assessment，不接收
+caller 临时数组或 Map。
+
+本切片尚未提供可信真实宿主 contribution verifier。当前隔离 ExtensionRunner 验收证明“load + result
+verifier pass 但 Store 中缺独立贡献 assessment ⇒ 零 ActivationProfile”；因此这里只能报告 Admission
+component、assessment persistence、用户控制与 host fail-closed seam，不能报告 G1 或 D1 end-to-end complete。
 
 准入矩阵：
 
@@ -216,6 +272,13 @@ interface MemoryControl {
   删除原始 Skill；
 - 返回内容只包含脱敏摘要、状态、父 Skill 身份、cue 数量和 evidence 引用，不返回完整用户任务；
 - 控制失败必须 fail closed，不能只改 UI 状态而继续后台学习。
+
+当前实现把控制状态持久化在 project-local tenant-hash 分区，并通过真实 Pi 工具暴露
+`skill_memory_status`、`skill_memory_set_learning`、`skill_memory_list` 与 `skill_memory_forget`。observer
+在摄入前和落盘前双重检查 pause，host lifecycle 在 pause 时不 induction/promotion；静态 discovery 与
+已有 active overlay 继续生效并由 status 明示。evidence forget 同时失效 PracticeEvent/assessment 并级联
+suspend 依赖 profile；profile forget 进入不可恢复的 retired tombstone。隔离 ExtensionRunner 已验证工具
+注册、pause 重启持久化、零新增 evidence、脱敏 list 和 profile forget；组件测试验证 evidence 级联。
 
 ## 5. No-Skill 合同
 

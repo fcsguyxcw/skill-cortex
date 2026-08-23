@@ -3,11 +3,18 @@ import path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 import { registerSkillCortex } from "../../../src/adapters/pi/index.ts";
+import { registerLearningControls } from "../../../src/adapters/pi/learning-controls.ts";
 import {
   createDiscoverySnapshotSource,
+  defaultTenantScope,
   registerPracticeObserver,
 } from "../../../src/adapters/pi/practice-observer.ts";
+import { LearningControlStore } from "../../../src/activation/learning-control-store.ts";
+import { LearningAssessmentStore } from "../../../src/activation/admission-store.ts";
+import { LearningControls } from "../../../src/activation/learning-controls.ts";
+import { ActivationProfileStore } from "../../../src/activation/store.ts";
 import { PracticeStore } from "../../../src/practice/store/index.ts";
+import { ExposureObservationStore } from "../../../src/exposure/index.ts";
 
 /**
  * Skill Cortex — Pi 扩展入口（project-local，经 jiti 免编译加载）。
@@ -33,18 +40,44 @@ import { PracticeStore } from "../../../src/practice/store/index.ts";
 export default function skillCortexEntry(pi: ExtensionAPI): void {
   const projectRoot = process.cwd();
   const source = createDiscoverySnapshotSource();
+  const tenantScope = defaultTenantScope(projectRoot);
+  const control = new LearningControlStore({
+    rootDir: path.join(projectRoot, ".skill-cortex", "control"),
+    projectRoot,
+    tenantScope,
+  });
+  const practice = new PracticeStore({
+    rootDir: path.join(projectRoot, ".skill-cortex", "practice"),
+    projectRoot,
+  });
+  const assessments = new LearningAssessmentStore({
+    rootDir: path.join(projectRoot, ".skill-cortex", "learning-assessments"),
+    projectRoot,
+  });
+  const activation = new ActivationProfileStore({
+    rootDir: path.join(projectRoot, ".skill-cortex", "activation"),
+    projectRoot,
+  });
+  const exposure = new ExposureObservationStore({
+    rootDir: path.join(projectRoot, ".skill-cortex", "exposure"),
+    projectRoot,
+  });
 
   registerSkillCortex(pi, {
     mode: "inject",
     onDiscovery: (result) => source.push(result),
   });
 
+  registerLearningControls(
+    pi,
+    new LearningControls(control, assessments, practice, activation, tenantScope),
+  );
+
   registerPracticeObserver(pi, {
-    store: new PracticeStore({
-      rootDir: path.join(projectRoot, ".skill-cortex", "practice"),
-      projectRoot,
-    }),
+    store: practice,
     projectRoot,
     routeSnapshotSource: source,
+    learningEnabled: async () => (await control.status()).learningEnabled,
+    onExposure: (record) => exposure.append(record),
   });
 }

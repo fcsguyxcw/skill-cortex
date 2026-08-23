@@ -19,10 +19,12 @@ import { after, before, describe, it } from "node:test";
 
 import type {
   ActivationProfile,
+  LearningEvidenceAssessment,
   PracticeEvent,
   SkillRecord,
 } from "../core/contracts/index.ts";
 import { buildIndex } from "../discovery/index.ts";
+import { LearningAssessmentStore } from "./admission-store.ts";
 import {
   applyActiveProfiles,
   buildFrozenEvaluation,
@@ -51,6 +53,7 @@ const SOURCE_HASH = "sha256:8e5a86aa92990a706512a6454e3a6a6345a950b454e75a11d048
 
 let tempRoot = "";
 let storeSeq = 0;
+let assessmentStoreSeq = 0;
 
 function makeStore(): ActivationProfileStore {
   storeSeq += 1;
@@ -158,7 +161,49 @@ function verifiedEventFor(record: SkillRecord, id: string): PracticeEvent {
   return verifiedEvent(id, {
     parentSkillId: record.skillId,
     parentSkillRevision: record.skillRevision,
+    sourceHash: record.sourceHash,
+    candidateSkillIds: [record.skillId],
+    selectedSkillIds: [record.skillId],
   });
+}
+
+function positiveAssessment(event: PracticeEvent): LearningEvidenceAssessment {
+  return {
+    schemaVersion: 1,
+    assessmentId: `assessment:${event.eventId}`,
+    eventId: event.eventId,
+    tenantScope: event.tenantScope,
+    parentSkillId: event.parentSkillId,
+    parentSkillRevision: event.parentSkillRevision,
+    sourceHash: event.sourceHash,
+    taskOutcome: "verified_success",
+    skillContribution: "verified",
+    evidenceKind: "positive",
+    verifier: { kind: "independent_verifier", result: "pass" },
+    assessedAt: "2026-08-23T00:01:00.000Z",
+  };
+}
+
+async function assessmentSourceFor(
+  events: readonly PracticeEvent[],
+  persist = true,
+): Promise<LearningAssessmentStore> {
+  assessmentStoreSeq += 1;
+  const source = new LearningAssessmentStore({
+    rootDir: path.join(tempRoot, `assessment-store-${assessmentStoreSeq}`),
+    projectRoot: tempRoot,
+  });
+  if (!persist) return source;
+  const eventByKey = new Map(events.map((event) => [`${event.tenantScope}\u0000${event.eventId}`, event]));
+  const eventSource = {
+    async getEvent(tenantScope: string, eventId: string) {
+      return eventByKey.get(`${tenantScope}\u0000${eventId}`);
+    },
+  };
+  for (const event of events) {
+    await source.append(positiveAssessment(event), eventSource);
+  }
+  return source;
 }
 
 before(() => {
@@ -326,14 +371,15 @@ describe("induceAndStoreShadow：真实事件 → draft → shadow 落盘", () =
   it("verified 事件 ⇒ draft→shadow 落盘；二次调用幂等（created=false）", async () => {
     const store = makeStore();
     const events = [verifiedEvent("obs-1"), verifiedEvent("obs-2")];
-    const first = await induceAndStoreShadow(store, events, parentSkill(), "shadow:phase6-host-001");
+    const assessments = await assessmentSourceFor(events);
+    const first = await induceAndStoreShadow(store, events, assessments, "project:abc123", parentSkill(), "shadow:phase6-host-001");
     assert.equal(first.ok, true);
     if (!first.ok) return;
     assert.equal(first.created, true);
     assert.equal(first.status, "shadow");
     assert.match(first.profileId, /^profile:[0-9a-f]{24}$/);
 
-    const second = await induceAndStoreShadow(store, events, parentSkill(), "shadow:phase6-host-001");
+    const second = await induceAndStoreShadow(store, events, assessments, "project:abc123", parentSkill(), "shadow:phase6-host-001");
     assert.equal(second.ok, true);
     if (!second.ok) return;
     assert.equal(second.created, false, "二次不重复 save");
@@ -344,8 +390,26 @@ describe("induceAndStoreShadow：真实事件 → draft → shadow 落盘", () =
   it("无合格事件 ⇒ 拒绝不落盘", async () => {
     const store = makeStore();
     const events = [verifiedEvent("obs-9", { attribution: "mixed", verifierResults: [{ verifierId: "v1", result: "fail" }], failureClass: "tool_failure" as const })];
-    const result = await induceAndStoreShadow(store, events, parentSkill(), "shadow:phase6-host-001");
+    const assessments = await assessmentSourceFor(events);
+    const result = await induceAndStoreShadow(store, events, assessments, "project:abc123", parentSkill(), "shadow:phase6-host-001");
     assert.equal(result.ok, false);
+    assert.equal((await store.listCurrent()).length, 0);
+  });
+
+  it("缺少独立 Learning Admission 评估 ⇒ 拒绝不落盘", async () => {
+    const store = makeStore();
+    const events = [verifiedEvent("obs-no-assessment")];
+    const assessments = await assessmentSourceFor(events, false);
+    const result = await induceAndStoreShadow(
+      store,
+      events,
+      assessments,
+      "project:abc123",
+      parentSkill(),
+      "shadow:phase6-host-001",
+    );
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.reason, "no_eligible_events");
     assert.equal((await store.listCurrent()).length, 0);
   });
 });
@@ -388,9 +452,12 @@ describe("runActivationHostLifecycle（Seam 2）：host lifecycle 编排", () =>
   it("verified 事件 + catalog ⇒ induction → 受控 promotion → active", async () => {
     const store = makeStore();
     const events = [verifiedEventFor(GOLD, "obs-1"), verifiedEventFor(GOLD, "obs-2")];
+    const assessments = await assessmentSourceFor(events);
     const outcome = await runActivationHostLifecycle({
       store,
       eventsByParent: new Map([[GOLD.skillId, events]]),
+      assessmentSource: assessments,
+      tenantScope: "project:abc123",
       catalogRecords: [GOLD, CONFUSER_DISTINCT],
       shadowReportId: "shadow:host-001",
       promotionReportId: "promotion:host-001",
@@ -404,9 +471,13 @@ describe("runActivationHostLifecycle（Seam 2）：host lifecycle 编排", () =>
 
   it("父 revision 漂移：第二轮流当次 catalog revision 不同 ⇒ active 回 shadow", async () => {
     const store = makeStore();
+    const events = [verifiedEventFor(GOLD, "obs-1")];
+    const assessments = await assessmentSourceFor(events);
     await runActivationHostLifecycle({
       store,
-      eventsByParent: new Map([[GOLD.skillId, [verifiedEventFor(GOLD, "obs-1")]]]),
+      eventsByParent: new Map([[GOLD.skillId, events]]),
+      assessmentSource: assessments,
+      tenantScope: "project:abc123",
       catalogRecords: [GOLD, CONFUSER_DISTINCT],
       shadowReportId: "shadow:host-001",
       promotionReportId: "promotion:host-001",
@@ -420,6 +491,8 @@ describe("runActivationHostLifecycle（Seam 2）：host lifecycle 编排", () =>
     const outcome = await runActivationHostLifecycle({
       store,
       eventsByParent: new Map(),
+      assessmentSource: assessments,
+      tenantScope: "project:abc123",
       catalogRecords: [driftGold, CONFUSER_DISTINCT],
       shadowReportId: "shadow:host-001",
       promotionReportId: "promotion:host-001",
@@ -432,7 +505,9 @@ describe("runActivationHostLifecycle（Seam 2）：host lifecycle 编排", () =>
 describe("runEvidenceDeletionCascade（Seam 2）：evidence 删除级联接线", () => {
   it("PracticeStore.invalidate 的真实 invalidatedEventIds → 命中 profile suspend", async () => {
     const store = makeStore();
-    await induceAndStoreShadow(store, [verifiedEventFor(GOLD, "obs-1"), verifiedEventFor(GOLD, "obs-2")], GOLD, "shadow:host-001");
+    const events = [verifiedEventFor(GOLD, "obs-1"), verifiedEventFor(GOLD, "obs-2")];
+    const assessments = await assessmentSourceFor(events);
+    await induceAndStoreShadow(store, events, assessments, "project:abc123", GOLD, "shadow:host-001");
 
     const practiceStore = {
       async invalidate(_tenantScope: string, _ids: readonly string[]) {
@@ -448,7 +523,9 @@ describe("runEvidenceDeletionCascade（Seam 2）：evidence 删除级联接线",
 
   it("未命中 evidence ⇒ 不 suspend", async () => {
     const store = makeStore();
-    await induceAndStoreShadow(store, [verifiedEventFor(GOLD, "obs-1")], GOLD, "shadow:host-001");
+    const events = [verifiedEventFor(GOLD, "obs-1")];
+    const assessments = await assessmentSourceFor(events);
+    await induceAndStoreShadow(store, events, assessments, "project:abc123", GOLD, "shadow:host-001");
     const practiceStore = {
       async invalidate(_tenantScope: string, _ids: readonly string[]) {
         return { invalidatedEventIds: [] };

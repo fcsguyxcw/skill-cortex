@@ -35,8 +35,14 @@ import { buildSystemPrompt } from "../../../node_modules/@earendil-works/pi-codi
 import type { ActivationProfile, SkillRecord } from "../../core/contracts/index.ts";
 import { buildSkillRecord } from "../../core/registry/index.ts";
 import { createDiscoveryServices } from "../../adapters/pi/core.ts";
-import { phase6ActivationStore } from "./host-integration-entry.ts";
+import {
+  phase6ActivationStore,
+  phase6ExposureStore,
+  phase6LearningControlStore,
+  phase6PracticeStore,
+} from "./host-integration-entry.ts";
 import { promoteProfileIfEligible, transitionProfileToShadow } from "../../activation/index.ts";
+import { defaultTenantScope } from "../../adapters/pi/practice-observer.ts";
 
 const PROJECT_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
 const ENTRY = path.join(PROJECT_ROOT, "src", "evaluation", "phase6", "host-integration-entry.ts");
@@ -60,6 +66,12 @@ async function realLoad(query: string): Promise<{ skillId: string; skillRevision
   const { skillId, skillRevision } = matches[0]!;
   const loadResult = await loadDef.execute("tcid", { skill_id: skillId, skill_revision: skillRevision }, undefined, undefined, ctx);
   return { skillId, skillRevision, details: loadResult.details as Record<string, unknown> };
+}
+
+async function runControlTool(name: string, params: Record<string, unknown> = {}) {
+  const definition = runner.getToolDefinition(name);
+  assert.ok(definition, `${name} 必须注册到真实 ExtensionRunner`);
+  return definition.execute("control-tcid", params, undefined, undefined, runner.createContext());
 }
 
 before(async () => {
@@ -130,7 +142,7 @@ async function startRun(prompt: string): Promise<void> {
 }
 
 describe("Phase 6 host integration（真实 ExtensionRunner）", () => {
-  it("真实链路：load_skill 选中 + pagination 证据钩子 ⇒ induction ⇒ 冻结评估 promotion ⇒ active", async () => {
+  it("D1 fail closed：load_skill + verifier pass 但无独立贡献评估 ⇒ 不 consolidation", async () => {
     // Run 0：预摄入（observer 无快照，不产事件）。
     await startRun("detect pagination");
     const { skillId, skillRevision, details } = await realLoad("pagination");
@@ -158,16 +170,70 @@ describe("Phase 6 host integration（真实 ExtensionRunner）", () => {
     });
     await runner.emit({ type: "agent_settled" });
 
-    // observer → induction → store：shadow profile 落盘（父 = 选中 skill）。
+    // verifier pass 只证明任务结果，不再自动证明 Skill contribution；无独立 assessment 时零 profile。
     const activationStore = phase6ActivationStore(fixtureRoot);
     const profiles = await activationStore.listCurrent();
-    assert.equal(profiles.length, 1, "必须产出一个 ActivationProfile");
-    const profile = profiles[0]!;
-    assert.equal(profile.parentSkillId, skillId);
-    assert.equal(profile.parentSkillRevision, skillRevision);
-    // Seam 3：冻结 real-skill 评估 provider 对真实 skill（confuser pdf 区分）判门通过 ⇒ active。
-    assert.equal(profile.status, "active");
-    assert.ok(profile.positiveExamples.length > 0, "induction 必须从 verified 事件产出 positiveExamples");
+    assert.equal(profiles.length, 0, "缺独立 Learning Admission assessment 时不得落 ActivationProfile");
+  });
+
+  it("G4 pause/resume：真实工具持久化开关，pause 阻止 observer 新增 evidence", async () => {
+    const practice = phase6PracticeStore(fixtureRoot);
+    const exposure = phase6ExposureStore(fixtureRoot);
+    const tenantScope = defaultTenantScope(fixtureRoot);
+    const before = await practice.listProvenance(tenantScope, "real");
+    const exposureBefore = await exposure.list(tenantScope);
+
+    const paused = await runControlTool("skill_memory_set_learning", { enabled: false });
+    assert.equal((paused.details as { learningEnabled: boolean }).learningEnabled, false);
+    assert.equal((await phase6LearningControlStore(fixtureRoot).status()).learningEnabled, false,
+      "新 store 实例必须读取到持久化 pause");
+
+    await startRun("detect pagination in SELECT * FROM posts OFFSET 10 LIMIT 5");
+    const loaded = await realLoad("pagination");
+    await runner.emitToolCall({
+      type: "tool_call", toolCallId: "paused-tc", toolName: "load_skill",
+      input: { skill_id: loaded.skillId, skill_revision: loaded.skillRevision },
+    });
+    await runner.emitToolResult({
+      type: "tool_result", toolCallId: "paused-tc", toolName: "load_skill",
+      input: { skill_id: loaded.skillId }, content: [{ type: "text", text: "ok" }],
+      isError: false, details: loaded.details,
+    });
+    await runner.emit({ type: "agent_settled" });
+    assert.equal((await practice.listProvenance(tenantScope, "real")).length, before.length,
+      "pause 后不得新增 PracticeEvent");
+    assert.equal((await exposure.list(tenantScope)).length, exposureBefore.length,
+      "pause 后不得新增 Exposure evidence");
+
+    const resumed = await runControlTool("skill_memory_set_learning", { enabled: true });
+    assert.equal((resumed.details as { learningEnabled: boolean }).learningEnabled, true);
+    const status = await runControlTool("skill_memory_status");
+    assert.equal((status.details as { learningEnabled: boolean }).learningEnabled, true);
+  });
+
+  it("G4 list/forget：真实工具只列摘要，profile 遗忘落 retired tombstone", async () => {
+    const store = phase6ActivationStore(fixtureRoot);
+    const draft: ActivationProfile = {
+      schemaVersion: 1,
+      profileId: "profile:host-forget",
+      parentSkillId: paginationRecord.skillId,
+      parentSkillRevision: paginationRecord.skillRevision,
+      status: "draft",
+      learnedAliases: [{ cueId: "cue:host-forget", text: "host-cue", evidenceIds: ["host-evidence"] }],
+      positiveExamples: [], nearMissExamples: [], environmentCues: [],
+      createdAt: "2026-08-23T00:00:00.000Z", updatedAt: "2026-08-23T00:00:00.000Z",
+    };
+    await store.save(draft, { trigger: "procedure" });
+
+    const listed = await runControlTool("skill_memory_list", { skill_id: paginationRecord.skillId });
+    const summaries = (listed.details as { summaries: Array<Record<string, unknown>> }).summaries;
+    const summary = summaries.find((item) => item.profileId === draft.profileId);
+    assert.ok(summary, "真实 list 工具必须返回目标摘要");
+    assert.equal("features" in summary, false, "摘要不得暴露 cue features/text");
+
+    const forgotten = await runControlTool("skill_memory_forget", { profile_id: draft.profileId });
+    assert.deepEqual((forgotten.details as { affectedProfileIds: string[] }).affectedProfileIds, [draft.profileId]);
+    assert.equal((await store.getProfile(draft.profileId))!.status, "retired");
   });
 });
 

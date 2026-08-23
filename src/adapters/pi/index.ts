@@ -69,6 +69,10 @@ export function registerSkillCortex(pi: ExtensionAPI, options: RegisterOptions =
       onError?.(outcome.error, { phase: "ingest" });
       return undefined;
     }
+    if (outcome.exposure === undefined || outcome.candidateBudget === undefined || outcome.cardProjection === undefined) {
+      onError?.(new Error("Exposure observation missing"), { phase: "ingest" });
+      return undefined;
+    }
 
     // 成功摄入后回调当次 catalog records（供 Phase 6 induction 取父 SkillRecord 作者字段）。
     if (onCatalog !== undefined && services.state.catalog !== undefined) {
@@ -84,6 +88,9 @@ export function registerSkillCortex(pi: ExtensionAPI, options: RegisterOptions =
         topK,
         exposedToAgent: false,
         deliveryMode: "shadow",
+        exposure: outcome.exposure,
+        candidateBudget: outcome.candidateBudget,
+        cardProjection: outcome.cardProjection,
       });
       const result: ShadowResult = {
         candidateCount: outcome.candidates.length,
@@ -140,6 +147,9 @@ export function registerSkillCortex(pi: ExtensionAPI, options: RegisterOptions =
       topK,
       exposedToAgent: true,
       deliveryMode: "inject",
+      exposure: outcome.exposure,
+      candidateBudget: outcome.candidateBudget,
+      cardProjection: outcome.cardProjection,
     });
     return { systemPrompt: finalPrompt };
   });

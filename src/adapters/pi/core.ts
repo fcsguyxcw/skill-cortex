@@ -14,7 +14,7 @@ import { lstat, readFile, realpath } from "node:fs/promises";
 import type { Stats } from "node:fs";
 import path from "node:path";
 
-import type { ActivationProfile, SkillCandidate, SkillRecord } from "../../core/contracts/index.ts";
+import type { ActivationProfile, CandidateBudgetShadowObservation, CardProjectionShadowObservation, ExposureObservation, SkillCandidate, SkillRecord } from "../../core/contracts/index.ts";
 import type { DependencyEntry, SkillPackageInput } from "../../core/registry/index.ts";
 import {
   buildSkillRecord,
@@ -32,9 +32,10 @@ import {
   MAX_TOP_K,
   type DiscoveryIndex,
 } from "../../discovery/index.ts";
-import { formatCandidateCards } from "../../discovery/index.ts";
+import { formatCandidateCards, observeCandidateBudgets, observeCardProjections } from "../../discovery/index.ts";
 import { applyActiveProfiles } from "../../activation/overlay.ts";
 import type { RerankOptions } from "../../activation/rerank.ts";
+import { observeExposure } from "../../exposure/index.ts";
 import type { HostSkillLike, HostToolResultLike } from "./host.ts";
 
 export type AdapterMode = "shadow" | "inject";
@@ -93,6 +94,10 @@ export interface DiscoveryResult {
   exposedToAgent: boolean;
   /** 候选暴露/注入方式："shadow"（未进入 prompt）| "inject"（已进入最终 prompt）。 */
   deliveryMode: "shadow" | "inject";
+  /** D2 shadow-only Gate observation；不含原始 prompt，也不改变本次 delivery。 */
+  exposure: ExposureObservation;
+  candidateBudget: CandidateBudgetShadowObservation;
+  cardProjection: CardProjectionShadowObservation;
 }
 
 /** 摄入/索引构建失败的稳定错误类别（模型可见诊断只用类别，绝不泄漏路径/内容/原始 message）。 */
@@ -171,6 +176,9 @@ export interface DiscoveryOutcome {
   candidates: SkillCandidate[];
   recordCount: number;
   durationMs: number;
+  exposure?: ExposureObservation;
+  candidateBudget?: CandidateBudgetShadowObservation;
+  cardProjection?: CardProjectionShadowObservation;
 }
 
 export interface DiscoveryServices {
@@ -242,12 +250,20 @@ export function createDiscoveryServices(options: {
         const candidates = options.overlayProfiles
           ? applyActiveProfiles(staticCandidates, options.overlayProfiles(), prompt, options.overlayOptions)
           : staticCandidates;
+        // Shadow comparator 独立观察到 K=5；生产 candidates 仍严格沿用原 topK 检索/overlay 路径。
+        const shadowStatic = options.topK >= 5 ? staticCandidates : index.search(prompt, { limit: 5 });
+        const shadowRanked = options.overlayProfiles
+          ? applyActiveProfiles(shadowStatic, options.overlayProfiles(), prompt, options.overlayOptions)
+          : shadowStatic;
         state.ready = true;
         state.lastErrorCategory = undefined;
         state.index = index;
         state.catalog = catalog;
         state.recordCount = records.length;
-        return { ok: true, candidates, recordCount: records.length, durationMs: Date.now() - started };
+        return { ok: true, candidates, recordCount: records.length, durationMs: Date.now() - started,
+          exposure: observeExposure(prompt, records, candidates),
+          candidateBudget: observeCandidateBudgets(shadowRanked),
+          cardProjection: observeCardProjections(candidates) };
       } catch (error) {
         state.ready = false;
         state.index = undefined;

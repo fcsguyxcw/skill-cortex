@@ -9,6 +9,13 @@ Applicability：`SkillRecord`、`SkillCandidate`、`ActivationProfile`、`Practi
 既有实验资产。新的 Exposure、Candidate Budget、Learning Admission 与用户控制设计见
 `docs/design/activation-memory-first-architecture.md`，对应 schema 在进入实施阶段时另行冻结。
 
+D2 已冻结并实现 `ExposureObservationRecord`：它只保存 retriever 派生的候选数量、前两名分数、首候选
+匹配字段、精确作者声明引用、同 run 的最终合法 `selectedSkillIds`，以及 tenant/route/time 审计字段；
+不保存任务原文，不产生 `show/abstain` 决策。Store 为 project-local、append-only、tenant hash 隔离。
+同一记录可选携带两个独立 shadow comparator：`candidateBudget` 保存 K=1/2/3/5 的有序候选 ID 前缀；
+`cardProjection` 保存 description 120/240/480 字符臂的总字符数与截断数量。两者都不是 active decision，
+不修改生产候选集合、排序或模型可见作者 description。
+
 ## 1. 合同目标
 
 本文件冻结系统边界与数据所有权，不冻结编程语言、数据库或宿主 API。当前工作区没有源码、包管理配置或可用的宿主 SDK 文档，因此本文中的 TypeScript 形状只是语言无关的数据契约表示，不代表已存在的接口。
@@ -217,6 +224,43 @@ interface PracticeEvent {
 - 把“任务完成”自动改写成 `verified_skill_effect`。
 - 把 `evaluation` 或 `synthetic` 事件混入生产学习数据。
 - 默认保存秘密、完整文件、完整对话或工具原始输出。
+
+#### 4.4.1 LearningEvidenceAssessment（D1 第一切片）
+
+`PracticeEvent` 只表示 observation。Activation induction 不再直接信任事件中的任务成功、verifier pass
+或 caller 自报 attribution；必须另外收到一个独立、版本绑定的评估：
+
+```ts
+interface LearningEvidenceAssessment {
+  schemaVersion: 1;
+  assessmentId: string;
+  eventId: string;
+  tenantScope: string;
+  parentSkillId: string;
+  parentSkillRevision: string;
+  sourceHash: string;
+  taskOutcome: "verified_success" | "verified_failure" | "unknown";
+  skillContribution: "verified" | "disproved" | "mixed" | "unknown";
+  evidenceKind: "positive" | "near_miss" | "boundary" | "external_failure";
+  verifier: {
+    kind: "independent_verifier" | "user_confirmation";
+    result: "pass" | "fail" | "unknown";
+  };
+  assessedAt: string;
+}
+```
+
+该评估必须精确绑定 `tenantScope + eventId + parentSkillId + parentSkillRevision + sourceHash`。缺失、绑定失配、
+verifier 非 pass、`mixed/unknown`、evaluation/synthetic、frozen procedure 或 external failure 均不得
+进入 consolidation。
+
+所有者：Learning Assessment Store。写入语义为 project-local、append-only、tenant hash 隔离；
+assessmentId 与 eventId 在 tenant 内均不可覆盖，且写入前必须从 Practice Store 读回已存在的 real
+`skill_md` event 并完成绑定校验。host induction 只能按 tenant/event 从 Store read seam 消费。
+用户控制已实现为 project-local 持久化状态与真实 Pi 工具：暂停阻止新 PracticeEvent 以及
+induction/promotion；evidence 删除同时失效 PracticeEvent/assessment 并级联 suspend 依赖 profile；
+profile 删除保留 retired tombstone。可信真实宿主 contribution verifier 尚未实现；在该边界关闭前
+不得宣称 G1 或 D1 end-to-end complete。
 
 ### 4.5 CompiledProcedure
 

@@ -43,6 +43,7 @@ import { computeSourceHash } from "../../core/registry/index.ts";
 import { validatePracticeEvent } from "../../practice/policy/index.ts";
 import { PracticeStore } from "../../practice/store/index.ts";
 import { defaultTenantScope } from "../../adapters/pi/practice-observer.ts";
+import { ExposureObservationStore } from "../../exposure/index.ts";
 
 const PROJECT_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
 const SKILL_CORTEX_ENTRY = path.join(PROJECT_ROOT, ".pi", "extensions", "skill-cortex", "index.ts");
@@ -109,10 +110,29 @@ describe("B3 observer 生产入口集成（真实 loader 加载 .pi/extensions/s
       new ModelRegistry(modelRuntime),
     );
 
-    // 入口注册的工具：cortex 的 search_skills/load_skill。
+    // 入口注册 discovery 与显式用户控制工具。
     const registeredNames = runner.getAllRegisteredTools().map((t) => t.definition.name).sort();
     assert.ok(registeredNames.includes("search_skills"), "生产入口必须注册 search_skills");
     assert.ok(registeredNames.includes("load_skill"), "生产入口必须注册 load_skill");
+    for (const name of [
+      "skill_memory_status",
+      "skill_memory_set_learning",
+      "skill_memory_list",
+      "skill_memory_forget",
+    ]) {
+      assert.ok(registeredNames.includes(name), `生产入口必须注册 ${name}`);
+    }
+
+    const controlDef = runner.getToolDefinition("skill_memory_set_learning")!;
+    const controlCtx = runner.createContext();
+    const paused = await controlDef.execute(
+      "pause-tcid", { enabled: false }, undefined, undefined, controlCtx,
+    );
+    assert.equal((paused.details as { learningEnabled: boolean }).learningEnabled, false);
+    const resumed = await controlDef.execute(
+      "resume-tcid", { enabled: true }, undefined, undefined, controlCtx,
+    );
+    assert.equal((resumed.details as { learningEnabled: boolean }).learningEnabled, true);
 
     // 真实 base prompt（含原生全量 Skill block）→ cortex inject 成功 → onDiscovery push（exposedToAgent=true）。
     const basePrompt = buildSystemPrompt({
@@ -181,6 +201,12 @@ describe("B3 observer 生产入口集成（真实 loader 加载 .pi/extensions/s
     });
     await runner.emit({ type: "agent_settled" });
 
+    // 第二轮有候选但 Main Agent 选择 No-Skill：仍需形成 exposure observation，不能只记录 Skill 调用。
+    await runner.emitBeforeAgentStart("PDF", undefined, basePrompt, {
+      cwd: fixtureRoot, skills, contextFiles: [],
+    });
+    await runner.emit({ type: "agent_settled" });
+
     // 生产入口的 store：<projectRoot>/.skill-cortex/practice（project-local，隔离 fixture）。
     const store = new PracticeStore({
       rootDir: path.join(fixtureRoot, ".skill-cortex", "practice"),
@@ -207,6 +233,25 @@ describe("B3 observer 生产入口集成（真实 loader 加载 .pi/extensions/s
     assert.equal(event.stepSummaries[1]!.operationClass, "tool:read");
     assert.match(event.redactedTaskFeatures[0]!, /^prompt-hash:[0-9a-f]{32}$/);
     assert.equal(validatePracticeEvent(event).ok, true, "事件必须通过 Practice policy 校验");
+
+    const exposureStore = new ExposureObservationStore({
+      rootDir: path.join(fixtureRoot, ".skill-cortex", "exposure"), projectRoot: fixtureRoot,
+    });
+    const observations = await exposureStore.list(tenantScope);
+    assert.equal(observations.length, 2, "Skill 选择与 No-Skill 两轮都必须持久化 shadow observation");
+    assert.equal(observations.every((item) => item.baselineWouldInject), true);
+    assert.equal(observations.every((item) => item.exactDeclaredReference), true);
+    assert.equal(observations.some((item) => item.selectedSkillIds.length === 0), true,
+      "No-Skill 轮必须保留空 selectedSkillIds");
+    assert.equal(observations.some((item) => item.selectedSkillIds.includes(skillId)), true,
+      "Skill 轮必须关联最终合法选择");
+    assert.equal(observations.every((item) =>
+      item.candidateBudget?.variants.map((variant) => variant.budget).join(",") === "1,2,3,5"), true,
+    "每轮必须记录 K=1/2/3/5 shadow comparator");
+    assert.equal(observations.every((item) =>
+      item.cardProjection?.variants.map((variant) => variant.maxDescriptionChars).join(",") === "120,240,480"), true,
+    "每轮必须记录 120/240/480 description shadow projection");
+    assert.equal(JSON.stringify(observations).includes("merge PDF"), false, "不得保存原始任务");
 
     // 事件文件确实位于 project-local 目录（隔离 fixture，非工作区）。
     assert.ok(event.tenantScope.startsWith("project:"), "tenantScope 必须是 project 前缀");
