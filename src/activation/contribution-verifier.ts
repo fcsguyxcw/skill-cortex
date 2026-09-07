@@ -22,7 +22,16 @@ export interface PositiveContributionVerifier {
   sourceHash: string;
   requiredOperationClass: string;
   requiredPracticeVerifierId: string;
-  verify(event: PracticeEvent): Promise<"verified_contribution" | "unverified">;
+  verify(
+    event: PracticeEvent,
+    evidence: ContributionVerificationEvidence,
+  ): Promise<"verified_contribution" | "unverified">;
+}
+
+/** Raw host evidence is memory-only input to a trusted verifier and is never copied into assessment. */
+export interface ContributionVerificationEvidence {
+  userPrompt: string;
+  finalAssistantText: string;
 }
 
 export interface VerifyAndStoreContributionInput {
@@ -32,6 +41,7 @@ export interface VerifyAndStoreContributionInput {
   assessmentStore: LearningAssessmentStore;
   catalogRecords: readonly SkillRecord[];
   verifiers: readonly PositiveContributionVerifier[];
+  verificationEvidence?: ContributionVerificationEvidence;
   assessedAt?: () => string;
 }
 
@@ -45,6 +55,7 @@ export interface VerifyAndStoreContributionResult {
     | "verifier_missing"
     | "verifier_binding_ambiguous"
     | "required_practice_evidence_missing"
+    | "host_evidence_missing"
     | "contribution_unverified"
     | "already_assessed";
   assessment?: LearningEvidenceAssessment;
@@ -124,10 +135,19 @@ export async function verifyAndStorePositiveContribution(
     return { status: "skipped", reason: "required_practice_evidence_missing" };
   }
 
+  const verificationEvidence = input.verificationEvidence;
+  if (
+    verificationEvidence === undefined ||
+    verificationEvidence.userPrompt.length === 0 ||
+    verificationEvidence.finalAssistantText.length === 0
+  ) {
+    return { status: "skipped", reason: "host_evidence_missing" };
+  }
+
   if ((await input.assessmentStore.getAssessment(event.tenantScope, event.eventId)) !== undefined) {
     return { status: "skipped", reason: "already_assessed" };
   }
-  if ((await verifier.verify(event)) !== "verified_contribution") {
+  if ((await verifier.verify(event, verificationEvidence)) !== "verified_contribution") {
     return { status: "skipped", reason: "contribution_unverified" };
   }
 

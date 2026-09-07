@@ -80,6 +80,11 @@ function verifier(overrides: Partial<PositiveContributionVerifier> = {}): Positi
   };
 }
 
+const HOST_EVIDENCE = {
+  userPrompt: "run the bounded fixture",
+  finalAssistantText: "BOUND_VERIFIED_OUTPUT",
+} as const;
+
 function stores(): { events: PracticeStore; assessments: LearningAssessmentStore } {
   seq += 1;
   const root = path.join(tempRoot, `case-${seq}`);
@@ -110,6 +115,7 @@ describe("bounded contribution verifier", () => {
       assessmentStore: assessments,
       catalogRecords: [parent()],
       verifiers: [verifier()],
+      verificationEvidence: HOST_EVIDENCE,
       assessedAt: () => "2026-08-23T00:01:00.000Z",
     });
 
@@ -182,8 +188,30 @@ describe("bounded contribution verifier", () => {
       assessmentStore: assessments,
       catalogRecords: [parent()],
       verifiers: [verifier({ verify: async () => "unverified" })],
+      verificationEvidence: HOST_EVIDENCE,
     });
     assert.deepEqual(result, { status: "skipped", reason: "contribution_unverified" });
+    assert.deepEqual(await assessments.list(TENANT), []);
+  });
+
+  it("缺少内存中的宿主最终结果证据时不调用 verifier、不写 assessment", async () => {
+    const { events, assessments } = stores();
+    const observed = event();
+    let calls = 0;
+    await events.append(observed);
+    const result = await verifyAndStorePositiveContribution({
+      tenantScope: TENANT,
+      eventId: observed.eventId,
+      eventSource: events,
+      assessmentStore: assessments,
+      catalogRecords: [parent()],
+      verifiers: [verifier({ verify: async () => {
+        calls += 1;
+        return "verified_contribution";
+      } })],
+    });
+    assert.deepEqual(result, { status: "skipped", reason: "host_evidence_missing" });
+    assert.equal(calls, 0);
     assert.deepEqual(await assessments.list(TENANT), []);
   });
 

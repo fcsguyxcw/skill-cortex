@@ -34,6 +34,7 @@ import {
 } from "./core.ts";
 
 export type { AdapterMode, DiscoveryResult, RegisterOptions, ShadowResult } from "./core.ts";
+export * from "./contribution-assessment-observer.ts";
 // 兼容导出：仅测试桩用（外部测试 import 旧窄接口）；生产签名以真实 ExtensionAPI 为准。
 export type {
   HostBeforeAgentStartEventLike,

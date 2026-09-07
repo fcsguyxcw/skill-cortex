@@ -259,8 +259,9 @@ assessmentId 与 eventId 在 tenant 内均不可覆盖，且写入前必须从 P
 `skill_md` event 并完成绑定校验。host induction 只能按 tenant/event 从 Store read seam 消费。
 用户控制已实现为 project-local 持久化状态与真实 Pi 工具：暂停阻止新 PracticeEvent 以及
 induction/promotion；evidence 删除同时失效 PracticeEvent/assessment 并级联 suspend 依赖 profile；
-profile 删除保留 retired tombstone。可信真实宿主 contribution verifier 尚未实现；在该边界关闭前
-不得宣称 G1 或 D1 end-to-end complete。
+profile 删除保留 retired tombstone。当前已有 project-local Pi host seam 从 `agent_end` 内存证据调用
+exact-bound 任务特定 verifier，但生产入口尚无可信 registration；在该边界关闭前不得宣称 G1 或 D1
+production/end-to-end complete。
 
 ### 4.5 CompiledProcedure
 

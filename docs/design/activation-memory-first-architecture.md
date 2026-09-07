@@ -2,7 +2,7 @@
 
 状态：Accepted design — 2026-08-22  
 权威范围：ADR-0014  
-实现状态：D0 完成；D1 已有 fail-closed contribution verifier component seam，但可信生产 verifier/host 接线仍缺失；D2 Exposure shadow observation 已接真实入口
+实现状态：D0 完成；D1 已有 fail-closed contribution verifier component + project-local Pi host seam，但可信生产 verifier 仍缺失；D2 Exposure shadow observation 已接真实入口
 
 ## 1. 目标
 
@@ -119,7 +119,15 @@ interface ExposureObservation {
 Pi discovery snapshot → observer settled 接线。生产入口在 learning enabled 时记录 Skill/No-Skill 两类
 run；pause 时不创建记录。当前仍沿用 bounded inject baseline，没有 suppress、任务分类器、Router LLM、
 `expected_gain` 或 active Gate policy，因此只能报告 D2 Exposure observation component + host integration，
-不能报告 G2 或 active Exposure 完成。
+不能报告 active Exposure 完成。
+
+G2 已补 evaluation-only frozen policy comparator。单一策略只读取 `exactDeclaredReference`、
+`candidateCount` 与 `topScore`：baseline 有候选且 exact reference、候选数达到 5、或 top score 至少 12 时
+建议 show。既有冻结 calibration 与 frozen replay 各 24 例中，基线 Top-5 已含任一 Gold 的 6 例均保留
+exposure，No-Skill exposure FP 均从 2/4 降至 1/4。配置 hash、catalog hash、fixture hash 与 partition drift
+均 fail closed。该结果满足 G2 offline component 的数值条件，但 heldout 在仓库中已可见，不能称本轮
+untouched confirmation；生产/host/E2E 仍未验证。依据 ADR-0014，在新增 active suppress ADR、冻结发布
+阈值与用户授权前，生产入口继续 observation-only，候选注入行为不变。
 
 未来 active policy 的上限也应保持很小，例如只读取候选集合、匹配字段、分数/分差和精确声明引用。
 如果必须增加任务类型词典、几十条规则或额外 Router LLM 才能过门，应判定 Gate 假设失败，继续使用
@@ -150,6 +158,11 @@ interface CandidateBudgetDecision {
 当前已实现 K=1/2/3/5 的确定性前缀 comparator，并随同一 `routeDecisionId` 的 Exposure record
 持久化各臂 candidate Skill IDs。它不输出推荐预算或 reason；即使生产 `topK=1`，也只在旁路读取
 最多 5 个候选用于观察，生产返回仍保持 1 个。没有独立 Gold/Selection 评估前不得据此改变预算。
+
+G3 evaluation-only frozen budget replay 已给 K=3 提供 offline retrieval support：dev 与 frozen replay
+均保持 K=5 的 overall/multi Gold full-set availability，replay 的 hard-confuser Gold availability 亦不下降；
+候选量降低约 30%～32%，description 字符降低约 32%～38%。K=1/2 在 dev 会丢失 K=5 已保留的 Gold
+或 multi full set。该结果不改变生产默认 K=5；final-heldout 在仓库中已可见，不能称本轮 untouched。
 
 ### 4.4 Candidate Presentation module
 
@@ -182,6 +195,10 @@ interface LightweightSkillCard {
 当前轻量卡切片仅在 shadow 中比较作者 description 的 120/240/480 UTF-16 字符投影，记录每臂总字符
 数与被截断候选数；生产候选卡仍使用现有作者 description，不注入投影，不生成 `activationHint`。
 这些长度只是并行实验臂，不是发布阈值；需要 G3 的 multi-skill/hard-confuser/字符成本证据后才能选择。
+
+冻结 replay 已确认三种投影都降低字符数且不改变候选 ID，但尚无真实主模型 Selection 可区分性证据；
+因此 `supportedDescriptionLimit=null`，不选择卡片长度。K=3 retrieval 子门通过不等于 G3 总体完成，
+生产 Top-K 与候选卡保持不变。
 
 ### 4.5 Learning Admission module
 
@@ -239,11 +256,16 @@ real `skill_md`、候选/选择/attribution 完整，精确匹配 catalog 中的
 assessment。任意 catalog Skill 不会自动获得归因资格；binding drift、重复 registration、缺证据或
 复核不通过均 fail closed。
 
-这仍不是可信真实宿主 contribution verifier 完成：当前生产入口没有任何 registration，现有 Pi observer
-也没有向该 seam 提供可独立验证 Agent 最终任务结果的宿主证据。当前隔离 ExtensionRunner 验收仍证明
-“load + result verifier pass 但 Store 中缺独立贡献 assessment ⇒ 零 ActivationProfile”。因此这里只能
-报告 verifier component、Admission component、assessment persistence、用户控制与 host fail-closed seam，
-不能报告 G1、D1 host integration 或 D1 end-to-end complete。
+Pi host seam 已新增：`registerContributionAssessmentObserver` 在 `before_agent_start` 捕获 prompt、在真实
+`agent_end.messages` 中只接受 `stopReason=stop` 的最终 assistant 文本，并在 `agent_settled` 时等待
+PracticeObserver 先完成事件落盘，再调用 exact-bound verifier。两段原文只在内存中存在，不复制到
+PracticeEvent、assessment 或其他 Store；缺 prompt、缺最终文本、length/error/aborted 结果均不会形成
+positive assessment。隔离的真实 AgentSession 已验证：同一任务实际调用 `load_skill` 后，任务特定 verifier
+对正确最终 marker 写入 1 条 assessment，错误 marker 返回 `contribution_unverified` 且保持零新增。
+
+这仍不是可信生产 contribution verifier 完成：生产入口没有任何 registration，仓库也没有一个可普遍
+判断任意任务成功与 Skill 因果贡献的 verifier。当前只能报告 verifier/Admission component、assessment
+persistence、用户控制与 project-local host seam；不能报告 G1 或 D1 production/end-to-end complete。
 
 准入矩阵：
 
@@ -288,6 +310,12 @@ interface MemoryControl {
 已有 active overlay 继续生效并由 status 明示。evidence forget 同时失效 PracticeEvent/assessment 并级联
 suspend 依赖 profile；profile forget 进入不可恢复的 retired tombstone。隔离 ExtensionRunner 已验证工具
 注册、pause 重启持久化、零新增 evidence、脱敏 list 和 profile forget；组件测试验证 evidence 级联。
+
+新增的真实 production-entry 验证通过 Pi `loadExtensions` 连续加载三个 entry 实例：pause 与 resume 均跨
+entry reload 持久化；pause 后真实 discovery/settled lifecycle 零新增 Exposure/Practice evidence；list
+保持脱敏；forget evidence 同时失效 PracticeEvent/assessment 并级联 suspend 依赖 profile。因此 G4 在
+component + project-local production-entry host integration 层 PASS。该证据不包含用户日常 Pi 部署、
+active overlay 或 G7 完整路径。
 
 ## 5. No-Skill 合同
 
@@ -340,15 +368,24 @@ observation
 
 不得通过每轮全扫描来简化一致性，也不得为追求 cache hit 跳过 `load_skill` 的当次 source/revision 校验。
 
-当前 D3 两层 cache component 已实现。Catalog 层基于经核验的 Pi 0.84.1 session 合同：
-`systemPromptOptions.skills` 数组保持稳定，resource reload 会生成新数组。因此同一数组且宿主元数据未变时
-复用 Registry 与静态 BM25 索引；新数组、元数据变化或重建失败均失效旧 snapshot。该 cache 不扫描
+当前 D3 两层 cache component 已实现。Catalog 层基于真实 `AgentSession + DefaultResourceLoader` 验证的
+Pi 0.84.1 session 合同：连续正常 turn 的 `before_agent_start.systemPromptOptions.skills` 保持同一引用，
+resource reload 后生成新数组。因此同一数组且宿主元数据未变时复用 Registry 与静态 BM25 索引；新数组、
+元数据变化或重建失败均失效旧 snapshot。该 cache 不扫描
 Skill package 来判定命中，且不削弱 `load_skill` 的 manifest/source/revision 当次复核。Overlay 层对实际
 影响 rerank 的 active profile revision/status/cue 内容生成内存 fingerprint；内容不变时 discovery 与
 `search_skills` 复用 `parentSkillId → active profile` 派生 snapshot，promotion/suspend/delete、revision 或
-cue 变化时失效。隔离的真实 ExtensionRunner resource-refresh E2E 已覆盖 unchanged hit、install/source refresh
-miss、旧 revision 拒绝和未 refresh source drift fail-closed，因此 G5 在 component + project-local host integration
-层 PASS。当前主入口仍未配置 active overlay；真实自用 Pi 会话与 G7 仍未关闭。
+cue 变化时失效。隔离的真实 AgentSession 连续 turn/resource reload 测试覆盖数组身份
+`same → same → changed`、catalog `miss → hit → miss` 与 revision 变化；component/adapter 回归继续覆盖宿主
+metadata/source 变化、旧 revision 拒绝和未 refresh source drift fail-closed。因此 G5 在 component +
+project-local host integration 层 PASS。当前主入口仍未配置 active overlay；真实自用 Pi 会话与 G7 仍未关闭。
+
+G6 既有 12 条 untouched final-heldout 在首次揭示后保持冻结，本轮未改 cases、Gold、profile、overlay
+参数或门槛，只做当前分支重跑。hard-confuser recall/confuser rejection/Gold preservation 与 No-Skill
+precision 均为 1，multi-skill/cross-language 也达冻结门槛；隔离真实 Pi ExtensionRunner 的 revision-bound
+overlay、无 provider 回静态与受控 promotion 同步通过。因此 G6 在 component + project-local evaluation
+host seam 层 PASS。生产入口的 scope-lock 明确禁止 `overlayProfiles`/`overlayOptions`，production active
+overlay 继续 disabled；该状态不关闭 G7。
 
 ## 8. 安全与隐私
 
@@ -430,6 +467,11 @@ procedure tool；Practice observer 中可选的 compiled-evidence seam 也未由
 - 实际注册的工具和事件 handler 清单不得包含 procedure execution adapter/tool；
 - compiled-evidence observer 配置必须保持 absent；
 - 隔离失败时阻止插件发布，而不是依赖“理论上不会调用”。
+
+上述 frozen-path isolation 子门已由
+`src/evaluation/d4/production-entry-isolation.test.ts` 自动化覆盖：递归检查真实入口静态 import graph，
+并通过真实 Pi loader 冻结工具与 handler 注册面，同时确认 compiled observer 未接线。该结果只关闭
+隔离子门，不关闭 G7；真实自用部署、可信 production contribution verifier 与完整生产 E2E 仍缺证据。
 
 只要这些门成立，procedure 文件可以保留在同一仓库，代价主要是 typecheck、测试与安全审计维护面，
 不是运行时行为。若以后维护成本持续出现，才考虑把 frozen track 移到独立 package/archive；当前无需

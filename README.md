@@ -100,24 +100,57 @@ status/list/pause/resume/forget：pause 跨重启持久化并阻止新 evidence 
 删除级联 suspend 依赖 profile，profile 删除落 retired tombstone。可信真实宿主 contribution verifier
 已新增一个 fail-closed component seam：只有显式注册且精确绑定 parent Skill revision/source 的 verifier，
 在所需 Practice step/result 已通过后再次独立复核，才可写 positive assessment；未注册 catalog Skill、
-binding drift、重复 registration 或复核不通过均保持零 assessment。当前生产入口没有注册可信 verifier，
-也没有观察 Agent 最终任务结果，因此 G1 与 D1 host/end-to-end 仍未完成，不得据此宣称 D1 完成。
+binding drift、重复 registration 或复核不通过均保持零 assessment。新增的 Pi host seam 会从真实
+`agent_end.messages` 在内存中提取最终 assistant 输出，并在 PracticeEvent 已落盘后交给任务特定 verifier；
+隔离 AgentSession 已验证匹配输出写入、错误输出拒绝。原始 prompt/输出不进入 assessment 或 Store。
+当前生产入口仍没有注册可信 verifier，因此只能报告 component + project-local host seam，G1 与 D1
+production/end-to-end 仍未完成，不得据此宣称 D1 完成。
+
+G4 已通过真实 project-local production entry 验证：pause/resume 跨 entry reload 持久化，pause 后真实
+discovery/settled lifecycle 不新增 Exposure/Practice evidence，list 只返回脱敏摘要，forget evidence
+同时删除 PracticeEvent/assessment 并级联 suspend profile。G4 在 component + project-local production-entry
+host integration 层 PASS；这不代表真实自用部署或 G7 完成。
 
 D2 第一切片已实现 Exposure shadow observation：真实 Pi 入口把每轮 retriever 的有界结构化事实与最终
 合法 Skill/No-Skill 选择写入 project-local append-only Store，不保存任务原文。它不返回 active
-show/abstain 决策，当前候选注入行为完全不变；G2 冻结评估与 active policy 尚未开始。
+show/abstain 决策，当前候选注入行为完全不变；active policy 尚未接入。
+
+G2 已新增 evaluation-only 的单一 deterministic policy 冻结 replay：只读取现有 observation 的精确声明
+引用、候选数与 top score，不含任务分类规则。calibration 与 frozen replay 均保持基线已召回 Gold 的
+necessary exposure recall 为 `6/6`，并把 No-Skill exposure FP 从 `2/4` 降到 `1/4`。这只满足 offline
+component 数值条件；heldout 非本轮 untouched，且 production/host/E2E 未验证。依据 ADR-0014，D2 继续
+shadow-only，生产候选注入不应用该 policy。
 
 D2 后续两个 shadow 切片也已接线：Candidate Budget 并行记录 K=1/2/3/5 的候选前缀；轻量卡并行记录
 作者 description 在 120/240/480 字符预算下的成本与截断数量。两者都随真实 run observation 落盘，
 但不选择推荐预算、不改变生产 Top-K/排序/候选卡，也不生成 Memory hint；G3 仍未关闭。
 
+G3 已新增 evaluation-only frozen budget replay：K=3 在 dev 与 frozen replay 上均保持 K=5 的 overall/multi
+Gold full-set availability，replay 的 hard-confuser Gold availability 也不下降，同时候选量降低约
+30%～32%、description 字符降低约 32%～38%。因此 K=3 只有 offline retrieval support；120/240/480
+投影尚无真实主模型可区分性证据，未选择 description limit。生产仍为默认 K=5 + 完整作者 description，
+G3 总体继续未关闭。
+
 D3 两层 cache component 已接入现有 discovery service：同一宿主 skills 数组且元数据未变化时，查询复用
 Registry 与静态 BM25 索引；active profile 的 revision、status 或 rerank cue 未变化时，discovery 与
 `search_skills` 共享派生 overlay snapshot。资源 reload、宿主元数据变化、promotion/suspend/delete、revision
 或 cue 变化会分别失效对应层；重建失败不复用旧 catalog，`load_skill` 仍执行当次 source/revision 校验。
-隔离的真实 ExtensionRunner resource-refresh E2E 已验证 unchanged hit、install/source refresh miss、旧 revision
-拒绝与未 refresh source drift fail-closed，G5 在 component + project-local host integration 层 PASS。真实自用
-Pi 会话与 G7 仍未关闭。
+隔离的真实 `AgentSession + DefaultResourceLoader` 验证已确认：连续正常 turn 传给
+`before_agent_start.systemPromptOptions.skills` 的确是同一数组引用，resource reload 后引用会变化；对应
+catalog cache 为 `miss → hit → miss`，source revision 同步变化。因此保留当前 reference + metadata cache key。
+旧 revision 拒绝与未 refresh source drift fail-closed 另由 component/adapter 回归覆盖，G5 在 component +
+project-local host integration 层 PASS。真实自用 Pi 会话与 G7 仍未关闭。
+
+G6 既有 untouched held-out 与隔离 Pi host seam 已在当前分支重跑：12 条四栏 held-out 全过，
+hard-confuser recall/rejection/Gold preservation 与 No-Skill precision 均为 1；active profile revision 匹配、
+无 overlay 无损回静态和受控 promotion 均通过。因此 G6 在 component + project-local evaluation host seam
+层 PASS。生产入口新增 scope-lock，明确不得配置 `overlayProfiles`/`overlayOptions`；production active
+overlay、真实自用部署与 G7 仍未启用或完成。
+
+G7 的 frozen-path isolation 子门已有自动化证据：真实生产入口的静态 import graph 不得触达
+`src/procedures/`、`src/runtime/` 或 `src/adapters/pi/execution-adapter.ts`，真实 loader 的工具/handler
+注册面也被冻结且入口未配置 compiled observer。该子门通过不代表 G7 完成；真实自用部署、可信
+production contribution verifier 与完整生产 E2E 仍未验证。
 
 ## 不可突破的约束
 

@@ -165,7 +165,7 @@ export interface PracticeObserverOptions {
   /** 观察/落盘错误回调（fail open，不阻断主 Agent）。 */
   onError?: (error: unknown, phase: ObserverPhase) => void;
   /** 每个成功落盘事件的观察回调（测试/审计）。 */
-  onEvent?: (event: PracticeEvent) => void;
+  onEvent?: (event: PracticeEvent, context: PracticeObserverEventContext) => void;
   /** 接线状态回调。 */
   onStatus?: (status: ObserverStatus) => void;
   /** 持久化前学习开关；false 时不保留 run、不写 PracticeEvent。缺省=true。 */
@@ -173,6 +173,10 @@ export interface PracticeObserverOptions {
   /** D2 shadow-only observation 落盘 seam；只接收脱敏检索事实与最终合法选择。 */
   onExposure?: (record: ExposureObservationRecord) => void | Promise<void>;
   now?: () => Date;
+}
+
+export interface PracticeObserverEventContext {
+  sessionId: string;
 }
 
 /** 默认 tenantScope：project 前缀 + 规范化项目根的 SHA-256 前 32 hex（不含原始路径）。 */
@@ -910,7 +914,7 @@ export function registerPracticeObserver(
         });
         await options.store.append(event);
         appended += 1;
-        onEvent?.(event);
+        onEvent?.(event, { sessionId });
       }
       for (const selection of loadOnly) {
         // 通用证据钩子：注入额外步骤/verifier（B4+）；返回 undefined 则不注入。
@@ -929,7 +933,7 @@ export function registerPracticeObserver(
         });
         await options.store.append(event);
         appended += 1;
-        onEvent?.(event);
+        onEvent?.(event, { sessionId });
       }
       onStatus?.({ wired: true, reason: "ok", appendedEvents: appended });
     } catch (error) {
