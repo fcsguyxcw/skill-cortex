@@ -15,6 +15,15 @@ import { LearningControls } from "../../../src/activation/learning-controls.ts";
 import { ActivationProfileStore } from "../../../src/activation/store.ts";
 import { PracticeStore } from "../../../src/practice/store/index.ts";
 import { ExposureObservationStore } from "../../../src/exposure/index.ts";
+import type { SkillRecord } from "../../../src/core/contracts/index.ts";
+import {
+  createGateStatusContributionVerifiers,
+  createGateStatusEvidenceHook,
+} from "../../../src/activation/gate-status-contribution-verifier.ts";
+import {
+  registerContributionAssessmentObserver,
+  type ContributionAssessmentSink,
+} from "../../../src/adapters/pi/contribution-assessment-observer.ts";
 
 /**
  * Skill Cortex — Pi 扩展入口（project-local，经 jiti 免编译加载）。
@@ -63,10 +72,16 @@ export default function skillCortexEntry(pi: ExtensionAPI): void {
     projectRoot,
   });
 
+  let catalogRecords: readonly SkillRecord[] = [];
+  let contributionSink: ContributionAssessmentSink | undefined;
+
   registerSkillCortex(pi, {
     mode: "inject",
     onDiscovery: (result) => source.push(result),
     onSearchExposure: (candidates) => source.exposeSearchCandidates(candidates),
+    onCatalog: (records) => {
+      catalogRecords = records;
+    },
   });
 
   registerLearningControls(
@@ -80,5 +95,13 @@ export default function skillCortexEntry(pi: ExtensionAPI): void {
     routeSnapshotSource: source,
     learningEnabled: async () => (await control.status()).learningEnabled,
     onExposure: (record) => exposure.append(record),
+    evidenceHook: createGateStatusEvidenceHook(() => catalogRecords),
+    onEvent: (event, context) => contributionSink?.onPracticeEvent(event, context),
+  });
+  contributionSink = registerContributionAssessmentObserver(pi, {
+    eventSource: practice,
+    assessmentStore: assessments,
+    catalogRecords: () => catalogRecords,
+    verifiers: () => createGateStatusContributionVerifiers(projectRoot, catalogRecords),
   });
 }

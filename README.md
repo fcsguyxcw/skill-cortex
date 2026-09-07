@@ -103,8 +103,10 @@ status/list/pause/resume/forget：pause 跨重启持久化并阻止新 evidence 
 binding drift、重复 registration 或复核不通过均保持零 assessment。新增的 Pi host seam 会从真实
 `agent_end.messages` 在内存中提取最终 assistant 输出，并在 PracticeEvent 已落盘后交给任务特定 verifier；
 隔离 AgentSession 已验证匹配输出写入、错误输出拒绝。原始 prompt/输出不进入 assessment 或 Store。
-当前生产入口仍没有注册可信 verifier，因此只能报告 component + project-local host seam，G1 与 D1
-production/end-to-end 仍未完成，不得据此宣称 D1 完成。
+当前生产入口已对 project-local `skill-cortex-gate-status` 注册一个精确绑定的可信 verifier：它独立重读版本化
+gate registry，只在最终严格 JSON 与权威状态完全一致时写 positive assessment。真实 production entry +
+AgentSession 正反例已验证正确输出写入、错误输出拒绝与原始 prompt/输出不落盘。G1/D1 在该有界真实任务域
+PASS；不代表任意 Skill 已有通用贡献验证。
 
 G4 已通过真实 project-local production entry 验证：pause/resume 跨 entry reload 持久化，pause 后真实
 discovery/settled lifecycle 不新增 Exposure/Practice evidence，list 只返回脱敏摘要，forget evidence

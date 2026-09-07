@@ -1,7 +1,7 @@
 # D1 Contribution Verifier Component Seam
 
 日期：2026-08-23  
-范围：G1 前置 component + project-local Pi host seam；不包含生产 verifier 或 end-to-end learning
+范围：G1 component + project-local Pi host seam，以及 2026-09-07 新增的有界 production verifier / end-to-end learning
 
 ## 目标
 
@@ -41,9 +41,10 @@ assessment，同时提供一个可接可信任务特定 verifier 的最小持久
 
 ## 完成口径
 
-当前关闭 contribution verifier component 与 project-local Pi host evidence seam。生产入口尚无可信
-verifier registration，也没有可普遍验证任意任务因果贡献的实现，所以 G1、D1 production integration
-与 D1 end-to-end 继续保持未完成。
+当前关闭 contribution verifier component 与 project-local Pi host evidence seam。生产入口中的
+`skill-cortex-gate-status` 现有一个可独立重读权威 registry 的精确 production verifier。真实 production
+entry + AgentSession 验证了正确输出落 assessment、错误输出零新增，以及原始 prompt/输出不落盘。因此 G1/D1
+在这个有界真实任务域 PASS；仍没有、也不声称可普遍验证任意 Skill 因果贡献的实现。
 
 ## 验证
 

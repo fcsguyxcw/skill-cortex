@@ -1,0 +1,4 @@
+interface:
+  display_name: "Skill Cortex Gate Status"
+  short_description: "Report authoritative Activation Memory gate states"
+  default_prompt: "Use $skill-cortex-gate-status to report the current G1-G7 states."
