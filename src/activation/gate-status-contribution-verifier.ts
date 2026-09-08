@@ -12,6 +12,7 @@ export const GATE_STATUS_CONTRIBUTION_VERIFIER_ID = "gate-status-exact-output";
 
 const STATUSES = new Set([
   "blocked",
+  "closed_keep_k5_full",
   "offline_pass_shadow_only",
   "pass_bounded_domain",
   "pass_project_local_host",

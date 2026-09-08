@@ -3,7 +3,7 @@
   "gates": [
     { "gateId": "G1", "status": "pass_bounded_domain" },
     { "gateId": "G2", "status": "offline_pass_shadow_only" },
-    { "gateId": "G3", "status": "blocked" },
+    { "gateId": "G3", "status": "closed_keep_k5_full" },
     { "gateId": "G4", "status": "pass_project_local_host" },
     { "gateId": "G5", "status": "pass_project_local_host" },
     { "gateId": "G6", "status": "pass_evaluation_host" },

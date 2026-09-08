@@ -43,9 +43,9 @@ final-heldout 内容在仓库中已可见，因此这里只称 frozen replay，�
 
 ## 状态口径
 
-Candidate Budget 的 offline retrieval 子门支持 K=3，但 G3 总体仍未关闭：缺少 K=3 + 截断卡片的真实
-Selection 验证与本轮 untouched confirmation。生产默认 K=5、完整作者 description、D2 shadow observation
-以及 K=1/2/3/5 和 120/240/480 comparator 均保持不变。
+本报告只记录当时的 offline retrieval 结果。后续 2026-09-08 真实模型 Selection 评测否定 K=3 非劣性；
+最终决策为拒绝 K=3 优化、显式保留生产 K=5 + 完整作者 description，状态记为
+`closed_keep_k5_full`。K=1/2/3/5 和 120/240/480 comparator 继续仅作 evaluation observation。
 
 ## 验证
 

@@ -97,6 +97,8 @@ describe("D4/G7 production entry frozen-path isolation", () => {
     );
 
     const entrySource = await readFile(ENTRY, "utf8");
+    assert.equal(entrySource.includes("topK: 5,"), true,
+      "生产入口必须显式固定已选择的 K=5 候选预算");
     assert.equal(entrySource.includes("compiledTool:"), false);
     assert.equal(entrySource.includes("overlayProfiles:"), false,
       "ADR-0014 范围内生产入口不得读取 active profiles 改变 discovery");

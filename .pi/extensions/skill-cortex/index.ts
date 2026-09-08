@@ -77,6 +77,7 @@ export default function skillCortexEntry(pi: ExtensionAPI): void {
 
   registerSkillCortex(pi, {
     mode: "inject",
+    topK: 5,
     onDiscovery: (result) => source.push(result),
     onSearchExposure: (candidates) => source.exposeSearchCandidates(candidates),
     onCatalog: (records) => {

@@ -25,7 +25,7 @@
 
 ## 判定
 
-**G3 BLOCKED**。所有 K=3 臂的 multi-skill exact-set 都低于 K=5/full 基线。
-No-Skill 和 hard-confuser 非劣不能抵消 multi-skill 回归，不选择 description limit，不改变生产
-Top-K、排序或候选卡。生产保持 K=5 + 完整作者 description；依赖 G3 的 G7 active path
-不得启动。
+**K=3 优化拒绝；候选预算决策关闭并保留 K=5/full。** 所有 K=3 臂的 multi-skill exact-set 都低于
+K=5/full 基线，No-Skill 和 hard-confuser 非劣不能抵消该回归。生产入口显式固定 K=5，继续使用完整
+作者 description，状态记为 `closed_keep_k5_full`。该状态表示采用已验证基线，不表示 K=3 非劣性通过；
+不选择 description limit。G7 仍须单独满足真实自用部署与完整生产 E2E。

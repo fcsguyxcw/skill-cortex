@@ -124,18 +124,13 @@ component 数值条件；heldout 非本轮 untouched，且 production/host/E2E �
 shadow-only，生产候选注入不应用该 policy。
 
 D2 后续两个 shadow 切片也已接线：Candidate Budget 并行记录 K=1/2/3/5 的候选前缀；轻量卡并行记录
-作者 description 在 120/240/480 字符预算下的成本与截断数量。两者都随真实 run observation 落盘，
-但不选择推荐预算、不改变生产 Top-K/排序/候选卡，也不生成 Memory hint；G3 仍未关闭。
+作者 description 在 120/240/480 字符预算下的成本与截断数量。两者继续作为 evaluation-only observation，
+不改变生产排序或候选卡，也不生成 Memory hint。
 
-G3 已新增 evaluation-only frozen budget replay：K=3 在 dev 与 frozen replay 上均保持 K=5 的 overall/multi
-Gold full-set availability，replay 的 hard-confuser Gold availability 也不下降，同时候选量降低约
-30%～32%、description 字符降低约 32%～38%。因此 K=3 只有 offline retrieval support；120/240/480
-投影尚无真实主模型可区分性证据，未选择 description limit。生产仍为默认 K=5 + 完整作者 description，
-G3 总体继续未关闭。
-
-2026-09-08 新增的一次性真实模型 gate 进一步证实不应发布 K=3：180 次调用无 provider/parse failure，
-但所有 K=3 臂的 multi-skill exact-set（55.56%～66.67%）都低于 K=5/full（77.78%）。G3 保持 BLOCKED，
-不选择 description limit，不启动依赖它的 G7 active path。
+G3 的 offline replay 曾支持 K=3 的 retrieval availability，但 2026-09-08 冻结真实模型评测的 180 次调用显示，
+所有 K=3 臂的 multi-skill exact-set（55.56%～66.67%）都低于 K=5/full（77.78%）。因此拒绝 K=3
+优化并关闭该候选预算决策：生产入口显式固定 K=5 + 完整作者 description，状态记为
+`closed_keep_k5_full`。这表示采用已验证基线，不表示 K=3 非劣性门禁通过；description limit 仍不选择。
 
 D3 两层 cache component 已接入现有 discovery service：同一宿主 skills 数组且元数据未变化时，查询复用
 Registry 与静态 BM25 索引；active profile 的 revision、status 或 rerank cue 未变化时，discovery 与

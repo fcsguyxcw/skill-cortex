@@ -197,8 +197,8 @@ interface LightweightSkillCard {
 这些长度只是并行实验臂，不是发布阈值；需要 G3 的 multi-skill/hard-confuser/字符成本证据后才能选择。
 
 2026-09-08 的冻结真实模型 Selection 评测完成 180 次调用且无解析/提供方失败；所有 K=3 臂的 multi-skill
-full-set accuracy 均低于 K=5/full 基线，因此 G3 非劣性失败。`supportedDescriptionLimit=null`，不选择卡片长度，
-生产 Top-K 与候选卡保持 K=5/full 不变。
+full-set accuracy 均低于 K=5/full 基线，因此拒绝 K=3 优化。生产入口显式固定 K=5/full，G3 状态记为
+`closed_keep_k5_full`；这表示保留已验证基线，不把 K=3 失败改写为通过。`supportedDescriptionLimit=null`。
 
 ### 4.5 Learning Admission module
 

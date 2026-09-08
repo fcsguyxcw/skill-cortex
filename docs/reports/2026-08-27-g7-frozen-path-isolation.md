@@ -17,11 +17,11 @@
 ## 状态口径
 
 本隔离子门已由自动化回归测试覆盖。D2 仍为 shadow-only，procedure/runtime 没有 active path。
-G7 总体仍未关闭：G3 真实模型 Selection 非劣性失败，且真实自用 Pi 部署与完整生产 E2E 仍缺证据。上游 G3 未关闭前不得启动 active path。
+K=3 优化已被拒绝，生产保留 K=5/full；G7 总体仍未关闭，因为真实自用 Pi 部署与完整生产 E2E 仍缺证据。
 
 ## 验证
 
 - `node --test src/evaluation/d4/production-entry-isolation.test.ts`：2 passed，0 failed。
-- `node --test src/evaluation/d4/production-entry-isolation.test.ts src/evaluation/candidate-budget/selection-report.test.ts`：3 passed，0 failed。
-- `npm test`：860 tests；858 passed，0 failed，2 skipped。
+- `node --test src/activation/gate-status-contribution-verifier.test.ts src/evaluation/candidate-budget/selection-report.test.ts src/evaluation/d4/production-entry-isolation.test.ts src/evaluation/phase1/pi-host-integration.test.ts`：17 passed，0 failed。
+- `npm test`：861 tests；859 passed，0 failed，2 skipped。
 - `npm run typecheck`：通过。
