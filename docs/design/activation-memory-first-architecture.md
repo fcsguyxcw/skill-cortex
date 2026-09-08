@@ -196,9 +196,9 @@ interface LightweightSkillCard {
 数与被截断候选数；生产候选卡仍使用现有作者 description，不注入投影，不生成 `activationHint`。
 这些长度只是并行实验臂，不是发布阈值；需要 G3 的 multi-skill/hard-confuser/字符成本证据后才能选择。
 
-冻结 replay 已确认三种投影都降低字符数且不改变候选 ID，但尚无真实主模型 Selection 可区分性证据；
-因此 `supportedDescriptionLimit=null`，不选择卡片长度。K=3 retrieval 子门通过不等于 G3 总体完成，
-生产 Top-K 与候选卡保持不变。
+2026-09-08 的冻结真实模型 Selection 评测完成 180 次调用且无解析/提供方失败；所有 K=3 臂的 multi-skill
+full-set accuracy 均低于 K=5/full 基线，因此 G3 非劣性失败。`supportedDescriptionLimit=null`，不选择卡片长度，
+生产 Top-K 与候选卡保持 K=5/full 不变。
 
 ### 4.5 Learning Admission module
 

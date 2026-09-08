@@ -9,20 +9,19 @@
   `src/procedures/`、`src/runtime/` 与 `src/adapters/pi/execution-adapter.ts`。
 - 通过真实 Pi `loadExtensions` 加载生产入口，冻结注册工具清单为 bounded discovery 两项与 learning
   controls 四项；任何 procedure execution tool 加入都会使测试失败。
-- 冻结真实 handler 事件与数量，并确认生产入口没有配置 `compiledTool`。
+- 冻结真实 handler 事件与数量，并确认生产入口没有配置 `compiledTool`。有界 gate-status contribution observer 会增加 `agent_end`、`agent_settled` 与 `before_agent_start` handler，但不引入 procedure/runtime 路径。
 - 确认生产入口没有配置 `overlayProfiles` 或 `overlayOptions`，避免在 G1/生产发布门未关闭时读取
   active profile 改变 discovery。
-- production contribution verifier 尚未就绪，因此入口继续不得注册
-  `registerContributionAssessmentObserver`。
+- 有界 gate-status 域的 production contribution verifier 已注册；它只接受明确验证证据，不扩展为通用贡献判定。
 
 ## 状态口径
 
 本隔离子门已由自动化回归测试覆盖。D2 仍为 shadow-only，procedure/runtime 没有 active path。
-G7 总体仍未关闭：真实自用 Pi 部署、可信 production contribution verifier 以及完整生产 E2E 仍缺证据。
+G7 总体仍未关闭：G3 真实模型 Selection 非劣性失败，且真实自用 Pi 部署与完整生产 E2E 仍缺证据。上游 G3 未关闭前不得启动 active path。
 
 ## 验证
 
 - `node --test src/evaluation/d4/production-entry-isolation.test.ts`：2 passed，0 failed。
-- `node --test src/evaluation/d4/production-entry-isolation.test.ts src/evaluation/phase2/observer-entry-integration.test.ts`：3 passed，0 failed。
-- `npm test`：845 tests；843 passed，0 failed，2 skipped。
+- `node --test src/evaluation/d4/production-entry-isolation.test.ts src/evaluation/candidate-budget/selection-report.test.ts`：3 passed，0 failed。
+- `npm test`：860 tests；858 passed，0 failed，2 skipped。
 - `npm run typecheck`：通过。

@@ -133,6 +133,10 @@ Gold full-set availability，replay 的 hard-confuser Gold availability 也不�
 投影尚无真实主模型可区分性证据，未选择 description limit。生产仍为默认 K=5 + 完整作者 description，
 G3 总体继续未关闭。
 
+2026-09-08 新增的一次性真实模型 gate 进一步证实不应发布 K=3：180 次调用无 provider/parse failure，
+但所有 K=3 臂的 multi-skill exact-set（55.56%～66.67%）都低于 K=5/full（77.78%）。G3 保持 BLOCKED，
+不选择 description limit，不启动依赖它的 G7 active path。
+
 D3 两层 cache component 已接入现有 discovery service：同一宿主 skills 数组且元数据未变化时，查询复用
 Registry 与静态 BM25 索引；active profile 的 revision、status 或 rerank cue 未变化时，discovery 与
 `search_skills` 共享派生 overlay snapshot。资源 reload、宿主元数据变化、promotion/suspend/delete、revision

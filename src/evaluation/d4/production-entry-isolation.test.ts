@@ -21,8 +21,9 @@ const EXPECTED_TOOLS = [
   "skill_memory_status",
 ] as const;
 const EXPECTED_HANDLERS = [
-  ["agent_settled", 1],
-  ["before_agent_start", 2],
+  ["agent_end", 1],
+  ["agent_settled", 2],
+  ["before_agent_start", 3],
   ["tool_call", 1],
   ["tool_result", 1],
 ] as const;
@@ -83,7 +84,7 @@ describe("D4/G7 production entry frozen-path isolation", () => {
     assert.ok(relative.includes(".pi/extensions/skill-cortex/index.ts"));
   });
 
-  it("真实 Pi loader 注册面保持 bounded discovery + controls，且 compiled observer 未接线", async () => {
+  it("真实 Pi loader 注册面保持 bounded discovery + controls + bounded contribution observer，且 compiled observer 未接线", async () => {
     const { extensions, errors } = await loadExtensions([ENTRY], PROJECT_ROOT, createEventBus());
     assert.deepEqual(errors, []);
     assert.equal(extensions.length, 1);
@@ -101,7 +102,7 @@ describe("D4/G7 production entry frozen-path isolation", () => {
       "ADR-0014 范围内生产入口不得读取 active profiles 改变 discovery");
     assert.equal(entrySource.includes("overlayOptions:"), false,
       "production active overlay 未获授权前不得配置 rerank 参数");
-    assert.equal(entrySource.includes("registerContributionAssessmentObserver"), false,
-      "可信 production verifier 未就绪前不得把 contribution observer 接到生产入口");
+    assert.equal(entrySource.includes("registerContributionAssessmentObserver"), true,
+      "有界 gate-status production verifier 必须接入 contribution observer");
   });
 });
