@@ -2,7 +2,8 @@
 
 状态：Accepted design — 2026-08-22  
 权威范围：ADR-0014  
-实现状态：D0 完成；D1 已有 fail-closed contribution verifier component + project-local Pi host seam，但可信生产 verifier 仍缺失；D2 Exposure shadow observation 已接真实入口
+实现状态：D0～D3 已有对应 component/host 证据；G1 在 gate-status 有界真实任务域通过，G2 保持
+shadow-only，G3 保留 K=5/full，G4～G7 按各自证据层关闭；production active overlay 仍禁用
 
 ## 1. 目标
 
@@ -263,9 +264,11 @@ PracticeEvent、assessment 或其他 Store；缺 prompt、缺最终文本、leng
 positive assessment。隔离的真实 AgentSession 已验证：同一任务实际调用 `load_skill` 后，任务特定 verifier
 对正确最终 marker 写入 1 条 assessment，错误 marker 返回 `contribution_unverified` 且保持零新增。
 
-这仍不是可信生产 contribution verifier 完成：生产入口没有任何 registration，仓库也没有一个可普遍
-判断任意任务成功与 Skill 因果贡献的 verifier。当前只能报告 verifier/Admission component、assessment
-persistence、用户控制与 project-local host seam；不能报告 G1 或 D1 production/end-to-end complete。
+生产入口当前为两个 project-local Skill 注册可信、精确绑定的 verifier：`skill-cortex-gate-status`
+独立重读版本化 gate registry，`markdown-relative-link-audit` 独立重扫有界项目 Markdown 相对文件链接；
+两者都严格比较最终 assistant JSON。gate-status 已有真实 Pi 自用 assessment，Markdown 链接审计已有真实
+production entry + AgentSession 正反例但尚无真实模型自用证据。因此 G1/D1 仍只在有界任务域通过。仓库
+没有可普遍判断任意任务成功与 Skill 因果贡献的 verifier；其他 Skill 仍须冻结各自证据与失败语义。
 
 准入矩阵：
 
@@ -314,8 +317,8 @@ suspend 依赖 profile；profile forget 进入不可恢复的 retired tombstone�
 新增的真实 production-entry 验证通过 Pi `loadExtensions` 连续加载三个 entry 实例：pause 与 resume 均跨
 entry reload 持久化；pause 后真实 discovery/settled lifecycle 零新增 Exposure/Practice evidence；list
 保持脱敏；forget evidence 同时失效 PracticeEvent/assessment 并级联 suspend 依赖 profile。因此 G4 在
-component + project-local production-entry host integration 层 PASS。该证据不包含用户日常 Pi 部署、
-active overlay 或 G7 完整路径。
+component + project-local production-entry host integration 层 PASS。该证据自身不包含用户日常 Pi 部署
+或 active overlay；后续 G7 已单独验证静态 K=5/full 的真实自用路径，production active overlay 仍禁用。
 
 ## 5. No-Skill 合同
 

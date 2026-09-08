@@ -248,6 +248,13 @@ export interface ObservedStep {
   stepId: string;
   toolName: string;
   outcome: "ok" | "failed" | "unknown";
+  /** 成功 read 的 project-relative 请求路径；仅在内存 evidence hook 中使用，不持久化。 */
+  relativeReadPath?: string;
+}
+
+interface ReadEvidence {
+  toolCallId: string;
+  relativeReadPath?: string;
 }
 
 /**
@@ -295,6 +302,7 @@ export class RunCollector {
   readonly startedAt: string;
   readonly tenantScope: string;
   readonly taskHash: string;
+  readonly projectRoot: string;
   /** 原始用户 prompt（仅内存，用于 evidenceHook 输入；绝不落盘）。 */
   readonly prompt: string;
   /** 本次 run 消费到的候选快照（cortex 成功 inject 后由 observer 在 before_agent_start 绑定）。 */
@@ -303,6 +311,7 @@ export class RunCollector {
   readonly snapshotRejectReason: ObserverStatus["reason"] | undefined;
   readonly steps: ObservedStep[] = [];
   readonly loadEvidenceByCallId = new Map<string, LoadEvidence>();
+  readonly readEvidenceByCallId = new Map<string, ReadEvidence>();
   readonly loadedSkillIds = new Set<string>();
   /** compiled 工具调用证据（仅在对应成功 tool_result 后保存 evidence）。 */
   readonly compiledEvidenceByCallId = new Map<string, CompiledCallEvidence>();
@@ -315,6 +324,7 @@ export class RunCollector {
     startedAt: string;
     tenantScope: string;
     taskHash: string;
+    projectRoot: string;
     prompt: string;
     snapshot?: RouteSnapshot;
     snapshotRejectReason?: ObserverStatus["reason"];
@@ -326,6 +336,7 @@ export class RunCollector {
     this.startedAt = options.startedAt;
     this.tenantScope = options.tenantScope;
     this.taskHash = options.taskHash;
+    this.projectRoot = path.resolve(options.projectRoot);
     this.prompt = options.prompt;
     this.snapshot = options.snapshot;
     this.snapshotRejectReason = options.snapshotRejectReason;
@@ -346,6 +357,19 @@ export class RunCollector {
         skillRevision,
         outcome: "unknown",
       });
+      return;
+    }
+    if (event.toolName === "read") {
+      const inputPath = typeof event.input.path === "string" ? event.input.path : undefined;
+      let relativeReadPath: string | undefined;
+      if (inputPath !== undefined) {
+        const resolved = path.resolve(this.projectRoot, inputPath);
+        const relative = path.relative(this.projectRoot, resolved);
+        if (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)) {
+          relativeReadPath = relative.replaceAll("\\", "/");
+        }
+      }
+      this.readEvidenceByCallId.set(event.toolCallId, { toolCallId: event.toolCallId, relativeReadPath });
       return;
     }
     if (this.compiledTool !== undefined && event.toolName === this.compiledTool.toolName) {
@@ -379,6 +403,15 @@ export class RunCollector {
       }
       return;
     }
+    const read = this.readEvidenceByCallId.get(event.toolCallId);
+    if (read !== undefined) {
+      this.#recordStep(
+        event.toolName,
+        event.isError ? "failed" : "ok",
+        event.isError ? undefined : read.relativeReadPath,
+      );
+      return;
+    }
     const compiled = this.compiledEvidenceByCallId.get(event.toolCallId);
     if (compiled !== undefined) {
       const details = (event as { details?: unknown }).details;
@@ -401,9 +434,18 @@ export class RunCollector {
     this.#recordStep(event.toolName, event.isError ? "failed" : "ok");
   }
 
-  #recordStep(toolName: string, outcome: ObservedStep["outcome"]): void {
+  #recordStep(
+    toolName: string,
+    outcome: ObservedStep["outcome"],
+    relativeReadPath?: string,
+  ): void {
     this.#stepSeq += 1;
-    this.steps.push({ stepId: `step-${this.#stepSeq}`, toolName, outcome });
+    this.steps.push({
+      stepId: `step-${this.#stepSeq}`,
+      toolName,
+      outcome,
+      ...(relativeReadPath !== undefined ? { relativeReadPath } : {}),
+    });
   }
 }
 
@@ -816,6 +858,7 @@ export function registerPracticeObserver(
         startedAt: now().toISOString(),
         tenantScope,
         taskHash: sha256HexOf(event.prompt).slice(0, 32),
+        projectRoot,
         // prompt 仅内存持有（evidenceHook 输入），落盘只写派生 hash 与结构化结果。
         prompt: event.prompt,
         snapshot,

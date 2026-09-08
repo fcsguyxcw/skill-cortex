@@ -28,8 +28,9 @@ canary 和 lifecycle 代码保留为 **frozen experimental track**：不删除�
 ### 当前主线
 
 1. [AGENTS.md](AGENTS.md)：项目安全、范围和协作规则。
-2. [最新实施进度审计](docs/reviews/2026-08-14-implementation-progress-audit.md)：已有实现证据；其中
-   procedure phase 状态只说明历史 project-local 验证，不定义当前主线。
+2. [最新实施进度审计](docs/reviews/2026-09-08-post-g7-implementation-progress-audit.md)：当前
+   Activation-Memory-first 主线与 G1～G7 证据；旧 procedure phase 状态只说明历史 project-local
+   验证，不定义当前主线。
 3. [ADR-0014：Activation-Memory-first 范围](docs/adr/0014-activation-memory-first-scope.md)。
 4. [Activation-Memory-first 架构设计](docs/design/activation-memory-first-architecture.md)。
 5. [ADR-0007：Prompt 外 Discovery](docs/adr/0007-prompt-external-skill-discovery.md)。
@@ -103,10 +104,11 @@ status/list/pause/resume/forget：pause 跨重启持久化并阻止新 evidence 
 binding drift、重复 registration 或复核不通过均保持零 assessment。新增的 Pi host seam 会从真实
 `agent_end.messages` 在内存中提取最终 assistant 输出，并在 PracticeEvent 已落盘后交给任务特定 verifier；
 隔离 AgentSession 已验证匹配输出写入、错误输出拒绝。原始 prompt/输出不进入 assessment 或 Store。
-当前生产入口已对 project-local `skill-cortex-gate-status` 注册一个精确绑定的可信 verifier：它独立重读版本化
-gate registry，只在最终严格 JSON 与权威状态完全一致时写 positive assessment。真实 production entry +
-AgentSession 正反例已验证正确输出写入、错误输出拒绝与原始 prompt/输出不落盘。G1/D1 在该有界真实任务域
-PASS；不代表任意 Skill 已有通用贡献验证。
+当前生产入口已对两个 project-local Skill 注册精确绑定的任务特定 verifier：`skill-cortex-gate-status`
+独立重读版本化 gate registry；`markdown-relative-link-audit` 独立重扫 `README.md` 与 `docs/**/*.md` 的
+相对文件链接。两者都只在最终严格 JSON 与权威结果完全一致时写 positive assessment。gate-status 已有真实
+自用 E2E；Markdown 链接审计已有真实 production entry + AgentSession 正反例，尚未进行真实模型自用。
+G1/D1 仍只表示有界任务域 PASS，不代表任意 Skill 已有通用贡献验证。
 
 G4 已通过真实 project-local production entry 验证：pause/resume 跨 entry reload 持久化，pause 后真实
 discovery/settled lifecycle 不新增 Exposure/Practice evidence，list 只返回脱敏摘要，forget evidence

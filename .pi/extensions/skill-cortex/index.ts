@@ -21,6 +21,10 @@ import {
   createGateStatusEvidenceHook,
 } from "../../../src/activation/gate-status-contribution-verifier.ts";
 import {
+  createMarkdownLinkAuditContributionVerifiers,
+  createMarkdownLinkAuditEvidenceHook,
+} from "../../../src/activation/markdown-link-audit-contribution-verifier.ts";
+import {
   registerContributionAssessmentObserver,
   type ContributionAssessmentSink,
 } from "../../../src/adapters/pi/contribution-assessment-observer.ts";
@@ -74,6 +78,10 @@ export default function skillCortexEntry(pi: ExtensionAPI): void {
 
   let catalogRecords: readonly SkillRecord[] = [];
   let contributionSink: ContributionAssessmentSink | undefined;
+  const evidenceHooks = [
+    createGateStatusEvidenceHook(() => catalogRecords),
+    createMarkdownLinkAuditEvidenceHook(projectRoot, () => catalogRecords),
+  ];
 
   registerSkillCortex(pi, {
     mode: "inject",
@@ -96,13 +104,24 @@ export default function skillCortexEntry(pi: ExtensionAPI): void {
     routeSnapshotSource: source,
     learningEnabled: async () => (await control.status()).learningEnabled,
     onExposure: (record) => exposure.append(record),
-    evidenceHook: createGateStatusEvidenceHook(() => catalogRecords),
+    evidenceHook: {
+      async collect(run, selection) {
+        for (const hook of evidenceHooks) {
+          const evidence = await hook.collect(run, selection);
+          if (evidence !== undefined) return evidence;
+        }
+        return undefined;
+      },
+    },
     onEvent: (event, context) => contributionSink?.onPracticeEvent(event, context),
   });
   contributionSink = registerContributionAssessmentObserver(pi, {
     eventSource: practice,
     assessmentStore: assessments,
     catalogRecords: () => catalogRecords,
-    verifiers: () => createGateStatusContributionVerifiers(projectRoot, catalogRecords),
+    verifiers: () => [
+      ...createGateStatusContributionVerifiers(projectRoot, catalogRecords),
+      ...createMarkdownLinkAuditContributionVerifiers(projectRoot, catalogRecords),
+    ],
   });
 }
