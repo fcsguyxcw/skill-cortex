@@ -378,14 +378,14 @@ Skill package 来判定命中，且不削弱 `load_skill` 的 manifest/source/re
 cue 变化时失效。隔离的真实 AgentSession 连续 turn/resource reload 测试覆盖数组身份
 `same → same → changed`、catalog `miss → hit → miss` 与 revision 变化；component/adapter 回归继续覆盖宿主
 metadata/source 变化、旧 revision 拒绝和未 refresh source drift fail-closed。因此 G5 在 component +
-project-local host integration 层 PASS。当前主入口仍未配置 active overlay；真实自用 Pi 会话与 G7 仍未关闭。
+project-local host integration 层 PASS。当前主入口仍未配置 active overlay；后续真实自用 Pi 会话由 G7 验证。
 
 G6 既有 12 条 untouched final-heldout 在首次揭示后保持冻结，本轮未改 cases、Gold、profile、overlay
 参数或门槛，只做当前分支重跑。hard-confuser recall/confuser rejection/Gold preservation 与 No-Skill
 precision 均为 1，multi-skill/cross-language 也达冻结门槛；隔离真实 Pi ExtensionRunner 的 revision-bound
 overlay、无 provider 回静态与受控 promotion 同步通过。因此 G6 在 component + project-local evaluation
 host seam 层 PASS。生产入口的 scope-lock 明确禁止 `overlayProfiles`/`overlayOptions`，production active
-overlay 继续 disabled；该状态不关闭 G7。
+overlay 继续 disabled。G7 可以关闭静态 K=5/full + 有界 verifier 的真实自用路径，但不据此发布 overlay。
 
 ## 8. 安全与隐私
 
@@ -470,8 +470,9 @@ procedure tool；Practice observer 中可选的 compiled-evidence seam 也未由
 
 上述 frozen-path isolation 子门已由
 `src/evaluation/d4/production-entry-isolation.test.ts` 自动化覆盖：递归检查真实入口静态 import graph，
-并通过真实 Pi loader 冻结工具与 handler 注册面，同时确认 compiled observer 未接线。该结果只关闭
-隔离子门，不关闭 G7；真实自用部署、可信 production contribution verifier 与完整生产 E2E 仍缺证据。
+并通过真实 Pi loader 冻结工具与 handler 注册面，同时确认 compiled observer 未接线。2026-09-08 又以
+Pi 0.84.2 正常自动加载 + DeepSeek 完成 gate-status 的 `load_skill → read → exact output → independent
+assessment`，且原始 prompt 不落盘；因此 G7 在当前静态 K=5/full 有界任务域关闭。
 
 只要这些门成立，procedure 文件可以保留在同一仓库，代价主要是 typecheck、测试与安全审计维护面，
 不是运行时行为。若以后维护成本持续出现，才考虑把 frozen track 移到独立 package/archive；当前无需

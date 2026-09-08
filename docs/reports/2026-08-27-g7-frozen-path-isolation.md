@@ -1,7 +1,8 @@
 # G7 Frozen Path Isolation Gate
 
 日期：2026-08-27  
-范围：真实 project-local Pi 生产入口的 procedure/runtime 隔离；不代表 G7 总体完成
+范围：真实 project-local Pi 生产入口的 procedure/runtime 隔离；G7 的最终真实自用证据见
+[2026-09-08 G7 报告](2026-09-08-g7-real-self-use.md)
 
 ## 验证边界
 
@@ -17,7 +18,8 @@
 ## 状态口径
 
 本隔离子门已由自动化回归测试覆盖。D2 仍为 shadow-only，procedure/runtime 没有 active path。
-K=3 优化已被拒绝，生产保留 K=5/full；G7 总体仍未关闭，因为真实自用 Pi 部署与完整生产 E2E 仍缺证据。
+K=3 优化已被拒绝，生产保留 K=5/full。本隔离子门与后续真实自用验证共同关闭 G7；本报告自身仍只证明
+frozen-path isolation，不单独证明外部模型链路。
 
 ## 验证
 

@@ -32,7 +32,7 @@ const VALID = {
     { gateId: "G4", status: "pass_project_local_host" },
     { gateId: "G5", status: "pass_project_local_host" },
     { gateId: "G6", status: "pass_evaluation_host" },
-    { gateId: "G7", status: "blocked" },
+    { gateId: "G7", status: "pass_real_self_use" },
   ],
 };
 

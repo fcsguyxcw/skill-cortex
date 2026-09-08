@@ -140,18 +140,19 @@ Registry 与静态 BM25 索引；active profile 的 revision、status 或 rerank
 `before_agent_start.systemPromptOptions.skills` 的确是同一数组引用，resource reload 后引用会变化；对应
 catalog cache 为 `miss → hit → miss`，source revision 同步变化。因此保留当前 reference + metadata cache key。
 旧 revision 拒绝与未 refresh source drift fail-closed 另由 component/adapter 回归覆盖，G5 在 component +
-project-local host integration 层 PASS。真实自用 Pi 会话与 G7 仍未关闭。
+project-local host integration 层 PASS；后续真实自用 Pi 会话证据由 G7 单独关闭。
 
 G6 既有 untouched held-out 与隔离 Pi host seam 已在当前分支重跑：12 条四栏 held-out 全过，
 hard-confuser recall/rejection/Gold preservation 与 No-Skill precision 均为 1；active profile revision 匹配、
 无 overlay 无损回静态和受控 promotion 均通过。因此 G6 在 component + project-local evaluation host seam
 层 PASS。生产入口新增 scope-lock，明确不得配置 `overlayProfiles`/`overlayOptions`；production active
-overlay、真实自用部署与 G7 仍未启用或完成。
+overlay 继续 disabled。G7 关闭的是当前静态 K=5/full + 有界 verifier 的真实自用路径，不把该 overlay 发布。
 
-G7 的 frozen-path isolation 子门已有自动化证据：真实生产入口的静态 import graph 不得触达
-`src/procedures/`、`src/runtime/` 或 `src/adapters/pi/execution-adapter.ts`，真实 loader 的工具/handler
-注册面也被冻结且入口未配置 compiled observer。该子门通过不代表 G7 完成；真实自用部署、可信
-production contribution verifier 与完整生产 E2E 仍未验证。
+G7 已在 Pi 0.84.2 的正常项目自动加载路径完成真实自用验证：项目 `.pi/settings.json` 引用唯一
+gate-status Skill 源，生产入口显式保持 K=5/full，DeepSeek 经候选选择、`load_skill`、`read` 返回与权威
+registry 完全一致的 JSON，并形成独立 verifier pass 的 project-local assessment；原始 prompt 不落盘。
+用户级旧 `skill-router.ts` 仅在检测到项目自带 Skill Cortex 时让位，其他项目仍保留原行为。生产入口
+静态 import graph 继续禁止 procedure/runtime/compiled observer，G7 状态为 `pass_real_self_use`。
 
 ## 不可突破的约束
 

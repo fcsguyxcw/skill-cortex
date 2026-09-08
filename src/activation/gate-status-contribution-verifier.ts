@@ -17,6 +17,7 @@ const STATUSES = new Set([
   "pass_bounded_domain",
   "pass_project_local_host",
   "pass_evaluation_host",
+  "pass_real_self_use",
 ]);
 
 export interface GateStatusRegistry {
