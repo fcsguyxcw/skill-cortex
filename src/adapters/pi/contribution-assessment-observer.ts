@@ -15,6 +15,7 @@ import type { PracticeEvent, SkillRecord } from "../../core/contracts/index.ts";
 import type { LearningAssessmentEventSource } from "../../activation/admission-store.ts";
 import { LearningAssessmentStore } from "../../activation/admission-store.ts";
 import {
+  type ContributionVerificationEvidence,
   type PositiveContributionVerifier,
   type VerifyAndStoreContributionResult,
   verifyAndStorePositiveContribution,
@@ -32,6 +33,8 @@ export interface ContributionAssessmentObserverOptions {
   onResult?: (
     result: VerifyAndStoreContributionResult,
     event: PracticeEvent,
+    /** Memory-only verifier input. Callers must project bounded facts and must not persist it. */
+    evidence: ContributionVerificationEvidence | undefined,
   ) => void | Promise<void>;
   onError?: (error: unknown, phase: "capture" | "finalize") => void;
 }
@@ -116,6 +119,13 @@ export function registerContributionAssessmentObserver(
     if (pending === undefined) return;
     try {
       for (const event of pending.events) {
+        const verificationEvidence =
+          pending.prompt !== undefined && pending.finalAssistantText !== undefined
+            ? {
+                userPrompt: pending.prompt,
+                finalAssistantText: pending.finalAssistantText,
+              }
+            : undefined;
         const result = await verifyAndStorePositiveContribution({
           tenantScope: event.tenantScope,
           eventId: event.eventId,
@@ -123,17 +133,10 @@ export function registerContributionAssessmentObserver(
           assessmentStore: options.assessmentStore,
           catalogRecords: options.catalogRecords(),
           verifiers: options.verifiers(),
-          ...(pending.prompt !== undefined && pending.finalAssistantText !== undefined
-            ? {
-                verificationEvidence: {
-                  userPrompt: pending.prompt,
-                  finalAssistantText: pending.finalAssistantText,
-                },
-              }
-            : {}),
+          ...(verificationEvidence !== undefined ? { verificationEvidence } : {}),
           ...(options.assessedAt !== undefined ? { assessedAt: options.assessedAt } : {}),
         });
-        await options.onResult?.(result, event);
+        await options.onResult?.(result, event, verificationEvidence);
       }
     } catch (error) {
       options.onError?.(error, "finalize");

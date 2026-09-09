@@ -270,6 +270,12 @@ positive assessment。隔离的真实 AgentSession 已验证：同一任务实�
 production entry + AgentSession 正反例但尚无真实模型自用证据。因此 G1/D1 仍只在有界任务域通过。仓库
 没有可普遍判断任意任务成功与 Skill 因果贡献的 verifier；其他 Skill 仍须冻结各自证据与失败语义。
 
+Markdown audit 的 positive assessment 后续只经过任务专属 deterministic feature producer：输出固定的
+任务族、审计范围、链接类型与结果类别，不接收或复制模型 alias、prompt span、输出 span、正文或路径。
+生产入口随后按 `tenantScope + eventId` 从 Store 读回 event/assessment，形成 draft→shadow profile；
+等价 cue 按固定特征聚合 evidence IDs。该路径不调用额外模型、不改变 Agent 可见候选，也没有 active
+promotion 接线。
+
 准入矩阵：
 
 | Task outcome | Skill contribution | 处理 |

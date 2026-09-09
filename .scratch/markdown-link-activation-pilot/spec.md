@@ -1,6 +1,6 @@
 # Markdown Relative-Link Audit Activation Pilot
 
-**Status:** ready-for-agent
+**Status:** ticket-02-complete
 
 ## Problem Statement
 
@@ -93,3 +93,7 @@ alias。通过准入的 evidence 只自动形成 draft/shadow ActivationProfile�
 The pilot is intentionally narrow: deterministic artifact verification provides a stronger attribution boundary than a generic
 success judge. Passing this pilot would demonstrate a second real formation path and a privacy-preserving semantic producer;
 it would not establish universal Skill contribution verification or production learning quality.
+
+Ticket 02 keeps the append-only PracticeEvent unchanged. Its task-specific projection stores only the frozen semantic
+vocabulary in a draft/shadow ActivationProfile after the exact-bound assessment has been persisted and read back from the
+project-local stores. The production-entry E2E uses an isolated faux provider, so real-model self-use remains unverified.

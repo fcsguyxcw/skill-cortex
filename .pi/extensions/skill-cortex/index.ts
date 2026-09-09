@@ -23,7 +23,10 @@ import {
 import {
   createMarkdownLinkAuditContributionVerifiers,
   createMarkdownLinkAuditEvidenceHook,
+  MARKDOWN_LINK_AUDIT_SKILL_NAME,
+  parseMarkdownLinkAuditResult,
 } from "../../../src/activation/markdown-link-audit-contribution-verifier.ts";
+import { induceAndStoreMarkdownLinkAuditShadow } from "../../../src/activation/markdown-link-audit-activation.ts";
 import {
   registerContributionAssessmentObserver,
   type ContributionAssessmentSink,
@@ -123,5 +126,34 @@ export default function skillCortexEntry(pi: ExtensionAPI): void {
       ...createGateStatusContributionVerifiers(projectRoot, catalogRecords),
       ...createMarkdownLinkAuditContributionVerifiers(projectRoot, catalogRecords),
     ],
+    async onResult(result, event, evidence) {
+      if (result.status !== "stored" || evidence === undefined) return;
+      const parents = catalogRecords.filter(
+        (record) =>
+          record.name === MARKDOWN_LINK_AUDIT_SKILL_NAME
+          && record.skillId === event.parentSkillId
+          && record.skillRevision === event.parentSkillRevision
+          && record.sourceHash === event.sourceHash,
+      );
+      if (parents.length !== 1) return;
+      if (!(await control.status()).learningEnabled) return;
+      let audit;
+      try {
+        audit = parseMarkdownLinkAuditResult(JSON.parse(evidence.finalAssistantText));
+      } catch {
+        return;
+      }
+      if (audit === undefined) return;
+      await induceAndStoreMarkdownLinkAuditShadow({
+        activationStore: activation,
+        eventSource: practice,
+        assessmentSource: assessments,
+        tenantScope,
+        eventId: event.eventId,
+        parentSkill: parents[0]!,
+        brokenLinkCount: audit.brokenLinks.length,
+        learningEnabled: async () => (await control.status()).learningEnabled,
+      });
+    },
   });
 }

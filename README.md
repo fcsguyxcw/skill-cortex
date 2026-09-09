@@ -110,6 +110,11 @@ binding drift、重复 registration 或复核不通过均保持零 assessment。
 自用 E2E；Markdown 链接审计已有真实 production entry + AgentSession 正反例，尚未进行真实模型自用。
 G1/D1 仍只表示有界任务域 PASS，不代表任意 Skill 已有通用贡献验证。
 
+Markdown 链接审计的 verified assessment 现在会进入一个任务专属、无模型的语义 producer：它只生成
+`task-family`、`audit-scope`、`link-class` 与 `result-class` 四类冻结枚举，不复制 prompt、assistant
+输出、文档正文或路径。生产入口会从 Store 读回精确绑定的 real event/assessment，并只形成
+draft→shadow ActivationProfile；重复等价 cue 确定性去重，pause 时不写入，active overlay 仍未启用。
+
 G4 已通过真实 project-local production entry 验证：pause/resume 跨 entry reload 持久化，pause 后真实
 discovery/settled lifecycle 不新增 Exposure/Practice evidence，list 只返回脱敏摘要，forget evidence
 同时删除 PracticeEvent/assessment 并级联 suspend profile。G4 在 component + project-local production-entry

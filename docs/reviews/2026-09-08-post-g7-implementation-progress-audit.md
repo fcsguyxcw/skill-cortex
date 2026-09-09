@@ -49,33 +49,40 @@ Gate registry 的当前权威值在 `config/activation-memory-gates.json`。G7 �
 - 2 条 positive LearningEvidenceAssessment；
 - 0 个 ActivationProfile 文件。
 
-真实 PracticeEvent 的 `redactedTaskFeatures` 目前只有 prompt hash、candidate count 与 selected count，
-不足以为新任务形成可泛化语义 cue。05:09 会话加载了 Skill，但最终输出是 Markdown JSON fence，严格
+真实 PracticeEvent 的 `redactedTaskFeatures` 仍只有 prompt hash、candidate count 与 selected count；
+Markdown pilot 不改写这些 append-only observation，而是在 exact-bound positive assessment 后把固定四类
+语义枚举投影到 shadow profile。05:09 会话加载了 Skill，但最终输出是 Markdown JSON fence，严格
 `JSON.parse(finalAssistantText)` 失败，因此没有新增 positive assessment；这保留为“加载 Skill 不等于
 产生正向学习证据”的真实负对照。
 
-`induceAndStoreShadow` 已有 component 测试，但生产入口没有自动 induction 接线。assessment 数量不得
-解释为 Activation Memory 数量。
+生产入口已为 Markdown pilot 接入 task-specific producer 与自动 draft→shadow induction；隔离
+AgentSession E2E 已证明 exact 输出形成一个 shadow profile，fenced/no-load 对照不形成 assessment/profile，
+且持久化内容不含 prompt、输出或项目绝对路径。该证据仍不是外部真实模型自用。assessment 数量不得
+直接解释为 Activation Memory 数量。
 
 ## 5. 当前验证证据
 
 - G7 报告记录的目标测试：10 passed，0 failed。
 - G7 报告记录的全套测试：862 tests；860 passed，0 failed，2 skipped。
 - G7 报告记录的 typecheck 与 `git diff --check`：通过。
-- 本审计只做文档与当前只读状态对账；未重新运行真实模型，也未修改 Store。
+- Ticket 02 当前 checkout 全套测试：873 tests；871 passed，0 failed，2 skipped；typecheck 与
+  `git diff --check` 通过。
+- Ticket 02 实际 scanner smoke：61 个 Markdown 文件，0 个 broken link。
+- 本轮未重新运行真实模型，也未修改 project-local 真实 Store；production-entry E2E 全部使用项目内临时目录。
 
 ## 6. 未关闭风险与下一实施门
 
 1. 第二个非元、可重复任务域已冻结为 project-local Markdown 相对链接审计；deterministic scanner、
    exact-bound verifier、生产 registration 与 AgentSession 正反例已实现。
 2. 该 pilot 尚未产生真实模型 evidence；其当前通过只属于 component + project-local host seam。
-3. 语义 feature producer 尚未实现；后续只能输出受控、脱敏字段，不得持久化原始 prompt 或任意模型 alias。
-4. 自动 draft/shadow induction 尚未接线；production active overlay 继续禁用。
+3. 任务专属语义 producer 已实现，只输出 task family、audit scope、link class、result class 四类冻结枚举。
+4. 自动 draft/shadow induction 已接入 production entry 的 verified-result 回调；production active overlay
+   继续禁用。
 5. 旧 Activation Memory calibration 中 verified 与 naive 输出相同，No-Skill FP=`1.00`、hard-confuser
    FP=`0.8333`；在新 development/calibration 通过前不得运行 held-out 或启用 active Memory。
 
-下一 frontier 是 project-local ticket 02：只在 verified Markdown audit evidence 后生成白名单语义特征，
-并接到 draft/shadow induction；不得提前运行 calibration 或启用 active overlay。
+下一 frontier 是 project-local ticket 03：冻结 producer boost、fixture 分区、hash、阈值与 leakage 规则后，
+只运行 development/calibration；安全门失败时停止，不得读取 held-out 或启用 active overlay。
 
 ## 7. 明确不做
 

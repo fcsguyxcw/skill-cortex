@@ -20,6 +20,7 @@ import {
 
 import productionEntry from "../../../.pi/extensions/skill-cortex/index.ts";
 import { LearningAssessmentStore } from "../../activation/admission-store.ts";
+import { ActivationProfileStore } from "../../activation/store.ts";
 import { scanMarkdownRelativeLinks } from "../../activation/markdown-link-audit-contribution-verifier.ts";
 import { defaultTenantScope } from "../../adapters/pi/practice-observer.ts";
 import { mapSkills } from "../../adapters/pi/core.ts";
@@ -120,9 +121,21 @@ describe("Markdown link audit through the real production entry", () => {
       rootDir: path.join(fixtureRoot, ".skill-cortex", "practice"),
       projectRoot: fixtureRoot,
     }).listProvenance(tenantScope, "real");
+    const profiles = await new ActivationProfileStore({
+      rootDir: path.join(fixtureRoot, ".skill-cortex", "activation"),
+      projectRoot: fixtureRoot,
+    }).listCurrent();
     assert.equal(events.length, 2);
     assert.equal(assessments.length, 1);
-    const persisted = JSON.stringify({ assessments, events });
+    assert.equal(profiles.length, 1);
+    assert.equal(profiles[0]!.status, "shadow");
+    assert.deepEqual(profiles[0]!.positiveExamples[0]!.features, [
+      "task-family:markdown-relative-link-audit",
+      "audit-scope:project-markdown",
+      "link-class:relative-file",
+      "result-class:broken-links-present",
+    ]);
+    const persisted = JSON.stringify({ assessments, events, profiles });
     assert.equal(persisted.includes(PROMPT), false);
     assert.equal(persisted.includes(expected), false);
     assert.equal(persisted.includes(fixtureRoot), false);

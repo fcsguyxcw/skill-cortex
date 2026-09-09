@@ -264,6 +264,11 @@ profile 删除保留 retired tombstone。project-local Pi host seam 从 `agent_e
 独立权威复核。前者已有真实自用 E2E，后者已有 project-local production-entry AgentSession 正反例。
 G1/D1 仍只在这些有界证据范围内成立，不能外推为任意 Skill 的通用 contribution verification。
 
+`markdown-relative-link-audit` 的 positive assessment 可触发一个任务专属 semantic projection：原始
+PracticeEvent 保持既有最小 hash/count 特征，ActivationProfile 只保存四类冻结枚举
+（task family、audit scope、link class、result class）及 event/assessment evidence IDs。projection
+不保存 prompt、最终输出、文档内容、文件名、相对/绝对路径或任意模型生成 alias，只允许 draft/shadow。
+
 ### 4.5 CompiledProcedure
 
 `CompiledProcedure` 是父 Skill 的部分执行快路径，而不是替代 Skill 的新 Skill。
