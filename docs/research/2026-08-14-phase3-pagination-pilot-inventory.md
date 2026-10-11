@@ -13,7 +13,7 @@
 2. **来源**：upstream 为 GitHub `supabase/agent-skills`（默认分支 `main`，创建 2026-01-16，`pushed_at` 2026-08-12）。README 明示遵循 Agent Skills Open Standard；supabase.com/blog 2026-01-21 发布公告可佐证来源组织。
 3. **许可（可追溯）**：本地**无** `LICENSE`/`LICENSE.txt` 文件（已核查）；本地唯一许可声明是 `SKILL.md` frontmatter 的 `license: MIT`。upstream 仓库根 `LICENSE` 为 MIT（Copyright (c) 2026 Supabase），`CONTRIBUTING.md` 声明贡献按 MIT 许可；upstream SKILL.md frontmatter 同为 `license: MIT`。结论：**本地安装许可 = MIT（由 frontmatter 声明 + upstream 仓库 LICENSE 佐证）**；本地未捆绑许可文件副本，属于安装器打包取舍，不改变许可结论。
 4. **pilot 范围（ADR-0010）**：只使用 `references\data-pagination.md` 条款；procedure 只做 **OFFSET pagination 静态检测**，输入 bounded SQL 字符串，输出结构化 findings 或显式 abstain；**禁止**执行 SQL、连接数据库、**改写查询**、修改原 Skill、把 procedure 当独立 Skill。advice、查询改写、性能论断、数据库特定语义与其余全部规则为 `llm_holes` 或 scope 外。
-5. **依赖 fingerprint（最小化）**：只包含影响本 detector 的输入——本地 `SKILL.md`（父绑定）、`references\data-pagination.md`、detector schema/version、permission policy（含 ADR-0010 的 declared version / license identifier，作为 SKILL.md 绑定的组成部分）。**其余 30 个 reference 与 upstream main 变化不进入 fingerprint、不触发失效**（纯确定性 artifact 不因无关变化失效）。
+5. **依赖 fingerprint（最小化）**：只包含影响本 detector 的输入——本地 `SKILL.md`（父绑定）、`references\data-pagination.md`、detector schema/version、permission policy（含 ADR-0010 的 declared version / license identifier，作为 SKILL.md 绑定的组成部分）。其余 30 个 reference 与 upstream main 变化不进入 procedure fingerprint；但当前父 `skill_revision` 覆盖完整本地 package manifest，任一 manifest 变化仍会保守触发 parent revision mismatch。
 6. **缺失引用状态**：本地 `SKILL.md` 引用的 `references\schema-partial-indexes.md` 与 `references\_sections.md` 本地不存在（upstream 有 `_sections.md`；`schema-partial-indexes.md` upstream main 亦无）。它们与本 detector 无关，**仅记录为慢路径风险**（慢路径读 SKILL.md 会引用缺失文件），**不是本 detector 的 runtime guard / fingerprint 输入**。
 7. **原 Skill 只读，无需 fixture 副本**：本轮仅只读读取 + 计算哈希；ADR-0010 明确"不需要复制 Skill 正文或示例"，原 Skill 保持只读，不建立 project-local 副本。
 
@@ -131,7 +131,7 @@
 
 ### 3.1 明确不进入 fingerprint（防无关失效）
 
-- **其余 30 个 `references\*.md`**：与本 detector 无依赖；其变化不触发本 procedure 失效（ADR-0008/数据合同："纯确定性 procedure 不得因为无关模型变更而失效"，同理适用于无关规则文件）。
+- **其余 30 个 `references\*.md`**：与本 detector 无直接依赖，不进入 procedure fingerprint；但 Phase 3 当前 Registry 的父 `skill_revision` 是全 manifest revision，因此变化仍会保守 suspend。按相关依赖做窄化重验属于后续 dependency-diff 阶段，Phase 3 不绕过父 revision 契约。
 - **upstream main 变化**：upstream `supabase/agent-skills` 的演进不直接进入 fingerprint；仅当它改变**上述四项输入之一**（如本地 SKILL.md 或 data-pagination.md 随重装更新）时才经本地哈希变化间接触发失效。
 - **本地缺失引用（`schema-partial-indexes.md`、`_sections.md`）**：与本 detector 无关；**不构成 runtime guard，不进入 fingerprint**，仅记录为慢路径风险（§6.2）。
 - `AGENTS.md`/`CLAUDE.md`/`README.md` 与其他文件：审计附录用途，不进入 fingerprint。
@@ -194,10 +194,10 @@
 - permission policy 版本变化（若影响输入白名单/授权判定）。
 - 任一 runtime guard 匹配（输入超出 bounded 子集 / 分类不确定 / source 或 dependency mismatch）。
 
-### 6.2 不触发失效（防无关失效）
+### 6.2 不进入 procedure fingerprint（父 revision 仍可能保守失效）
 
 - 其余 30 个 reference 文件变化。
-- upstream `supabase/agent-skills` main 演进（除非改变 §6.1 四项输入之一）。
+- upstream `supabase/agent-skills` main 演进本身不触发本地失效；只有 installed package 实际变化才改变本地绑定。其余本地 manifest 文件虽不进入 procedure fingerprint，仍可能改变父 revision 并保守 suspend。
 - 本地缺失引用（`schema-partial-indexes.md`、`_sections.md`）状态——仅**慢路径风险**：慢路径读 SKILL.md 引用缺失文件时回退 LLM 按缺失处理；不影响 detector 本身。
 
 ## 7. 未验证项（明确未验证，不表述为事实）

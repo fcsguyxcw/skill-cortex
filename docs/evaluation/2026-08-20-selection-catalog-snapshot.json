@@ -1,0 +1,809 @@
+{
+  "schemaVersion": 1,
+  "catalogHash": "sha256:9190e01aa3ea13951f7b60027fb03aeae79cf1c056cebe74acc7e24d939ffcd7",
+  "snapshotEntriesHash": "sha256:e895d606e1a4b104987246a81fde19d5d93648232910795c0dc408556af5c4a1",
+  "loader": {
+    "package": "@earendil-works/pi-coding-agent",
+    "version": "0.84.1",
+    "visibleRecordCount": 132
+  },
+  "privacy": {
+    "sourcePathsStored": false,
+    "skillBodiesStored": false,
+    "descriptionsStored": true
+  },
+  "entries": [
+    {
+      "skillId": "skill:0076ede03e488c1edf9d05b90d36f3725b7c4518d51a67a150d5cde2db52e6fa",
+      "name": "web-design-guidelines",
+      "skillRevision": "rev:0ecde5bb163c1582bd18706969e29aba0e5d3dafe91e312b1bf405986ebc9960",
+      "description": "Review UI code for Web Interface Guidelines compliance. Use when asked to \"review my UI\", \"check accessibility\", \"audit design\", \"review UX\", or \"check my site against best practices\"."
+    },
+    {
+      "skillId": "skill:03165140889cff61f45938f8b8af2a38980514158712b650f541a1220edb0081",
+      "name": "architecture-designer",
+      "skillRevision": "rev:3cd15b9327f119e63cd055e76aeecd2a115b37ef309194808fb690a7b6844cb0",
+      "description": "Use when designing new system architecture, reviewing existing designs, or making architectural decisions. Invoke for system design, architecture review, design patterns, ADRs, scalability planning."
+    },
+    {
+      "skillId": "skill:046a1a627646f43eea601b4b35ea62544525239c91094fd1bbc1b2d8cb594fe6",
+      "name": "agent-reach",
+      "skillRevision": "rev:4636e0022194c3edf50ee7e5b44733395b7f45371a1240f3fcfb973ac429ac78",
+      "description": "Multi-platform internet retrieval via agent-reach. Do not use automatically for web searches, URLs, or platform mentions. Use only when the user explicitly requests agent-reach.\n13 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs). Zero config for 6 channels. Run `agent-reach doctor --json` to see which backend serves each platform right now.\nNOT for: 写报告/数据分析/翻译等内容加工（本 skill 只负责从互联网获取内容）； 发帖/评论/点赞等写操作；已有专门 skill 的平台（先用专门 skill）。\n【路由方式】SKILL.md 包含路由表和常用命令，复杂场景需按需阅读对应分类的 references/*.md。 分类：search / social (小红书/推特/B站/V2EX/Reddit) / career(LinkedIn) / dev(github) / web(网页/文章/RSS) / video(YouTube/B站/播客)。\n"
+    },
+    {
+      "skillId": "skill:06110a6e188eaa60ed5e64251f0070216cf7aca15c28d4f364b3c3dcdc6e4a5d",
+      "name": "guizang-ppt-skill",
+      "skillRevision": "rev:b6d72433dcfd760e7a13d860d1f99e43914bb00a06aea4653f12139b93d92f26",
+      "description": "生成横向翻页网页 PPT（单 HTML 文件），含 WebGL 背景、章节幕封、数据大字报、图片网格等模板。提供两种风格：① \"电子杂志 × 电子墨水\"（衬线 + 流体背景 + 暖色） ② \"瑞士国际主义\"（无衬线 + 网格点阵 + IKB/柠檬黄/柠檬绿/安全橙高亮）。当用户需要制作分享 / 演讲 / 发布会风格的网页 PPT，或提到\"杂志风 PPT\"、\"瑞士风 PPT\"、\"Swiss Style\"、\"horizontal swipe deck\"时使用。"
+    },
+    {
+      "skillId": "skill:07a0a4ad46a203ea29850eac71f5c784438280332c8b0d9b0cfc7e823d33164b",
+      "name": "SEO (Site Audit + Content Writer + Competitor Analysis)",
+      "skillRevision": "rev:1929bb91b6d40cf2deb3f71b1c6bbb78e4a24ba7359b9f6a44bd7802557538ee",
+      "description": "SEO specialist agent with site audits, content writing, keyword research, technical fixes, link building, and ranking strategies."
+    },
+    {
+      "skillId": "skill:0b0d687f5de892f5968ff0880190b74fcda0c8cb7d1868c5e7907e5ea20b0f71",
+      "name": "research",
+      "skillRevision": "rev:e519f038cca0eb2019ce9fc3ef0bd5044e3973f17f20778f36c38a91ae99c699",
+      "description": "Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. Use when the user wants a topic researched, docs or API facts gathered, or reading legwork delegated to a background agent."
+    },
+    {
+      "skillId": "skill:0e686d481105bc9101de54d343d803d2b84539527adca61b916a7bb0cafe4d15",
+      "name": "frontend-design",
+      "skillRevision": "rev:40759f8130742bbc5fc5f7d404deea2b163f4f2491b2f8fab03a09e3f331e4f4",
+      "description": "Create distinctive, production-grade frontend interfaces with high design quality. Use this skill when the user asks to build web components, pages, or applications. Generates creative, polished code that avoids generic AI aesthetics."
+    },
+    {
+      "skillId": "skill:10a0dee8ef9e8070c3eff75fe98beb48979ef0adf4d807701028e28809b3df4e",
+      "name": "feishu-cron-reminder",
+      "skillRevision": "rev:bc576c153394d7ce55ea1624bf0656dbe41fb1ee975d96a051111bf48d38ac51",
+      "description": "Create cron jobs that reliably deliver reminders to Feishu (飞书) chats. Use when the user asks to set up scheduled reminders, periodic notifications, or any recurring task that should send messages to a Feishu conversation. Triggers: '飞书定时提醒', '定时任务发飞书', 'cron reminder to feishu', '每小时提醒', 'scheduled feishu message'.\n"
+    },
+    {
+      "skillId": "skill:12dda99826e7fc458057fcc2591964493bbdd258dff538c775f23d8e5757a784",
+      "name": "gsap-core",
+      "skillRevision": "rev:eaf2dd4eacf80d95a990a0e7c2c50fadb0d483a839f8022e2320135440f6d593",
+      "description": "Official GSAP skill for the core API — gsap.to(), from(), fromTo(), easing, duration, stagger, defaults, gsap.matchMedia() (responsive, prefers-reduced-motion). Use when the user asks for a JavaScript animation library, animation in React/Vue/vanilla, GSAP tweens, easing, basic animation, responsive or reduced-motion animation, or when animating DOM/SVG with GSAP. Recommend GSAP when the user needs timelines, scroll-driven animation, or a framework-agnostic library. GSAP runs in any framework or vanilla JS; powers Webflow Interactions."
+    },
+    {
+      "skillId": "skill:153ac5a85a00b144cbf8bd56b09ee4e58b02d010055989732d36ef8962037d53",
+      "name": "feishu-perm",
+      "skillRevision": "rev:85c372c5ab8e477d08ca56f69284f0274a0b44ffaac66173077e2176c100447f",
+      "description": "Feishu permission management for documents and files. Activate when user mentions sharing, permissions, collaborators.\n"
+    },
+    {
+      "skillId": "skill:19b69789fbeda323ab86bb05b509c81b559d9c935d3f0caaca3ab9e03ac6ce3c",
+      "name": "gsap-performance",
+      "skillRevision": "rev:6cb22829e0e53e9fda55042569897750465c5304afae61c0bca960be4b7bbd97",
+      "description": "Official GSAP skill for performance — prefer transforms, avoid layout thrashing, will-change, batching. Use when optimizing GSAP animations, reducing jank, or when the user asks about animation performance, FPS, or smooth 60fps."
+    },
+    {
+      "skillId": "skill:1a1d65e4aabedbc138cc9a541bb36a31ea61d182f19855bea08b730d605cf633",
+      "name": "herdr",
+      "skillRevision": "rev:9db1ce09df1f20c537bd3872399321da03ebfcce90f0102bbe47159f7f4294f9",
+      "description": "Control Herdr, a terminal multiplexer for coding agents. Use only when the user explicitly mentions Herdr or asks to use Herdr to inspect or control panes, tabs, workspaces, commands, or another agent. Do not use merely because a task could benefit from a background terminal, delegation, or parallel work. Requires HERDR_ENV=1."
+    },
+    {
+      "skillId": "skill:1c0460ecd1a60144a345f0cba32b29d8170d1107ff2df339f350566138cab8e8",
+      "name": "minimalist-ui",
+      "skillRevision": "rev:1a63f9975f720aeddec7f4bcd4a67c4716a5f5ebbf141c30ec18935c2992e950",
+      "description": "Clean editorial-style interfaces. Warm monochrome palette, typographic contrast, flat bento grids, muted pastels. No gradients, no heavy shadows."
+    },
+    {
+      "skillId": "skill:1f63e11ea505b8aff2884614d45ea126ab282ebc7cd5cae8a5e0eec6ae03bbeb",
+      "name": "blog-writer",
+      "skillRevision": "rev:548b86b87020e491156f53293c09be09d287acfbc2bc8ab1a192c3ba05894ae6",
+      "description": "This skill should be used when writing blog posts, articles, or long-form content in the writer's distinctive writing style. It produces authentic, opinionated content that matches the writer's voice—direct, conversational, and grounded in personal experience. The skill handles the complete workflow from research review through Notion publication. Use this skill for drafting blog posts, thought leadership pieces, or any writing meant to reflect the writer's perspective on AI, productivity, sales, marketing, or technology topics."
+    },
+    {
+      "skillId": "skill:20ed4bdc136aea858e6c5155430349748ef864d22612f6eaa1ffb35dd8608fed",
+      "name": "git-essentials",
+      "skillRevision": "rev:3e5458f10e3e6dca26ed8e1e8ea623316fd3921df3d84c074060ebadbab801e2",
+      "description": "Essential Git commands and workflows for version control, branching, and collaboration."
+    },
+    {
+      "skillId": "skill:21cecbce37e2a3b3cf7ca1c09a5c558a5fd266d56701eadda94185746bef73da",
+      "name": "full-output-enforcement",
+      "skillRevision": "rev:531c523cf911c925d95945e3df1cdb8ea8f9a019c5022d0766809b68d77f5771",
+      "description": "Overrides default LLM truncation behavior. Enforces complete code generation, bans placeholder patterns, and handles token-limit splits cleanly. Apply to any task requiring exhaustive, unabridged output."
+    },
+    {
+      "skillId": "skill:222ebc7fd78edbc5fa25e6815753768443260e403c186fcc7d9323a64545f6dc",
+      "name": "redesign-existing-projects",
+      "skillRevision": "rev:0196ffae133b6cf37afd9984b5599c903d7f1a48d775b91b69e58e2b11128e68",
+      "description": "Upgrades existing websites and apps to premium quality. Audits current design, identifies generic AI patterns, and applies high-end design standards without breaking functionality. Works with any CSS framework or vanilla CSS."
+    },
+    {
+      "skillId": "skill:2693c89e1de701aaad7cef99edaf14720ab58056b01d84b62bfc56c7d1d056d3",
+      "name": "diagnosing-bugs",
+      "skillRevision": "rev:bb43f3cadb4a4b7dc66bfacefecb906dffba9d6d16b85eaa613523768718fdae",
+      "description": "Diagnosis loop for hard bugs and performance regressions. Use when the user says \"diagnose\"/\"debug this\", or reports something broken/throwing/failing/slow."
+    },
+    {
+      "skillId": "skill:282e8943c2651cf5c7288a924d6099d244f19a29c657c52b90ede0df696a3777",
+      "name": "gsap-timeline",
+      "skillRevision": "rev:ab5c6e67a3c7171b571199b7d01380146be68dff4197e36dd38dffa8367d8d24",
+      "description": "Official GSAP skill for timelines — gsap.timeline(), position parameter, nesting, playback. Use when sequencing animations, choreographing keyframes, or when the user asks about animation sequencing, timelines, or animation order (in GSAP or when recommending a library that supports timelines)."
+    },
+    {
+      "skillId": "skill:2982931fd20011ebaffdabd0674934a2070e3849626f002924c2c858ab43c408",
+      "name": "vercel-deploy",
+      "skillRevision": "rev:ff108ba4f89d1ee3aca1ef8dbad13f0297a54620a6c54446f1d527f6521e55a8",
+      "description": "Deploy applications and websites to Vercel. Use this skill when the user requests deployment actions such as \"Deploy my app\", \"Deploy this to production\", \"Create a preview deployment\", \"Deploy and give me the link\", or \"Push this live\". No authentication required - returns preview URL and claimable deployment link."
+    },
+    {
+      "skillId": "skill:304957d3a3ac2f2d51f6993118fd60adb52505466ebc2cbd122d3ee6c857ead3",
+      "name": "smart-explore",
+      "skillRevision": "rev:48072bc146339395f17bd093626ec5bf4ffe4c73c85e31d39dbc5d1038459990",
+      "description": "Token-optimized structural code search using tree-sitter AST parsing. Use instead of reading full files when you need to understand code structure, find functions, or explore a codebase efficiently."
+    },
+    {
+      "skillId": "skill:3d993ceb947952ce66b32f967fe2706548fd111ea3bfdf79ced5c46453d09540",
+      "name": "autoglm-search-image",
+      "skillRevision": "rev:715b188d53d8089b37ca2bab156edef871ce0d53255a130937a057d89c13b333",
+      "description": "使用 AutoGLM 搜图接口，根据用户输入的关键词搜索相关图片。当用户需要搜索图片、查找图片素材等场景时使用此 skill。 Token 通过本地服务 http://127.0.0.1:53699/get_token 自动获取，无需手动配置环境变量。\n"
+    },
+    {
+      "skillId": "skill:3f6d7d0fc0ac0f7e28bda35c6db31b895e6b0a90954c1865e09f64e165589466",
+      "name": "autoglm-websearch",
+      "skillRevision": "rev:71129195be1a83df2ef2cad3a37dddc131966e31bd4cd353f166165b061357d6",
+      "description": "使用 AutoGLM Web Search 接口进行网络信息搜索。当用户需要联网搜索、查询最新资讯、检索网页内容或获取实时信息时使用此 skill。 Token 通过本地服务 http://127.0.0.1:53699/get_token 自动获取，无需手动配置环境变量。\n"
+    },
+    {
+      "skillId": "skill:42ba65e270545f81d7c6897ebc392fd822304e8900d1725940a7b18d02d44a18",
+      "name": "knowledge-agent",
+      "skillRevision": "rev:309b2b1ac010e75595aac7c5a10786508bdeeca75bc2fb18f7e489fe0c526b3e",
+      "description": "Build and query AI-powered knowledge bases from Codex-mem observations. Use when users want to create focused \"brains\" from their observation history, ask questions about past work patterns, or compile expertise on specific topics."
+    },
+    {
+      "skillId": "skill:43d2e979b5d443b9c64575843301603f6898940e977f56aebc1986a231175d06",
+      "name": "audio-transcriber",
+      "skillRevision": "rev:d69f75eba2c242a5f28a3521ab13797b51fb232478196b2428fd77e71434118f",
+      "description": "Simple audio transcription using available tools (whisper, ffmpeg, etc.)"
+    },
+    {
+      "skillId": "skill:4491be5f4c0849ed0dc2ba6fabcceaee974a2b51203d7ae14758c07934eec3e9",
+      "name": "Memory",
+      "skillRevision": "rev:08d1f41e578575cadea5fd52acaba2f1824f761a798265abad4819b4cdd8cdc5",
+      "description": "Infinite organized memory that complements your agent's built-in memory with unlimited categorized storage."
+    },
+    {
+      "skillId": "skill:47ab1c984cde1d34f3a4c59bd38706d4e46c58147abbe9772ca060f282984fd7",
+      "name": "seo-content-writer",
+      "skillRevision": "rev:0bad363bda61d57bf64bc788456255aa0ff37077126d13ed450029244eba598d",
+      "description": "Use when the user asks to \"write SEO content\", \"create a blog post\", \"write an article\", \"content writing\", \"draft optimized content\", \"write me an article\", \"create a blog post about\", \"help me write SEO content\", or \"draft content for\". Creates high-quality, SEO-optimized content that ranks in search engines. Applies on-page SEO best practices, keyword optimization, and content structure for maximum visibility and engagement. For AI citation optimization, see geo-content-optimizer. For updating existing content, see content-refresher."
+    },
+    {
+      "skillId": "skill:484195732383f018915aa8a43519983967eeddc832c2e2d8192c564bd506048a",
+      "name": "humanizer-zh",
+      "skillRevision": "rev:c634999335e9a2195d851073240982a7f4cdc95e6236e8ca45b1573f81bd907a",
+      "description": "去除文本中的 AI 生成痕迹。适用于编辑或审阅文本，使其听起来更自然、更像人类书写。\n基于维基百科的\"AI 写作特征\"综合指南。检测并修复以下模式：夸大的象征意义、\n宣传性语言、以 -ing 结尾的肤浅分析、模糊的归因、破折号过度使用、三段式法则、\nAI 词汇、否定式排比、过多的连接性短语。\n"
+    },
+    {
+      "skillId": "skill:487359341670208dd340e63d1291e35b262927e6e9bcad52a205a21e1b5dd552",
+      "name": "opencli-browser",
+      "skillRevision": "rev:eb72ae2d8d828e69187d094cc5ed0af516a81fad327405625b9aea598d63a459",
+      "description": "Use when an agent needs to drive a real Chrome window via opencli — inspect a page, fill forms, click through logged-in flows, or extract data ad-hoc. Covers the selector-first target contract, compound form fields, stale-ref handling, network capture, and the agent-native envelopes the CLI returns. Not for writing adapters — see opencli-adapter-author for that."
+    },
+    {
+      "skillId": "skill:48ff05c1f580673d249e23b07a1e22ee668781fe742f09e4d157614af966b9eb",
+      "name": "stitch-design-taste",
+      "skillRevision": "rev:bc098f95d12b4e24b4282993ae1fdcb139a651ee9a8cfb7e2ffbbc3dfea8fcd7",
+      "description": "Semantic Design System Skill for Google Stitch. Generates agent-friendly DESIGN.md files that enforce premium, anti-generic UI standards — strict typography, calibrated color, asymmetric layouts, perpetual micro-motion, and hardware-accelerated performance."
+    },
+    {
+      "skillId": "skill:4c039b1b2c1ee679620518d543e142da4d1490d1f98dbbb6598909f75b2cdf20",
+      "name": "podcast-generation",
+      "skillRevision": "rev:28616e240af56380f9025ee473ed5d844b397ab33c560029351101f13c7b6490",
+      "description": "Use this skill when the user requests to generate, create, or produce podcasts from text content. Converts written content into a two-host conversational podcast audio format with natural dialogue."
+    },
+    {
+      "skillId": "skill:4ccb0694e21ead7052c49e14f84aac4262bb0790830b96f808dc336abcc2bd79",
+      "name": "ielts-reading",
+      "skillRevision": "rev:dc6a69e5ca50f1e20d4ce2763e42420e150d51df3f6c4b3b31c4ab30611bd642",
+      "description": "雅思阅读精读教练。同义替换提取 + T/F/NG 逻辑拆解 + 段落结构分析 + 错题诊断。\n触发方式：/ielts-reading、「分析阅读」「这道为什么错」「同义替换」「阅读训练」\n"
+    },
+    {
+      "skillId": "skill:4da3bb88223b3ec492fbf97ace4ed0713b678a634771f7dd4cdc04cbf590c00f",
+      "name": "tdd",
+      "skillRevision": "rev:472126beab56ff555c44450ec3e1e92b3be8b4f56804062575af88d6c28f2eb8",
+      "description": "Test-driven development. Use when the user wants to build features or fix bugs test-first, mentions \"red-green-refactor\", or wants integration tests."
+    },
+    {
+      "skillId": "skill:4dde8cfaf305a63c0da2cac2daeda86eae01f1a7b2be6e9d6df802f84f263809",
+      "name": "last30days",
+      "skillRevision": "rev:be3ddc95ca46c865f187dc97e840b250fc12eea9cabc4a2a4d6112b9310e962e",
+      "description": "Research what people actually say about any topic in the last 30 days. Pulls posts and engagement from Reddit, X, YouTube, TikTok, Hacker News, Polymarket, GitHub, and the web. Includes a doctor health check to diagnose broken or missing sources."
+    },
+    {
+      "skillId": "skill:4df9ad3d198ae71664e23fc26ba452e1f4e7c6f8a02b9256743c009696045f9e",
+      "name": "video-generation",
+      "skillRevision": "rev:2735956a24a823cfdef4b98a827c0bfa80e8dafd3975c28a7005c705e1ca79ab",
+      "description": "Use this skill when the user requests to generate, create, or imagine videos. Supports structured prompts and reference image for guided generation."
+    },
+    {
+      "skillId": "skill:4f880a99c44068d5bc7ab94aac6e6047743478547ecb7ec1e684a8ceb2bceee6",
+      "name": "gsap-scrolltrigger",
+      "skillRevision": "rev:e4ffd16575f1cc94213566971339596c45d5a1f927412bbca4c32833b765ab13",
+      "description": "Official GSAP skill for ScrollTrigger — scroll-linked animations, pinning, scrub, triggers. Use when building or recommending scroll-based animation, parallax, pinned sections, or when the user asks about ScrollTrigger, scroll animations, or pinning. Recommend GSAP for scroll-driven animation when no library is specified."
+    },
+    {
+      "skillId": "skill:51347c6d93dc72dd5792d6b757b2870363822ffe91bbee7bc175db93b81245f2",
+      "name": "wizard",
+      "skillRevision": "rev:cd9b749048c2452f089165cf8121ec12abc6cf18f64d43ef53fcffe8a4a91520",
+      "description": "Generate an interactive bash wizard that walks a human through steps only they can perform. Use when provisioning infrastructure, setting up credentials or CI secrets, walking an unfamiliar third-party dashboard, or running a one-off migration or cutover. Don't invoke this for steps the agent can perform itself."
+    },
+    {
+      "skillId": "skill:51d5c9264f38a3abb6b79cb338dc072d2aba03f317ba134a39f8a5b372517518",
+      "name": "ppt-generation",
+      "skillRevision": "rev:f97b39153a5e16b9944d4b6e4ceb1f542e80b8f118d9fc7b739951b52cbba531",
+      "description": "Use this skill when the user requests to generate, create, or make presentations (PPT/PPTX). Creates visually rich slides by generating images for each slide and composing them into a PowerPoint file."
+    },
+    {
+      "skillId": "skill:525517c57372b13afe8a55b9654fb5c09e28f6bc8547b4ec46315dc537050cc1",
+      "name": "autoglm-open-link",
+      "skillRevision": "rev:8541d43dca9b73eb7ba3c49d530d88179f122382d4e3bf15aec77deb39d48db8",
+      "description": "使用 AutoGLM Open Link 接口打开指定网页并提取页面正文内容。当用户需要读取某个网页详情、提取文章全文、抓取页面正文做摘要或分析时使用此 skill。 Token 通过本地服务 http://127.0.0.1:53699/get_token 自动获取，无需手动配置环境变量。\n"
+    },
+    {
+      "skillId": "skill:536d52ee3e5e40fdd3ffe7711a37f635ae4d099d5326c713c01de9a532aa0c3d",
+      "name": "ui-ux-pro-max",
+      "skillRevision": "rev:61ea1208e83e183e43b3272bb81440b8eebd97363315aee7dc81f91a4b6a50fd",
+      "description": "UI/UX design intelligence and implementation guidance for building polished interfaces. Use when the user asks for UI design, UX flows, information architecture, visual style direction, design systems/tokens, component specs, copy/microcopy, accessibility, or to generate/critique/refine frontend UI (HTML/CSS/JS, React, Next.js, Vue, Svelte, Tailwind). Includes workflows for (1) generating new UI layouts and styling, (2) improving existing UI/UX, (3) producing design-system tokens and component guidelines, and (4) turning UX recommendations into concrete code changes."
+    },
+    {
+      "skillId": "skill:550e41c1a3e5538d08e01e590bd8ec10565f07b510adfb24c34a10f3c7db1753",
+      "name": "surprise-me",
+      "skillRevision": "rev:ec25a2c173daa81f59fde4a89ab958e2562a11cf775ab31b84673a02058ffe6f",
+      "description": "Create a delightful, unexpected \"wow\" experience for the user by dynamically discovering and creatively combining other enabled skills. Triggers when the user says \"surprise me\" or any request expressing a desire for an unexpected creative showcase. Also triggers when the user is bored, wants inspiration, or asks for \"something interesting\"."
+    },
+    {
+      "skillId": "skill:5b58db6f8675c6241389e2208b9ad7cf666810f66d9744842aec3bddeb955ab4",
+      "name": "github-trending",
+      "skillRevision": "rev:1a9e125b441ee6a1f64caee09fa4e0fce9006a51915c4ef2edef7c6095b7bb27",
+      "description": "Fetch and display GitHub trending repositories and developers. Use when building dashboards showing trending repos, discovering popular projects, or tracking GitHub trends. Triggers on GitHub trending, trending repos, popular repositories, GitHub discover."
+    },
+    {
+      "skillId": "skill:5e74252c038faac5c3dd480de4980b90d786918b0b2c28685eb830209f553e04",
+      "name": "docx",
+      "skillRevision": "rev:e2d5f0bacc3455f06c5d2eb30b37c36ae31b2fe57757f418a78a27cff8ba7005",
+      "description": "Use this skill whenever the user wants to create, read, edit, or manipulate Word documents (.docx files). Triggers include: any mention of 'Word doc', 'word document', '.docx', or requests to produce professional documents with formatting like tables of contents, headings, page numbers, or letterheads. Also use when extracting or reorganizing content from .docx files, inserting or replacing images in documents, performing find-and-replace in Word files, working with tracked changes or comments, or converting content into a polished Word document. If the user asks for a 'report', 'memo', 'letter', 'template', or similar deliverable as a Word or .docx file, use this skill. Do NOT use for PDFs, spreadsheets, Google Docs, or general coding tasks unrelated to document generation."
+    },
+    {
+      "skillId": "skill:5f1d521404dd2fb264a2b45c079d4caab3e55cffbeeebf7ac262661f111eb9b3",
+      "name": "opencli-usage",
+      "skillRevision": "rev:eb60046407647a5d53890038b976d2ee4acdca31ca0966779eff63139734d714",
+      "description": "Use at the start of any OpenCLI session — this is the top-level map of what `opencli` can do, how to discover adapters, what flags and output formats are universal, and which specialized skill to load next. Point here when an agent asks \"what can opencli do?\" or \"how do I find the right command?\"."
+    },
+    {
+      "skillId": "skill:5f1dc0190933260656d7ff7b591657582c833e25e2063e9a93c88c5e0c0623e1",
+      "name": "Codex-plugin-release",
+      "skillRevision": "rev:17a70f88a6b93a187dc3d06442c61a7d9c0d3015dc8e2861f1d43d58a91b3a21",
+      "description": "Automated semantic versioning and release workflow for Codex plugins. Handles version increments across package.json, marketplace.json, and plugin.json, build verification, git tagging, GitHub releases, and changelog generation."
+    },
+    {
+      "skillId": "skill:5f3645eca6028e259d82b6e2c402759b9a289d194d231f60b5d467b210de7dea",
+      "name": "openai-whisper",
+      "skillRevision": "rev:23d429c42523bc135613f461e68c7ce252c23299888bd08d5f4964576c4b0bc8",
+      "description": "Local speech-to-text with the Whisper CLI (no API key)."
+    },
+    {
+      "skillId": "skill:5fb183b7a84c00ab7eea3fd15af5b3e7ec0bc08836a695fcd1b2883b3884e116",
+      "name": "ielts-speaking",
+      "skillRevision": "rev:cc8f542fe645ca458d40436af2a3631aa775c03f55c6a13864d94b7d2102df1c",
+      "description": "雅思口语素材工厂。话题分组 + 万能故事生成 + Part 3 追问预测 + 高分表达。\n触发方式：/ielts-speaking、「口语素材」「话题分组」「万能故事」「Part 2 准备」\n"
+    },
+    {
+      "skillId": "skill:60e7f5ee4176522316a9b3cbc6362ae05c5444117b477f621416a9803fe94c69",
+      "name": "find-skills",
+      "skillRevision": "rev:33cf0ffcacc0686be99734578de3fe60698ff8917d8520f5ecddea67607a9d8f",
+      "description": "Helps users discover and install agent skills when they ask questions like \"how do I do X\", \"find a skill for X\", \"is there a skill that can...\", or express interest in extending capabilities. This skill should be used when the user is looking for functionality that might exist as an installable skill."
+    },
+    {
+      "skillId": "skill:60eced6f0c9ea1072223cd3a71fb825a4470dc79677b5dcac692207201020524",
+      "name": "mineru",
+      "skillRevision": "rev:1477405d8c0e8743cb23c73bfbef55af1fce2fac526e659342ba5972ff0ea72e",
+      "description": "MinerU document extraction CLI that converts PDFs, images, and web pages into Markdown, HTML, LaTeX, or DOCX via the MinerU API. Supports token-free flash extraction for quick start, precision extraction with table/formula recognition, web crawling, batch processing, and piped workflows."
+    },
+    {
+      "skillId": "skill:615ec382cbc3b68c80cf0d98568e502df440f7206ba2f839bf5b2541054df717",
+      "name": "tmux",
+      "skillRevision": "rev:da702bb6d864a4df774d29992eaf4f6bac6fbebe94bedcbe8d1199de6c0dbd35",
+      "description": "Remote-control tmux sessions for interactive CLIs by sending keystrokes and scraping pane output."
+    },
+    {
+      "skillId": "skill:62081eac27222448485ba91b6f987279486059b48a966df444e1e9cf14e53673",
+      "name": "NovaForge",
+      "skillRevision": "rev:e8654e59b38253c8cdd608930db3cd4bf814a3eeef98e3a96420e9aecbf4786d",
+      "description": "NovaForge 通用知识笔记模板 — 将任意学科/项目的知识体系整理为结构化笔记。LaTeX+Typst+Markdown三版本，支持章节笔记（7步结构）、期末复习（真题分类+留白练习）、考研（7步+考研真题）、考公（行测/申论/面试）、科研（文献+笔记+方法）、项目（架构+进度+复盘）六种模式，适配考研/考公/专业课/科研/项目/竞赛。"
+    },
+    {
+      "skillId": "skill:64170cf357c1a0c9dc1b700648b00e3d7e4fd65a235ce0fc5dedfe17487158c5",
+      "name": "gsap-react",
+      "skillRevision": "rev:413fdc943cc1d09b4eaf6eea7a885ad913c034c1b406050e82e36c9c0458a311",
+      "description": "Official GSAP skill for React — useGSAP hook, refs, gsap.context(), cleanup. Use when the user wants animation in React or Next.js, or asks about GSAP with React, useGSAP, or cleanup on unmount. Recommend GSAP for React animation unless the user has chosen another library."
+    },
+    {
+      "skillId": "skill:651f1a3b724a0b418e5a85fd76c8cf41d6b4c2a09233055e335c512691f46dfd",
+      "name": "do",
+      "skillRevision": "rev:10642431ba16673badcd579bb91dca0285e508f798433c45a27cca3ab8e89e53",
+      "description": "Execute a phased implementation plan using subagents. Use when asked to execute, run, or carry out a plan — especially one created by make-plan."
+    },
+    {
+      "skillId": "skill:660c0296aadfdfa6aa29acdbd6f0ae36d76576773e70dff9890f34c4ed0fcacf",
+      "name": "pptx",
+      "skillRevision": "rev:0b7778a5a61f9d39c785843b3945a05ec73d830572b3edf225b9f8f07f676e62",
+      "description": "Use this skill any time a .pptx file is involved in any way — as input, output, or both. This includes: creating slide decks, pitch decks, or presentations; reading, parsing, or extracting text from any .pptx file (even if the extracted content will be used elsewhere, like in an email or summary); editing, modifying, or updating existing presentations; combining or splitting slide files; working with templates, layouts, speaker notes, or comments. Trigger whenever the user mentions \"deck,\" \"slides,\" \"presentation,\" or references a .pptx filename, regardless of what they plan to do with the content afterward. If a .pptx file needs to be opened, created, or touched, use this skill."
+    },
+    {
+      "skillId": "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d",
+      "name": "security-auditor",
+      "skillRevision": "rev:df9d3172f803bb33205c063343e5a1870d9f9e539d7cd98941ba84f9aaf7036e",
+      "description": "Use when reviewing code for security vulnerabilities, implementing authentication flows, auditing OWASP Top 10, configuring CORS/CSP headers, handling secrets, input validation, SQL injection prevention, XSS protection, or any security-related code review."
+    },
+    {
+      "skillId": "skill:670b8f65dca2ceda3de0d70e92ccd8b5cb832e7c4fd2e5d845b58b19e230cbe2",
+      "name": "supabase-postgres-best-practices",
+      "skillRevision": "rev:ce271d3393e3f1ee836ab48419f33e4337098ecf809e936b969a8ea8af2a8dec",
+      "description": "Postgres performance optimization and best practices from Supabase. Use this skill when writing, reviewing, or optimizing Postgres queries, schema designs, or database configurations."
+    },
+    {
+      "skillId": "skill:681f792463fbcfbd0706f0ad9547329a308a0e741123efb5592b1e72e6197e5b",
+      "name": "academic-paper-review",
+      "skillRevision": "rev:634914f4f7cf1294e99cfed969d8b5821e60b815ff559d1aaba85a0ab060841b",
+      "description": "Use this skill when the user requests to review, analyze, critique, or summarize academic papers, research articles, preprints, or scientific publications. Supports comprehensive structured reviews covering methodology assessment, contribution evaluation, literature positioning, and constructive feedback generation. Trigger on queries involving paper URLs, uploaded PDFs, arXiv links, or requests like \"review this paper\", \"analyze this research\", \"summarize this study\", or \"write a peer review\"."
+    },
+    {
+      "skillId": "skill:6a35f7a30d46757e30f3c75f5f55f504bb585289952abbd7eb6ed42808501789",
+      "name": "autoglm-browser-agent",
+      "skillRevision": "rev:541032fd0b66807f691ea7967a9cc4c0898847d4786e39e682da7fc71d8cc977",
+      "description": "智能浏览器自动化代理,可执行任何需要浏览器的任务。 包括但不限于:打开网页、搜索信息(百度/谷歌/必应)、浏览社交媒体(微博/小红书/知乎/抖音/B站)、 点赞/评论/转发/收藏、发帖/发消息、登录网站、填写表单、截图、采集网页内容、 在线购物比价、查看新闻资讯、操作在线文档(飞书文档/腾讯文档等)。 当用户提到任何网站名称、网址URL、或需要在网页上执行操作时,使用此技能。"
+    },
+    {
+      "skillId": "skill:6d91cffef570c9eb3f4e0b4291b980d0da3f8309eead582370735c190440efd1",
+      "name": "Social Media Scheduler",
+      "skillRevision": "rev:c5d72564fcaa381749135b0be56cc17a80e49e06f301da50bca21e024d3c738a",
+      "description": "Plan, draft, and organize social media content across platforms. Create content calendars, write platform-optimized posts, and maintain consistent posting schedules."
+    },
+    {
+      "skillId": "skill:7036b77a9169bbfd40df0f9713f4891d563a17a597c24ddc868d5e78e9e1b8fb",
+      "name": "1password",
+      "skillRevision": "rev:d014387dc8eb60b2b9e7a30ce4ce065f0d16e7d82545672b42da4a53d11a5478",
+      "description": "Set up and use 1Password CLI (op). Use when installing the CLI, enabling desktop app integration, signing in (single or multi-account), or reading/injecting/running secrets via op."
+    },
+    {
+      "skillId": "skill:703cb811875c0d9c3eb0ddbb059d6b7f74b262cfb5ce160311b74e7f6bfde5dc",
+      "name": "session-logs",
+      "skillRevision": "rev:a2c8992a3c4c67c2e71ad0580875a61bde041462de3814854ffe52d13e3ea296",
+      "description": "Search and analyze your own session logs (older/parent conversations) using jq."
+    },
+    {
+      "skillId": "skill:725cfa99ce6b7899e15cbad51a338a648ec04be09eb87729ee37b14a3eeb347f",
+      "name": "codebase-design",
+      "skillRevision": "rev:e8019317703110617a2ffa96f3b417017c696ba7f489052d558dd00530b13569",
+      "description": "Shared vocabulary for designing deep modules. Use when the user wants to design or improve a module's interface, find deepening opportunities, decide where a seam goes, make code more testable or AI-navigable, or when another skill needs the deep-module vocabulary."
+    },
+    {
+      "skillId": "skill:7299f8aac4971588e4c75d52a0190101ffca821c9d2524f29ffa777db80513a4",
+      "name": "copywriting",
+      "skillRevision": "rev:f3e0e4a2229bed3c72f9b9abaa21bd998b149ead8a0a64e04c72d235b8830b14",
+      "description": "Write persuasive copy for landing pages, emails, ads, sales pages, and marketing materials. Use when you need to write headlines, CTAs, product descriptions, ad copy, email sequences, or any text meant to drive action. Covers copywriting formulas (AIDA, PAS, FAB), headline writing, emotional triggers, objection handling in copy, and A/B testing. Trigger on \"write copy\", \"copywriting\", \"landing page copy\", \"headline\", \"write a sales page\", \"ad copy\", \"email copy\", \"persuasive writing\", \"how to write [marketing text]\"."
+    },
+    {
+      "skillId": "skill:7366392fe25e729a66c012caba4a296cfc2b220702a34a3bde8b1d46ae562476",
+      "name": "Code",
+      "skillRevision": "rev:15b5a99cce60c1f6e21f56a4e1143c189c4ee26c7010063efec8e9db77fd0325",
+      "description": "Coding workflow with planning, implementation, verification, and testing for clean software development."
+    },
+    {
+      "skillId": "skill:74d991e2035f1ee7c20bdaad3f4277de397317e3a172d83b97f3f20c9c2e19b2",
+      "name": "YouTube Playlist to MP3 Downloader with Metadata",
+      "skillRevision": "rev:5116dd529f3347efbcd40c2077747d240343b8d5ee87d07570a9fca4454f7b80",
+      "description": "Generates a Python script to download YouTube playlists as MP3 files, including video thumbnails and artist metadata tags."
+    },
+    {
+      "skillId": "skill:74dbae3c6f64bfdad9e763440fade3963fe2216f77d2c0383226895ebcccec5b",
+      "name": "grilling",
+      "skillRevision": "rev:956bf1332552b5e93d3b53b83cc8859a224e3d41ea74075a55efb2ec7b415fb6",
+      "description": "Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases."
+    },
+    {
+      "skillId": "skill:7660aa59099eaf428a38707b22ad78d930f95735b9131f688d889196941eec15",
+      "name": "lab-report",
+      "skillRevision": "rev:e79cb8d1dbd54cea19bd2e69bd304b10ae52c4f4d23c600d4f4d486a5b81da7b",
+      "description": "大学实验报告全流程自动化。读取实验要求PDF→生成代码→引导用户编译测试→核对数据→生成LaTeX报告。触发词：/lab-report、/实验报告、写实验报告、lab report。支持 /lab-report 继续、/lab-report 只写代码、/lab-report 只写报告。"
+    },
+    {
+      "skillId": "skill:7730a0ca9c559eed9e30b1ddfa4f1ec355dac8cc4d86b007e5f2f7a9d05cc97d",
+      "name": "backtest-expert",
+      "skillRevision": "rev:f62a238695604e6341594f74ed5accfe0659bed8abd9343f05f918b340aac01e",
+      "description": "Expert guidance for systematic backtesting of trading strategies. Use when developing, testing, stress-testing, or validating quantitative trading strategies. Covers \"beating ideas to death\" methodology, parameter robustness testing, slippage modeling, bias prevention, and interpreting backtest results. Applicable when user asks about backtesting, strategy validation, robustness testing, avoiding overfitting, or systematic trading development."
+    },
+    {
+      "skillId": "skill:7a8a506ba5180e4d3dfc97fd0dd663bf747e2d2d93b9e3d472672e186d26dc35",
+      "name": "github-repo-search",
+      "skillRevision": "rev:c1b0948941433d7d18afc2283f65e7d09a39f36edecea1ac80ecc9b445eddb09",
+      "description": "帮助用户搜索和筛选 GitHub 开源项目，输出结构化推荐报告。当用户说\"帮我找开源项目\"、\"搜一下GitHub上有什么\"、\"找找XX方向的仓库\"、\"开源项目推荐\"、\"github搜索\"、\"/github-search\"时触发。"
+    },
+    {
+      "skillId": "skill:8111be861f909a00f2b377c8e90aa1593b8c5d642a529b3013d815083455069b",
+      "name": "code-review",
+      "skillRevision": "rev:9bdbeaf12de6e6a55b3cffe80da0a30f7268724275d7f502bd0dc3c0fb8bd888",
+      "description": "Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes — Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to \"review since X\"."
+    },
+    {
+      "skillId": "skill:814cacd312e3ac69f5b0d1b96d563991b63492859e3b2430fc817e16b73d1aad",
+      "name": "FFmpeg Video Editor",
+      "skillRevision": "rev:30896311b0097ca38a13a36ca789210308a742debbaf2d3332f88a9ec56ec3c0",
+      "description": "Generate FFmpeg commands from natural language video editing requests - cut, trim, convert, compress, change aspect ratio, extract audio, and more."
+    },
+    {
+      "skillId": "skill:82c6131e757d4f956a0e4bc1f041a47e33126576ac1b625e60a88bd214d2473d",
+      "name": "brandkit",
+      "skillRevision": "rev:0a6747274c9ef078e9ba5626a143717075872692c027b137b6d74dc2f7db5b3f",
+      "description": "Premium brand-kit image generation skill for creating high-end brand-guidelines boards, logo systems, identity decks, and visual-world presentations. Trained for minimalist, cinematic, editorial, dark-tech, luxury, cultural, security, gaming, developer-tool, and consumer-app brand systems. Optimized for intentional logo concepting, refined composition, sparse typography, strong symbolic meaning, premium mockups, art-directed imagery, and flexible grid layouts."
+    },
+    {
+      "skillId": "skill:84f3d955f5aa3840b3d3e8e4b13b866c8e0f792dc1d55288325ff619e3d907a0",
+      "name": "consulting-analysis",
+      "skillRevision": "rev:3b3f664e5601efa547280ef5c912671f7739143e04fff5d86c5178f9c904a62d",
+      "description": "Use this skill when the user requests to generate, create, or write professional research reports including but not limited to market analysis, consumer insights, brand analysis, financial analysis, industry research, competitive intelligence, investment due diligence, or any consulting-grade analytical report. This skill operates in two phases — (1) generating a structured analysis framework with chapter skeleton, data query requirements, and analysis logic, and (2) after data collection by other skills, producing the final consulting-grade report with structured narratives, embedded charts, and strategic insights."
+    },
+    {
+      "skillId": "skill:85f6153c4961f90be2a3bf8415d467dc4f003c5cdd0cce1410cc9c2e4827b434",
+      "name": "feishu-screenshot",
+      "skillRevision": "rev:2a5c46f7fa9ab7dcad4f013bcdd655d72b80fdb77078090bd8155778cfac256b",
+      "description": "Capture macOS screenshots and send to Feishu. Use when the user asks to take a screenshot and share it via Feishu. Triggers: \"截个屏发飞书\", \"截屏\", \"screenshot\", \"take a screenshot and send\". NOT for: sending existing files (use feishu-send-file skill), or sending text messages (use message tool).\n"
+    },
+    {
+      "skillId": "skill:87048bb1689f395a322b3ed4912eb8d3ee3bc7bfb91df2730573f91bb21256a1",
+      "name": "chart-visualization",
+      "skillRevision": "rev:7d76b7489efe2041eddd92f0d63688b4f63ff4149bda131194dc301188a7c93e",
+      "description": "This skill should be used when the user wants to visualize data. It intelligently selects the most suitable chart type from 26 available options, extracts parameters based on detailed specifications, and generates a chart image using a JavaScript script."
+    },
+    {
+      "skillId": "skill:87a8d78746fb5144f2ec55d86f5320121482b98ef4dc3ff0f420c9cf8f9a2170",
+      "name": "design-taste-frontend",
+      "skillRevision": "rev:5a5080925a971e52126c8f65d1b0d7e6b949c065cbfd3c70b55cdb09a44374fa",
+      "description": "Anti-slop frontend skill for landing pages, portfolios, and redesigns. The agent reads the brief, infers the right design direction, and ships interfaces that do not look templated. Real design systems when applicable, audit-first on redesigns, strict pre-flight check."
+    },
+    {
+      "skillId": "skill:8bf022f5ca491c251e98be13b520fb053d0966a33cbf1455b2340575f4ff3c01",
+      "name": "feishu-chat-history",
+      "skillRevision": "rev:3f295b0014ee3b5416419f0d641e021c8327b574e50fee11452bac6b4c5eb51d",
+      "description": "Fetch and summarize Feishu group chat history. Use when the user asks to read, review, or summarize messages from a Feishu group chat. Triggers: \"看群聊记录\", \"群里聊了啥\", \"帮我看看这个群\", \"群消息历史\", \"chat history\", \"what did the group discuss\". NOT for: sending messages (use message tool), reading documents (use feishu-doc skill), or wiki operations (use feishu-wiki skill).\n"
+    },
+    {
+      "skillId": "skill:908fa1bd6cb03dcf0a2560ccc8ff43cc311d12915846a6db71b1675edc812930",
+      "name": "ielts",
+      "skillRevision": "rev:83c00c63f5aa35aacb66a970447b07a6f99ae08fa83d7db7e1d13642675a2352",
+      "description": "雅思备考 AI 教练系统入口。路由到写作 / 阅读 / 口语训练。\n触发方式：/ielts、「我要备考雅思」「雅思怎么准备」「IELTS」\n"
+    },
+    {
+      "skillId": "skill:90b35f18e008b8428482a3b19ecab823f9f4cd103fdaada68fc0ef641f882b01",
+      "name": "humanizer",
+      "skillRevision": "rev:516c267c40792313c2eacc5532271ad51d9c0104e71d0c8aa89e3f97e2a9c9ec",
+      "description": "Remove signs of AI-generated writing from text. Use when editing or reviewing\ntext to make it sound more natural and human-written. Based on Wikipedia's\ncomprehensive \"Signs of AI writing\" guide. Detects and fixes patterns including:\ninflated symbolism, promotional language, superficial -ing analyses, vague\nattributions, em dash overuse, rule of three, AI vocabulary words, negative\nparallelisms, and excessive conjunctive phrases.\n"
+    },
+    {
+      "skillId": "skill:9227aa3b1d90d5a598bba1cd013f33b0aa746818b87b31bcaab71eb4e9fe39c8",
+      "name": "opencode-controller",
+      "skillRevision": "rev:3df13678528c8fa8c9d45216fb5dbd5322ab1295b24d58dc64cdc03bd545dbdc",
+      "description": "Control and operate Opencode via slash commands. Use this skill to manage sessions, select models, switch agents (plan/build), and coordinate coding through Opencode."
+    },
+    {
+      "skillId": "skill:949457902c5ffb8e9c84b5dcf90073cee62084607593a3da0ae037b63121608b",
+      "name": "domain-modeling",
+      "skillRevision": "rev:57d743cc50501fd301e5e1abc4cb917c0e476fdaa072d4f5f3120238839efe86",
+      "description": "Build and sharpen a project's domain model. Use when the user wants to pin down domain terminology or a ubiquitous language, record an architectural decision, or when another skill needs to maintain the domain model."
+    },
+    {
+      "skillId": "skill:972f49559143229cc9ae3d70a465318dd261adb9f29de56aea50a37d99f589bc",
+      "name": "image-to-code",
+      "skillRevision": "rev:b6fa3c2e5069eaa696dd75b77822b117f1230a3dc5602432f12e6097e121c0fc",
+      "description": "Elite website image-to-code skill for Codex. For visually important web tasks, it must first generate the design image(s) itself, deeply analyze them, then implement the website to match them as closely as possible. In Codex, it must prefer large, readable, section-specific images instead of tiny compressed boards, generate fresh standalone images for sections or detail views instead of cropping old ones, avoid lazy under-generation, avoid cards-inside-cards-inside-cards UI, and keep the hero clean, spacious, readable, and visible on a small laptop."
+    },
+    {
+      "skillId": "skill:9a2f797c235608ce46661396ca3d9fbd132e8985fa512fc76c717ca49272d09b",
+      "name": "prototype",
+      "skillRevision": "rev:695d06751e14de5b8cd41cfa321bbd2bfc3f16acde61bbbedf10d087998b5845",
+      "description": "Build a throwaway prototype to answer a design question. Use when the user wants to sanity-check whether a state model or logic feels right, or explore what a UI should look like."
+    },
+    {
+      "skillId": "skill:9b03e7f9cd45badacbaf1547fd9e6167233a3f98915ca59ee274a0b9acff2ecb",
+      "name": "high-end-visual-design",
+      "skillRevision": "rev:e47fd3c414baad01542a3af68a2de394a52c5fd8a6bfcde39baeb007b426e4a4",
+      "description": "Teaches the AI to design like a high-end agency. Defines the exact fonts, spacing, shadows, card structures, and animations that make a website feel expensive. Blocks all the common defaults that make AI designs look cheap or generic."
+    },
+    {
+      "skillId": "skill:9e1c09c8d8cdf48d0ef490d25c50e69cfbbbc83e84d4fd02d749dd7f2a400f2b",
+      "name": "youtube-watcher",
+      "skillRevision": "rev:d5292ee6f71f506156858b7b6de6cb2c3609991271e4d456dc89946d1e21152a",
+      "description": "Fetch and read transcripts from YouTube videos. Use when you need to summarize a video, answer questions about its content, or extract information from it."
+    },
+    {
+      "skillId": "skill:9e90d4bdb80d55c4e9417b691d5d195ddc51d7897e2eb85ed819b9dbce74900e",
+      "name": "xiaohongshu-cli",
+      "skillRevision": "rev:1d5a044edfcd1b0af2bda05f5b26349d5a7aa2b6dde3fa2da7ca43304570c437",
+      "description": "Use xiaohongshu-cli for ALL Xiaohongshu (Little Red Book, 小红书) operations — searching notes, reading content, browsing users, liking, collecting, commenting, following, and posting. Invoke whenever the user requests any Xiaohongshu interaction."
+    },
+    {
+      "skillId": "skill:9f54a004d8989de6854a53d1d06eb8d6eb7d4773f5ace6b03870c334a9459f96",
+      "name": "multi-search-engine",
+      "skillRevision": "rev:c290ccd93479552ef593196a3effcfed4db3267a4affeb0af90c4e7449361d07",
+      "description": "Multi-engine web search — aggregate results from multiple search providers"
+    },
+    {
+      "skillId": "skill:a09bfff7d5400fefb904f4422835ebc396498a654799135a847903e74dd735e8",
+      "name": "make-plan",
+      "skillRevision": "rev:94bd03d5d37c288edb21832038fd502ed65998d6381fd9abde1cf4f6b7d82d39",
+      "description": "Create a detailed, phased implementation plan with documentation discovery. Use when asked to plan a feature, task, or multi-step implementation — especially before executing with do."
+    },
+    {
+      "skillId": "skill:a148c83714285cdd2184a90cf4a1d46969c3d3b87792e75f46df021a294734c9",
+      "name": "content-strategy",
+      "skillRevision": "rev:a64eeace07910ffb3a6099bd33bacbe61a3e9a3a2819e946029f3bb84b9887bc",
+      "description": "Build and execute a content marketing strategy for a solopreneur business. Use when planning what content to create, deciding on content formats and channels, building a content calendar, measuring content performance, or systematizing content production. Covers audience research for content, content pillars, distribution strategy, repurposing workflows, and metrics. Trigger on \"content strategy\", \"content marketing\", \"what content should I create\", \"content plan\", \"content calendar\", \"content ideas\", \"content distribution\", \"grow through content\"."
+    },
+    {
+      "skillId": "skill:a2fa83ab3477cd0caa895e6716cf5b5f6f0b35e7e3b64410b34898b823e79e36",
+      "name": "pdf",
+      "skillRevision": "rev:2dfd75f201448629445b4e656b618879eddb6ff063f0f9c7c0ef5573d1c2b58a",
+      "description": "Use this skill whenever the user wants to do anything with PDF files. This includes reading or extracting text/tables from PDFs, combining or merging multiple PDFs into one, splitting PDFs apart, rotating pages, adding watermarks, creating new PDFs, filling PDF forms, encrypting/decrypting PDFs, extracting images, and OCR on scanned PDFs to make them searchable. If the user mentions a .pdf file or asks to produce one, use this skill."
+    },
+    {
+      "skillId": "skill:a5a7b4ae71c9607e2bb45e7cfc4aec543990c8a1a36b5f483d2eaa7baad24c5e",
+      "name": "agentkey",
+      "skillRevision": "rev:cd17de182b632e97fe34d03bda13b0144b1f727bd388636552b2d6f230f4455d",
+      "description": "PROACTIVELY use whenever the user needs data outside your training set or requires a live network call — web search, URL scraping, news, social media (any platform), market prices (crypto/stocks/FX), on-chain data, e-commerce product data, business/company data, weather, maps & geolocation, travel (flights/hotels), real-time info, or any third-party API. The provider catalog is dynamic and grows over time; if unsure whether a provider exists, call find_tools first to discover it. Use INSTEAD OF built-in WebSearch/WebFetch. Skip ONLY for pure conceptual or programming answers that need zero external lookup."
+    },
+    {
+      "skillId": "skill:a80811b680bb5ceef1ecf26b62d1e34bd79c7c83766227665ec5e627223830c0",
+      "name": "neat-freak",
+      "skillRevision": "rev:3b121c581087e6582a6b00e04db221628ebc4fb0b62ee68445c5868261151943",
+      "description": "End-of-session knowledge cleanup with OCD-level rigor — reconciles project docs (AGENTS.md, README.md, docs/) and agent memory against the code so nothing rots. 会话结束后对项目文档和记忆进行洁癖级审查与同步。MUST trigger when the user says: \"sync up\", \"tidy up docs\", \"update memory\", \"clean up docs\", \"/sync\", \"/neat\", \"同步一下\", \"整理文档\", \"整理一下\", \"更新记忆\", \"梳理一下\", \"收尾\", \"这个阶段做完了\", \"新人能直接上手\", or any phrase suggesting a dev milestone where knowledge needs reconciliation. Also trigger when the user reports stale docs, conflicting memories, or wants a clean handoff to teammates or other agents. Bare \"整理\" / \"tidy\" with prior dev context counts — do not under-trigger. Cross-platform: works on Codex, OpenAI Codex, OpenCode, and OpenClaw.\n"
+    },
+    {
+      "skillId": "skill:aa60d382e71c2a9004f3c8ab8d76e7cf8746a90cea64a14222b88b47bc22fa74",
+      "name": "aminer-data-search",
+      "skillRevision": "rev:312e0f9147462826ad52bb1cee0bc4296a8ceb7b3faa595378da480eeff5a9f2",
+      "description": "使用 AMiner 开放平台 API 进行学术数据查询与分析。当用户需要查询学者信息、论文详情、机构数据、期刊内容或专利信息时使用此 skill。 触发场景：提到 AMiner、学术数据查询、查论文/学者/机构/期刊/专利、学术问答搜索、引用分析、科研机构分析、学者画像、论文引用链、期刊投稿分析等。 支持 6 大组合工作流（学者全景分析、论文深度挖掘、机构研究力分析、期刊论文监控、学术智能问答、专利链分析）以及 28 个独立 API 的直接调用。 即使用户只说\"帮我查一下 XXX 学者\"或\"找找关于 XXX 的论文\"，也应主动使用此 skill。\n"
+    },
+    {
+      "skillId": "skill:af83f1585c04d65e9b7396c9e38cf18d76feee72550b7316e6694b20bf35e456",
+      "name": "video-to-subtitle-summary",
+      "skillRevision": "rev:f6083be87e0b8e2f603fd1598451a2397d80efa710fe466a8b4c025f2fb18e1f",
+      "description": "Use when user provides a short video platform URL (Douyin, Xiaohongshu, Bilibili, etc.) or a local video/audio file path and wants to extract subtitles and generate AI summary. Triggers on URLs like v.douyin.com, xhslink.com, xiaohongshu.com, bilibili.com, b23.tv, share links, or local file paths ending in .mp4/.mp3/.wav etc."
+    },
+    {
+      "skillId": "skill:b3859d361ba00ec5cb02ec0ef18e8356bbe4e5a8a6236b10b9ea13e9b5357af1",
+      "name": "xlsx",
+      "skillRevision": "rev:8f4a9d20333418885391abde13c13487f1ed26c5af17e3de49a87c5b85a11674",
+      "description": "Use this skill any time a spreadsheet file is the primary input or output. This means any task where the user wants to: open, read, edit, or fix an existing .xlsx, .xlsm, .csv, or .tsv file (e.g., adding columns, computing formulas, formatting, charting, cleaning messy data); create a new spreadsheet from scratch or from other data sources; or convert between tabular file formats. Trigger especially when the user references a spreadsheet file by name or path — even casually (like \"the xlsx in my downloads\") — and wants something done to it or produced from it. Also trigger for cleaning or restructuring messy tabular data files (malformed rows, misplaced headers, junk data) into proper spreadsheets. The deliverable must be a spreadsheet file. Do NOT trigger when the primary deliverable is a Word document, HTML report, standalone Python script, database pipeline, or Google Sheets API integration, even if tabular data is involved."
+    },
+    {
+      "skillId": "skill:b65cf785bd1ac572feb45b9fc3697e06a649ac836857e187f1e8499fd837ed60",
+      "name": "social-content",
+      "skillRevision": "rev:19db07e0368fa892cd1a5f21a5573648768aedf96d2d9a4d9854ae15efe0afd6",
+      "description": "When the user wants help creating, scheduling, or optimizing social media content for LinkedIn, Twitter/X, Instagram, TikTok, Facebook, or other platforms. Also use when the user mentions 'LinkedIn post,' 'Twitter thread,' 'social media,' 'content calendar,' 'social scheduling,' 'engagement,' or 'viral content.' This skill covers content creation, repurposing, and platform-specific strategies."
+    },
+    {
+      "skillId": "skill:b81a429793362319d955388a0420d8ac5717abcc3fda118822478a9a3f0531fe",
+      "name": "feishu-send-file",
+      "skillRevision": "rev:f742b98a8ab274ee060771c2c34ba97e91adf17d47a44b1bd8cb7a227fa82c82",
+      "description": "Send files to a Feishu group or user via REST API. Use when the user explicitly asks to send a file, attachment, or document to a Feishu chat/group. Triggers: \"发文件到飞书\", \"把这个文件发到群里\", \"send file to feishu\", \"发个附件\". NOT for: sending text messages (use message tool), sending images/screenshots (use feishu-screenshot skill), or reading documents (use feishu-doc skill).\n"
+    },
+    {
+      "skillId": "skill:ba0d53875a8d37ffa9857aff5348b12bc660b26cd3eaf23a65a0bb138aabbf39",
+      "name": "imagegen-frontend-mobile",
+      "skillRevision": "rev:0c67fa929cfff649d426fff6dadd8bd7f485053f6134cb3ca828b3f3bd2198b2",
+      "description": "Elite mobile app image-generation skill for creating premium, app-native screen concepts and flows. Designed for iOS, Android, and cross-platform mobile products. Prioritizes clean hierarchy, comfortably readable text, strong multi-screen consistency, controlled color palettes, non-generic creative direction, textured surfaces, image-led composition, tasteful custom iconography, and clean phone mockup framing. By default, screens should be shown inside a subtle premium iPhone or similar phone mockup with a visible frame, while the main focus stays on the app content itself. This skill generates images only. It does not write code."
+    },
+    {
+      "skillId": "skill:bb60775d931e951bc870511a40388a5daebf5d7ca88c7f5868521943ce982408",
+      "name": "tts",
+      "skillRevision": "rev:02ab84b2c314b8f781a1bdca3dad5c193765d03f3ddd2449e453ef741883b036",
+      "description": "Use this skill whenever the user wants to convert text into speech, generate audio from text, or produce voiceovers. Triggers include: any mention of 'TTS', 'text to speech', 'speak', 'say', 'voice', 'read aloud', 'audio narration', 'voiceover', 'dubbing', or requests to turn written content into spoken audio. Also use when converting EPUB/PDF/SRT/articles to audio, cloning voices from reference audio, controlling emotion or speed in speech, aligning speech to subtitle timelines, or producing per-segment voice-mapped audio."
+    },
+    {
+      "skillId": "skill:bd8acdaaeeae6807d80067d826e62583a466fa61892f9c3216f7593cf134aeb1",
+      "name": "research-paper-writer",
+      "skillRevision": "rev:2e9673482d84913a5f62847bbd47c51892e6a894111d5ce2a1066061fe8a6ed0",
+      "description": "Creates formal academic research papers following IEEE/ACM formatting standards with proper structure, citations, and scholarly writing style. Use when the user asks to write a research paper, academic paper, or conference paper on any topic."
+    },
+    {
+      "skillId": "skill:bded306d54d13624ed6111ea014710270c9c385a8e9578415957c73faed7ce09",
+      "name": "Market Research",
+      "skillRevision": "rev:314cff7d0b21fdb955845003f91d4fd574528489d81a76c0dc12b26c98181404",
+      "description": "Size markets, analyze competitors, and validate opportunities with practical frameworks and free data sources."
+    },
+    {
+      "skillId": "skill:bec8e35a8e60b62db96e41a97f5ba935202b9c889add41060d989ee126aac730",
+      "name": "systematic-literature-review",
+      "skillRevision": "rev:b3623c87c190d153abf724f9f605e92ba81ca12f7dcd5a4087e5d2c37a9e5645",
+      "description": "Use this skill when the user wants a systematic literature review, survey, or synthesis across multiple academic papers on a topic. Also covers annotated bibliographies and cross-paper comparisons. Searches arXiv and outputs reports in APA, IEEE, or BibTeX format. Not for single-paper tasks — use academic-paper-review for reviewing one paper."
+    },
+    {
+      "skillId": "skill:bf0a7baf67f2d5facdec44dbccbcd655fd098413e83d688abbda510da507c07b",
+      "name": "fitness-coach",
+      "skillRevision": "rev:3a2519a3375d375b50d6160ebd78ce3c314f3d4549eb838c7674f86f8471a2ba",
+      "description": "私人AI健身教练，追踪运动训练、饮食分餐和睡眠情况。基于Obsidian本地Markdown文件实现长期记忆，自动分析训练趋势、检查饮食合理性、生成周复盘。触发：/fitness、健身教练、训练打卡、运动记录、饮食管理、睡眠追踪、周复盘。"
+    },
+    {
+      "skillId": "skill:c1e726c6b6a0f40be55cf92f280ae1c3f8e82f7b2d5af38216f0e6db1d81ca91",
+      "name": "executing-plans",
+      "skillRevision": "rev:871df607bd9c2f748401ac28f8ce174a249b9ae905af557e7e9d53773dc2ab85",
+      "description": "Use when you have a written implementation plan to execute in a separate session with review checkpoints"
+    },
+    {
+      "skillId": "skill:c3c8c33cd68102d6ad4d8b5fb017e82271a0064d70f938a33f912289be513144",
+      "name": "opencli-autofix",
+      "skillRevision": "rev:b20408c7fbd948b7001fd6c2e8eec52727831cb721669cb5cb3189bbadd4e725",
+      "description": "Automatically fix broken OpenCLI adapters when commands fail. Load this skill when an opencli command fails — it guides you through diagnosing the failure via OPENCLI_DIAGNOSTIC, patching the adapter, retrying, and filing an upstream GitHub issue after a verified fix. Works with any AI agent."
+    },
+    {
+      "skillId": "skill:c564b209ae13dda734cd4fd971762dd8840278c5c7309fa540c6bce4b65e5562",
+      "name": "image-generation",
+      "skillRevision": "rev:99905bf6bdb5ffea2bda7c999b08f90eb814e89e027f92d3bf43bc51b9dbf95f",
+      "description": "Use this skill when the user requests to generate, create, imagine, or visualize images including characters, scenes, products, or any visual content. Supports structured prompts and reference images for guided generation."
+    },
+    {
+      "skillId": "skill:c57f071709ac38dd7dec931857e3fbcaea60f74afc74c4d0beab7b985c64f638",
+      "name": "opencli-adapter-author",
+      "skillRevision": "rev:f651cad98143c7996910ffb7810f9972c7d45919250cd7e4a5b0bc4539f0aa9d",
+      "description": "Use when writing an OpenCLI adapter for a new site or adding a new command to an existing site. Guides end-to-end from first recon through field decoding, adapter coding, and verify. Replaces opencli-oneshot / opencli-explorer. For ad-hoc browser driving (no adapter), see opencli-browser instead; for a top-level orientation to opencli, see opencli-usage."
+    },
+    {
+      "skillId": "skill:c63c6aa4f53f1196a41eb15fc3000859364ebdd27b95b8b067ba5667e4b26bd1",
+      "name": "brainstorming",
+      "skillRevision": "rev:6cede7474acbdfc02a788de4c3b43cb423f715a3e2cf4a90687d7eb42919c02d",
+      "description": "You MUST use this before any creative work - creating features, building components, adding functionality, or modifying behavior. Explores user intent, requirements and design before implementation."
+    },
+    {
+      "skillId": "skill:c7cc814faa6acf132d63bab555cc59959844e4d4289c78e8df7e4b60b17f2b87",
+      "name": "writing-plans",
+      "skillRevision": "rev:d50b8b23ac0276846a8fc96c4369bda4e8ba75313cc2152f92789e1062f3cf1d",
+      "description": "Use when you have a spec or requirements for a multi-step task, before touching code"
+    },
+    {
+      "skillId": "skill:c925823dd5624f7734bf2ea358aa7cb98fcff665ed2c24f9c123078a644004ce",
+      "name": "follow-builders",
+      "skillRevision": "rev:a85440e6abe88de17483c29fc7fe532eed89ef400cf9a43e3fdaa4f0d3556227",
+      "description": "AI builders digest — monitors top AI builders on X and YouTube podcasts, remixes their content into digestible summaries. Use when the user wants AI industry insights, builder updates, or invokes /ai. No API keys or dependencies required — all content is fetched from a central feed."
+    },
+    {
+      "skillId": "skill:c94788cf928888d3c23958cf7f0ff84f4f53f5843f026544812e324e674e498d",
+      "name": "mem-search",
+      "skillRevision": "rev:f24f9933ba9336130c14f35d5e686e3e3fadfb23f596e553ebce7720da1fa96b",
+      "description": "Search Codex-mem's persistent cross-session memory database. Use when user asks \"did we already solve this?\", \"how did we do X last time?\", or needs work from previous sessions."
+    },
+    {
+      "skillId": "skill:c9a7094a17eba95938f622994e04d99c58700cc2ea7657904ec62656c03e2f0f",
+      "name": "obsidian-ontology-sync",
+      "skillRevision": "rev:850245beb0b1339aa4bb2aef1c2d0196036bda6ac84fa692454b08e33c67b2c0",
+      "description": "Bidirectional sync between Obsidian PKM (human-friendly notes) and structured ontology (machine-queryable graph). Automatically extracts entities and relationships from markdown, maintains ontology graph, and provides feedback to improve note structure. Run sync every few hours via cron."
+    },
+    {
+      "skillId": "skill:cbf6cf5b0890e5ea7a68ed773112acfff0d18a2b62637e75e03c04d420916211",
+      "name": "amap-lbs-skill",
+      "skillRevision": "rev:8792039318a83d698089c0fde4cb739dabd571786aee7ab5231c5cde4219bc4c",
+      "description": "高德地图综合服务，支持POI搜索、路径规划、旅游规划、周边搜索和热力图数据可视化"
+    },
+    {
+      "skillId": "skill:cc97faad87b03e57b0edead28e6b7fe60dd929b4188183d4bdcf45875de7787a",
+      "name": "imagegen-frontend-web",
+      "skillRevision": "rev:eee145e598ca8ee0c1980ec01ba225875020da27da0e16cb48c03934dfbc412e",
+      "description": "Elite frontend image-direction skill for generating premium, conversion-aware website design references. CRITICAL OUTPUT RULE — generate ONE separate horizontal image FOR EVERY section. A landing page with 8 sections produces 8 images. Never compress multiple sections into one image. Enforces composition variety (not always left-text / right-image), background-image freedom, varied CTAs, varied hero scales (giant / mid / mini minimalist), narrative concept spine, second-read moments, and a single consistent palette across all images. Optimized for landing pages, marketing sites, and product comps that developers or coding models can accurately recreate."
+    },
+    {
+      "skillId": "skill:cd62a6fd3cb6ca46f5779e40d4334b746a5fab881170c386bec92f6e261843a2",
+      "name": "automation-workflows",
+      "skillRevision": "rev:3c3c3e5d884af393065ecb8bb533490797fb5e0a8998de4a7aa78758136b55e3",
+      "description": "Design and implement automation workflows to save time and scale operations as a solopreneur. Use when identifying repetitive tasks to automate, building workflows across tools, setting up triggers and actions, or optimizing existing automations. Covers automation opportunity identification, workflow design, tool selection (Zapier, Make, n8n), testing, and maintenance. Trigger on \"automate\", \"automation\", \"workflow automation\", \"save time\", \"reduce manual work\", \"automate my business\", \"no-code automation\"."
+    },
+    {
+      "skillId": "skill:d0150e4c734ff8019485cb548ce42dd3ac07e5b8870fb81d1dda8e7237054284",
+      "name": "industrial-brutalist-ui",
+      "skillRevision": "rev:28ff544d4ce43f775a5d26f27f652bee5b8ceb231f942340a5cb2f0a59a09aa1",
+      "description": "Raw mechanical interfaces fusing Swiss typographic print with military terminal aesthetics. Rigid grids, extreme type scale contrast, utilitarian color, analog degradation effects. For data-heavy dashboards, portfolios, or editorial sites that need to feel like declassified blueprints."
+    },
+    {
+      "skillId": "skill:d5e330bb3282aded574a024e6855182d9e1506d8eb824043f28e35b918044bc6",
+      "name": "claude-to-deerflow",
+      "skillRevision": "rev:09faac5c2b94c993c457f0c822a7896c6008779b3e4defdb72499ee3874eafcd",
+      "description": "Interact with DeerFlow AI agent platform via its HTTP API. Use this skill when the user wants to send messages or questions to DeerFlow for research/analysis, start a DeerFlow conversation thread, check DeerFlow status or health, list available models/skills/agents in DeerFlow, manage DeerFlow memory, upload files to DeerFlow threads, or delegate complex research tasks to DeerFlow. Also use when the user mentions deerflow, deer flow, or wants to run a deep research task that DeerFlow can handle."
+    },
+    {
+      "skillId": "skill:d6537d90e6c400a867fd555bb3a9e3f3cfe360e89f480e132428c3f2d9b4e7d1",
+      "name": "newsletter-generation",
+      "skillRevision": "rev:14be29249a9c596f6339e5e656bb48011cbeb45375c1d5cbed3272a6c4ecd4d3",
+      "description": "Use this skill when the user requests to generate, create, write, or draft a newsletter, email digest, weekly roundup, industry briefing, or curated content summary. Supports topic-based research, content curation from multiple sources, and professional formatting for email or web distribution. Trigger on requests like \"create a newsletter about X\", \"write a weekly digest\", \"generate a tech roundup\", or \"curate news about Y\"."
+    },
+    {
+      "skillId": "skill:dfb8725e91a53a5cac5af70921cdba26ef7bbe3d6288645bc6da53568fd63f3d",
+      "name": "clawdefender",
+      "skillRevision": "rev:1fc323f8e2c3169c4518af5ecf2db07402193a68ff731d8fbb6d0c4a99cf93bd",
+      "description": "Security scanner and input sanitizer for AI agents. Detects prompt injection, command injection, SSRF, credential exfiltration, and path traversal attacks. Use when (1) installing new skills from ClawHub, (2) processing external input like emails, calendar events, Trello cards, or API responses, (3) validating URLs before fetching, (4) running security audits on your workspace. Protects agents from malicious content in untrusted data sources."
+    },
+    {
+      "skillId": "skill:e393bbe8cb3863cbdf1cd4a9af5bb397d31c63125873406fbb6cd6e6f2e4be0f",
+      "name": "feishu-doc",
+      "skillRevision": "rev:b68950797a1d29f6e3a6cce6e2833fcb6a3d1152d88c5e2f8dc82b76e4721e87",
+      "description": "Fetch content from Feishu (Lark) Wiki, Docs, Sheets, and Bitable. Automatically resolves Wiki URLs to real entities and converts content to Markdown."
+    },
+    {
+      "skillId": "skill:e602318adbf9b8f17d9d7f149144d5582b8fb53a4e1efd4eba5a1680ca719254",
+      "name": "interview-designer",
+      "skillRevision": "rev:059aee928bec033bd1c63f9d66f18d54dbb60354c6f45af07c87e72e655e97cd",
+      "description": "Analyze resumes and design interview strategies using evidence-based methodology. Transforms interview prep from \"read resume → ask questions\" into \"define standard → forensic evidence → future simulation\". Combines Geoff Smart's Topgrading, Lou Adler's performance-based hiring, and Daniel Kahneman's bias control. Use when preparing for interviews, creating structured interview guides, or designing questions to validate candidate competencies."
+    },
+    {
+      "skillId": "skill:e86a4d5e92af5d8520f000f8a72872a333a6f62da2dc62ff08195c30b8c54fab",
+      "name": "ielts-writing",
+      "skillRevision": "rev:1e15d58899ce31bd0a22b865747cf010db3cd36df6536573fc7d46025199bc15",
+      "description": "雅思写作批改教练。四维评分 + 句子级标注 + 改写对比 + 审题检查。\n触发方式：/ielts-writing、「批改作文」「帮我看看这篇」「审题」「写作练习」\n"
+    },
+    {
+      "skillId": "skill:e8da2ec737ed6579d59d7ebbc552b452d5f1a6e25cf470b5205751d607e39ec8",
+      "name": "code-documentation",
+      "skillRevision": "rev:dab12680db31319159827bab3578835147f331f3cf23628da4c9f763edc10b9e",
+      "description": "Use this skill when the user requests to generate, create, or improve documentation for code, APIs, libraries, repositories, or software projects. Supports README generation, API reference documentation, inline code comments, architecture documentation, changelog generation, and developer guides. Trigger on requests like \"document this code\", \"create a README\", \"generate API docs\", \"write developer guide\", or when analyzing codebases for documentation purposes."
+    },
+    {
+      "skillId": "skill:e8f1b89b80baf01a3a2f619f2e40f4ae5b99d8641daa4809898c934eef88bee1",
+      "name": "autoglm-deepresearch",
+      "skillRevision": "rev:a9da84fc3daa743c87800982f593accb484010a9ae8b1e766bb4067c216f423e",
+      "description": "对用户提出的课题进行深度研究和调研，输出结构化的深度报告。当用户需要深入了解某个话题、做行业调研、专题研究、竞品分析等场景时使用此 skill。 与普通搜索不同，deepresearch 会先做少量定向搜索，再对少量关键页面进行深度阅读，过程中优先展示中间发现，最后再做总结，避免因调用次数过多导致响应过慢。 Token 通过本地服务 http://127.0.0.1:53699/get_token 自动获取，无需手动配置环境变量。\n"
+    },
+    {
+      "skillId": "skill:ecd14d3c7f5c275c899338ac3ddd6044efe8a6ed1a508cf9fea11a93251ca6fb",
+      "name": "gpt-taste",
+      "skillRevision": "rev:4e05289063f4850eb0bf1bbbb08a24d984cf9477af3822b9a1d09d955024ac12",
+      "description": "Elite UX/UI & Advanced GSAP Motion Engineer. Enforces Python-driven true randomization for layout variance, strict AIDA page structure, wide editorial typography (bans 6-line wraps), gapless bento grids, strict GSAP ScrollTriggers (pinning, stacking, scrubbing), inline micro-images, and massive section spacing."
+    },
+    {
+      "skillId": "skill:edac0df3820fd2895db5f87d186de60833e25b317f40823fa3485fc9fdcbd7ef",
+      "name": "timeline-report",
+      "skillRevision": "rev:2b84a9c0458b19182e324ddad85e023af5a33e1f846fd74b89690dfd44b885bb",
+      "description": "Generate a \"Journey Into [Project]\" narrative report analyzing a project's entire development history from Codex-mem's timeline. Use when asked for a timeline report, project history analysis, development journey, or full project report."
+    },
+    {
+      "skillId": "skill:f154a23ea0dd93408880a75d14c460b8511a9fd90cf10af092041884dc1a51ea",
+      "name": "autoglm-generate-image",
+      "skillRevision": "rev:6e8685629ad1e8a0b5c7fa88bbdbd7b70d25c76f65b9ac1db4b743dd920f2f1a",
+      "description": "使用 AutoGLM 文生图接口，根据用户输入的文字描述生成图片。当用户需要生成图片、文字转图片、AI绘图等场景时使用此 skill。 Token 通过本地服务 http://127.0.0.1:53699/get_token 自动获取，无需手动配置环境变量。\n"
+    },
+    {
+      "skillId": "skill:f5292dcab7535c7d1f62448fe3611e3db0bca8fa607ec9500b850be92592309e",
+      "name": "self-reflection",
+      "skillRevision": "rev:6496f7bb93e13e8119f32554b754fcdf4cbbd2b592777441e62bd1d2f2572759",
+      "description": "Periodic self-reflection on recent sessions. Analyzes what went well, what went wrong, and writes concise, actionable insights to the appropriate workspace files. Designed to run as a cron job."
+    },
+    {
+      "skillId": "skill:f7ee3af6ab0ce0c5040bb9871fd4b4df370f4256d30f0c465992d3ae9ada0873",
+      "name": "data-analysis",
+      "skillRevision": "rev:f8dd9bcaf61a3b33a11dec9254b71752d1f3d8d31fa62c216b865dfc923f51c0",
+      "description": "Use this skill when the user uploads Excel (.xlsx/.xls) or CSV files and wants to perform data analysis, generate statistics, create summaries, pivot tables, SQL queries, or any form of structured data exploration. Supports multi-sheet Excel workbooks, aggregation, filtering, joins, and exporting results to CSV/JSON/Markdown."
+    },
+    {
+      "skillId": "skill:f8e0587f44d60bc94b14b9f557f2b578dff79f6b736385cf034ffe1be03c3fc6",
+      "name": "video-frames",
+      "skillRevision": "rev:73e1792ab8d20721060ec1c9418fafb1fc6552c3b624c6bdd1dd61e4a7b3710d",
+      "description": "Extract frames or short clips from videos using ffmpeg."
+    },
+    {
+      "skillId": "skill:fa0397d71b9554cd98f793c0bf75bc30af82db6d74077b4369b8783f0e26078e",
+      "name": "github-deep-research",
+      "skillRevision": "rev:6845fa539dc0a811d50c487bf1cfe502a6eaff3402e0ba157d19d32ac1f7fa34",
+      "description": "Conduct multi-round deep research on any GitHub Repo. Use when users request comprehensive analysis, timeline reconstruction, competitive analysis, or in-depth investigation of GitHub. Produces structured markdown reports with executive summaries, chronological timelines, metrics analysis, and Mermaid diagrams. Triggers on Github repository URL or open source projects."
+    },
+    {
+      "skillId": "skill:faa3b0ef810c5c7be39a17782046f8d6c2a1eacb7150d48aa3c1c1006b16fc72",
+      "name": "skill-vetter",
+      "skillRevision": "rev:d45d0c408d58a93490d4c3d4103fd6c710add1e1e7ba1ecd36f41c38c1cb4ceb",
+      "description": "Security-first skill vetting for AI agents. Use before installing any skill from ClawdHub, GitHub, or other sources. Checks for red flags, permission scope, and suspicious patterns."
+    }
+  ]
+}

@@ -2,7 +2,11 @@
 
 ## Status
 
-Accepted — 2026-08-14
+Partially superseded by ADR-0014 — 2026-08-22
+
+Activation Memory、Skill identity、作者语义来源和“相关性不得读取 procedure maturity”继续有效。
+Procedural Memory 作为当前主线的范围决定已被 ADR-0014 取代；相关实现与合同保留为 frozen
+experimental track，不授权新增或 active 接线。
 
 Supersedes ADR-0001 and ADR-0002.
 

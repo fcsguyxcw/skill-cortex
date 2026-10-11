@@ -1,0 +1,4981 @@
+{
+  "schemaVersion": 1,
+  "sourceMode": "real_model",
+  "generatedAt": "2026-09-08T00:12:35.464Z",
+  "freezeHash": "sha256:40c750102dbd8e086b9b0107a09688b3ff6d25fb40747574712f677601740137",
+  "protocol": {
+    "rawPromptsStored": false,
+    "rawResponsesStored": false,
+    "casesChangedAfterRun": false
+  },
+  "arms": [
+    {
+      "id": "k5_full",
+      "k": 5,
+      "limit": null
+    },
+    {
+      "id": "k3_full",
+      "k": 3,
+      "limit": null
+    },
+    {
+      "id": "k3_120",
+      "k": 3,
+      "limit": 120
+    },
+    {
+      "id": "k3_240",
+      "k": 3,
+      "limit": 240
+    },
+    {
+      "id": "k3_480",
+      "k": 3,
+      "limit": 480
+    }
+  ],
+  "repeatCount": 3,
+  "summaries": {
+    "k5_full": {
+      "exactSetAccuracy": 0.9166666666666666,
+      "bySlice": {
+        "single": 1,
+        "multi": 0.7777777777777778,
+        "no_skill": 0.8888888888888888,
+        "hard_confuser": 1
+      }
+    },
+    "k3_full": {
+      "exactSetAccuracy": 0.8888888888888888,
+      "bySlice": {
+        "single": 1,
+        "multi": 0.5555555555555556,
+        "no_skill": 1,
+        "hard_confuser": 1
+      }
+    },
+    "k3_120": {
+      "exactSetAccuracy": 0.9166666666666666,
+      "bySlice": {
+        "single": 1,
+        "multi": 0.6666666666666666,
+        "no_skill": 1,
+        "hard_confuser": 1
+      }
+    },
+    "k3_240": {
+      "exactSetAccuracy": 0.8611111111111112,
+      "bySlice": {
+        "single": 1,
+        "multi": 0.5555555555555556,
+        "no_skill": 0.8888888888888888,
+        "hard_confuser": 1
+      }
+    },
+    "k3_480": {
+      "exactSetAccuracy": 0.9166666666666666,
+      "bySlice": {
+        "single": 1,
+        "multi": 0.6666666666666666,
+        "no_skill": 1,
+        "hard_confuser": 1
+      }
+    }
+  },
+  "calls": [
+    {
+      "caseId": "CBH01",
+      "slice": "single",
+      "arm": "k5_full",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:c564b209ae13dda734cd4fd971762dd8840278c5c7309fa540c6bce4b65e5562"
+      ],
+      "responseHash": "sha256:38e2054a7a32cdc79ff4524689d54052e3ef02052b7f88fb7056d419de40f557",
+      "usage": {
+        "input": 887,
+        "output": 94,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 48,
+        "totalTokens": 981,
+        "cost": {
+          "input": 0.00012418000000000002,
+          "output": 0.000026320000000000002,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00015050000000000003
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH01",
+      "slice": "single",
+      "arm": "k5_full",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:c564b209ae13dda734cd4fd971762dd8840278c5c7309fa540c6bce4b65e5562"
+      ],
+      "responseHash": "sha256:38e2054a7a32cdc79ff4524689d54052e3ef02052b7f88fb7056d419de40f557",
+      "usage": {
+        "input": 119,
+        "output": 106,
+        "cacheRead": 768,
+        "cacheWrite": 0,
+        "reasoning": 60,
+        "totalTokens": 993,
+        "cost": {
+          "input": 0.00001666,
+          "output": 0.00002968,
+          "cacheRead": 0.0000021503999999999998,
+          "cacheWrite": 0,
+          "total": 0.0000484904
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH01",
+      "slice": "single",
+      "arm": "k5_full",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:c564b209ae13dda734cd4fd971762dd8840278c5c7309fa540c6bce4b65e5562"
+      ],
+      "responseHash": "sha256:38e2054a7a32cdc79ff4524689d54052e3ef02052b7f88fb7056d419de40f557",
+      "usage": {
+        "input": 119,
+        "output": 135,
+        "cacheRead": 768,
+        "cacheWrite": 0,
+        "reasoning": 89,
+        "totalTokens": 1022,
+        "cost": {
+          "input": 0.00001666,
+          "output": 0.000037800000000000004,
+          "cacheRead": 0.0000021503999999999998,
+          "cacheWrite": 0,
+          "total": 0.0000566104
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH01",
+      "slice": "single",
+      "arm": "k3_full",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:c564b209ae13dda734cd4fd971762dd8840278c5c7309fa540c6bce4b65e5562"
+      ],
+      "responseHash": "sha256:38e2054a7a32cdc79ff4524689d54052e3ef02052b7f88fb7056d419de40f557",
+      "usage": {
+        "input": 631,
+        "output": 311,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 265,
+        "totalTokens": 942,
+        "cost": {
+          "input": 0.00008834000000000001,
+          "output": 0.00008708,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00017542000000000002
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH01",
+      "slice": "single",
+      "arm": "k3_full",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:c564b209ae13dda734cd4fd971762dd8840278c5c7309fa540c6bce4b65e5562"
+      ],
+      "responseHash": "sha256:38e2054a7a32cdc79ff4524689d54052e3ef02052b7f88fb7056d419de40f557",
+      "usage": {
+        "input": 119,
+        "output": 120,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 74,
+        "totalTokens": 751,
+        "cost": {
+          "input": 0.00001666,
+          "output": 0.000033600000000000004,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000516936
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH01",
+      "slice": "single",
+      "arm": "k3_full",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:c564b209ae13dda734cd4fd971762dd8840278c5c7309fa540c6bce4b65e5562"
+      ],
+      "responseHash": "sha256:38e2054a7a32cdc79ff4524689d54052e3ef02052b7f88fb7056d419de40f557",
+      "usage": {
+        "input": 119,
+        "output": 110,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 64,
+        "totalTokens": 741,
+        "cost": {
+          "input": 0.00001666,
+          "output": 0.0000308,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000488936
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH01",
+      "slice": "single",
+      "arm": "k3_120",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:c564b209ae13dda734cd4fd971762dd8840278c5c7309fa540c6bce4b65e5562"
+      ],
+      "responseHash": "sha256:38e2054a7a32cdc79ff4524689d54052e3ef02052b7f88fb7056d419de40f557",
+      "usage": {
+        "input": 505,
+        "output": 93,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 47,
+        "totalTokens": 598,
+        "cost": {
+          "input": 0.00007070000000000001,
+          "output": 0.00002604,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00009674000000000001
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH01",
+      "slice": "single",
+      "arm": "k3_120",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:c564b209ae13dda734cd4fd971762dd8840278c5c7309fa540c6bce4b65e5562"
+      ],
+      "responseHash": "sha256:38e2054a7a32cdc79ff4524689d54052e3ef02052b7f88fb7056d419de40f557",
+      "usage": {
+        "input": 121,
+        "output": 96,
+        "cacheRead": 384,
+        "cacheWrite": 0,
+        "reasoning": 50,
+        "totalTokens": 601,
+        "cost": {
+          "input": 0.00001694,
+          "output": 0.00002688,
+          "cacheRead": 0.0000010751999999999999,
+          "cacheWrite": 0,
+          "total": 0.0000448952
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH01",
+      "slice": "single",
+      "arm": "k3_120",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:c564b209ae13dda734cd4fd971762dd8840278c5c7309fa540c6bce4b65e5562"
+      ],
+      "responseHash": "sha256:38e2054a7a32cdc79ff4524689d54052e3ef02052b7f88fb7056d419de40f557",
+      "usage": {
+        "input": 121,
+        "output": 89,
+        "cacheRead": 384,
+        "cacheWrite": 0,
+        "reasoning": 43,
+        "totalTokens": 594,
+        "cost": {
+          "input": 0.00001694,
+          "output": 0.000024920000000000002,
+          "cacheRead": 0.0000010751999999999999,
+          "cacheWrite": 0,
+          "total": 0.0000429352
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH01",
+      "slice": "single",
+      "arm": "k3_240",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:c564b209ae13dda734cd4fd971762dd8840278c5c7309fa540c6bce4b65e5562"
+      ],
+      "responseHash": "sha256:38e2054a7a32cdc79ff4524689d54052e3ef02052b7f88fb7056d419de40f557",
+      "usage": {
+        "input": 311,
+        "output": 116,
+        "cacheRead": 256,
+        "cacheWrite": 0,
+        "reasoning": 70,
+        "totalTokens": 683,
+        "cost": {
+          "input": 0.00004354,
+          "output": 0.00003248,
+          "cacheRead": 7.168e-7,
+          "cacheWrite": 0,
+          "total": 0.0000767368
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH01",
+      "slice": "single",
+      "arm": "k3_240",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:c564b209ae13dda734cd4fd971762dd8840278c5c7309fa540c6bce4b65e5562"
+      ],
+      "responseHash": "sha256:38e2054a7a32cdc79ff4524689d54052e3ef02052b7f88fb7056d419de40f557",
+      "usage": {
+        "input": 55,
+        "output": 117,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 71,
+        "totalTokens": 684,
+        "cost": {
+          "input": 0.0000077,
+          "output": 0.000032760000000000005,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000418936
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH01",
+      "slice": "single",
+      "arm": "k3_240",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:c564b209ae13dda734cd4fd971762dd8840278c5c7309fa540c6bce4b65e5562"
+      ],
+      "responseHash": "sha256:38e2054a7a32cdc79ff4524689d54052e3ef02052b7f88fb7056d419de40f557",
+      "usage": {
+        "input": 55,
+        "output": 105,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 59,
+        "totalTokens": 672,
+        "cost": {
+          "input": 0.0000077,
+          "output": 0.000029400000000000003,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.000038533600000000007
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH01",
+      "slice": "single",
+      "arm": "k3_480",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:c564b209ae13dda734cd4fd971762dd8840278c5c7309fa540c6bce4b65e5562"
+      ],
+      "responseHash": "sha256:38e2054a7a32cdc79ff4524689d54052e3ef02052b7f88fb7056d419de40f557",
+      "usage": {
+        "input": 103,
+        "output": 106,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 60,
+        "totalTokens": 721,
+        "cost": {
+          "input": 0.000014420000000000001,
+          "output": 0.00002968,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000455336
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH01",
+      "slice": "single",
+      "arm": "k3_480",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:c564b209ae13dda734cd4fd971762dd8840278c5c7309fa540c6bce4b65e5562"
+      ],
+      "responseHash": "sha256:38e2054a7a32cdc79ff4524689d54052e3ef02052b7f88fb7056d419de40f557",
+      "usage": {
+        "input": 103,
+        "output": 98,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 52,
+        "totalTokens": 713,
+        "cost": {
+          "input": 0.000014420000000000001,
+          "output": 0.00002744,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000432936
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH01",
+      "slice": "single",
+      "arm": "k3_480",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:c564b209ae13dda734cd4fd971762dd8840278c5c7309fa540c6bce4b65e5562"
+      ],
+      "responseHash": "sha256:38e2054a7a32cdc79ff4524689d54052e3ef02052b7f88fb7056d419de40f557",
+      "usage": {
+        "input": 103,
+        "output": 121,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 75,
+        "totalTokens": 736,
+        "cost": {
+          "input": 0.000014420000000000001,
+          "output": 0.00003388,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000497336
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH02",
+      "slice": "single",
+      "arm": "k5_full",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:f8e0587f44d60bc94b14b9f557f2b578dff79f6b736385cf034ffe1be03c3fc6"
+      ],
+      "responseHash": "sha256:9c521b53ccfda86119a1188088b0add13488b9fb48cd32cf2f069240c979b61f",
+      "usage": {
+        "input": 786,
+        "output": 113,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 63,
+        "totalTokens": 899,
+        "cost": {
+          "input": 0.00011004000000000001,
+          "output": 0.00003164,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00014168
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH02",
+      "slice": "single",
+      "arm": "k5_full",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:f8e0587f44d60bc94b14b9f557f2b578dff79f6b736385cf034ffe1be03c3fc6"
+      ],
+      "responseHash": "sha256:9c521b53ccfda86119a1188088b0add13488b9fb48cd32cf2f069240c979b61f",
+      "usage": {
+        "input": 18,
+        "output": 207,
+        "cacheRead": 768,
+        "cacheWrite": 0,
+        "reasoning": 157,
+        "totalTokens": 993,
+        "cost": {
+          "input": 0.00000252,
+          "output": 0.00005796,
+          "cacheRead": 0.0000021503999999999998,
+          "cacheWrite": 0,
+          "total": 0.0000626304
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH02",
+      "slice": "single",
+      "arm": "k5_full",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:f8e0587f44d60bc94b14b9f557f2b578dff79f6b736385cf034ffe1be03c3fc6"
+      ],
+      "responseHash": "sha256:9c521b53ccfda86119a1188088b0add13488b9fb48cd32cf2f069240c979b61f",
+      "usage": {
+        "input": 18,
+        "output": 166,
+        "cacheRead": 768,
+        "cacheWrite": 0,
+        "reasoning": 116,
+        "totalTokens": 952,
+        "cost": {
+          "input": 0.00000252,
+          "output": 0.00004648,
+          "cacheRead": 0.0000021503999999999998,
+          "cacheWrite": 0,
+          "total": 0.000051150400000000004
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH02",
+      "slice": "single",
+      "arm": "k3_full",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:f8e0587f44d60bc94b14b9f557f2b578dff79f6b736385cf034ffe1be03c3fc6"
+      ],
+      "responseHash": "sha256:9c521b53ccfda86119a1188088b0add13488b9fb48cd32cf2f069240c979b61f",
+      "usage": {
+        "input": 541,
+        "output": 241,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 191,
+        "totalTokens": 782,
+        "cost": {
+          "input": 0.00007574,
+          "output": 0.00006748000000000001,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00014322
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH02",
+      "slice": "single",
+      "arm": "k3_full",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:f8e0587f44d60bc94b14b9f557f2b578dff79f6b736385cf034ffe1be03c3fc6"
+      ],
+      "responseHash": "sha256:9c521b53ccfda86119a1188088b0add13488b9fb48cd32cf2f069240c979b61f",
+      "usage": {
+        "input": 29,
+        "output": 564,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 514,
+        "totalTokens": 1105,
+        "cost": {
+          "input": 0.00000406,
+          "output": 0.00015792,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.00016341360000000002
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH02",
+      "slice": "single",
+      "arm": "k3_full",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:f8e0587f44d60bc94b14b9f557f2b578dff79f6b736385cf034ffe1be03c3fc6"
+      ],
+      "responseHash": "sha256:9c521b53ccfda86119a1188088b0add13488b9fb48cd32cf2f069240c979b61f",
+      "usage": {
+        "input": 29,
+        "output": 118,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 68,
+        "totalTokens": 659,
+        "cost": {
+          "input": 0.00000406,
+          "output": 0.00003304,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000385336
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH02",
+      "slice": "single",
+      "arm": "k3_120",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:f8e0587f44d60bc94b14b9f557f2b578dff79f6b736385cf034ffe1be03c3fc6"
+      ],
+      "responseHash": "sha256:9c521b53ccfda86119a1188088b0add13488b9fb48cd32cf2f069240c979b61f",
+      "usage": {
+        "input": 528,
+        "output": 178,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 128,
+        "totalTokens": 706,
+        "cost": {
+          "input": 0.00007392000000000001,
+          "output": 0.000049840000000000004,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00012376000000000002
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH02",
+      "slice": "single",
+      "arm": "k3_120",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:f8e0587f44d60bc94b14b9f557f2b578dff79f6b736385cf034ffe1be03c3fc6"
+      ],
+      "responseHash": "sha256:9c521b53ccfda86119a1188088b0add13488b9fb48cd32cf2f069240c979b61f",
+      "usage": {
+        "input": 16,
+        "output": 409,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 359,
+        "totalTokens": 937,
+        "cost": {
+          "input": 0.00000224,
+          "output": 0.00011452000000000001,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.00011819360000000001
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH02",
+      "slice": "single",
+      "arm": "k3_120",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:f8e0587f44d60bc94b14b9f557f2b578dff79f6b736385cf034ffe1be03c3fc6"
+      ],
+      "responseHash": "sha256:9c521b53ccfda86119a1188088b0add13488b9fb48cd32cf2f069240c979b61f",
+      "usage": {
+        "input": 16,
+        "output": 394,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 344,
+        "totalTokens": 922,
+        "cost": {
+          "input": 0.00000224,
+          "output": 0.00011032,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0001139936
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH02",
+      "slice": "single",
+      "arm": "k3_240",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:f8e0587f44d60bc94b14b9f557f2b578dff79f6b736385cf034ffe1be03c3fc6"
+      ],
+      "responseHash": "sha256:9c521b53ccfda86119a1188088b0add13488b9fb48cd32cf2f069240c979b61f",
+      "usage": {
+        "input": 29,
+        "output": 225,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 175,
+        "totalTokens": 766,
+        "cost": {
+          "input": 0.00000406,
+          "output": 0.000063,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000684936
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH02",
+      "slice": "single",
+      "arm": "k3_240",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:f8e0587f44d60bc94b14b9f557f2b578dff79f6b736385cf034ffe1be03c3fc6"
+      ],
+      "responseHash": "sha256:9c521b53ccfda86119a1188088b0add13488b9fb48cd32cf2f069240c979b61f",
+      "usage": {
+        "input": 29,
+        "output": 660,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 610,
+        "totalTokens": 1201,
+        "cost": {
+          "input": 0.00000406,
+          "output": 0.00018480000000000002,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.00019029360000000003
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH02",
+      "slice": "single",
+      "arm": "k3_240",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:f8e0587f44d60bc94b14b9f557f2b578dff79f6b736385cf034ffe1be03c3fc6"
+      ],
+      "responseHash": "sha256:9c521b53ccfda86119a1188088b0add13488b9fb48cd32cf2f069240c979b61f",
+      "usage": {
+        "input": 29,
+        "output": 474,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 424,
+        "totalTokens": 1015,
+        "cost": {
+          "input": 0.00000406,
+          "output": 0.00013272000000000002,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.00013821360000000003
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH02",
+      "slice": "single",
+      "arm": "k3_480",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:f8e0587f44d60bc94b14b9f557f2b578dff79f6b736385cf034ffe1be03c3fc6"
+      ],
+      "responseHash": "sha256:9c521b53ccfda86119a1188088b0add13488b9fb48cd32cf2f069240c979b61f",
+      "usage": {
+        "input": 29,
+        "output": 178,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 128,
+        "totalTokens": 719,
+        "cost": {
+          "input": 0.00000406,
+          "output": 0.000049840000000000004,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000553336
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH02",
+      "slice": "single",
+      "arm": "k3_480",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:f8e0587f44d60bc94b14b9f557f2b578dff79f6b736385cf034ffe1be03c3fc6"
+      ],
+      "responseHash": "sha256:9c521b53ccfda86119a1188088b0add13488b9fb48cd32cf2f069240c979b61f",
+      "usage": {
+        "input": 29,
+        "output": 364,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 314,
+        "totalTokens": 905,
+        "cost": {
+          "input": 0.00000406,
+          "output": 0.00010192000000000001,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.00010741360000000001
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH02",
+      "slice": "single",
+      "arm": "k3_480",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:f8e0587f44d60bc94b14b9f557f2b578dff79f6b736385cf034ffe1be03c3fc6"
+      ],
+      "responseHash": "sha256:9c521b53ccfda86119a1188088b0add13488b9fb48cd32cf2f069240c979b61f",
+      "usage": {
+        "input": 29,
+        "output": 132,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 82,
+        "totalTokens": 673,
+        "cost": {
+          "input": 0.00000406,
+          "output": 0.000036960000000000005,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000424536
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH03",
+      "slice": "single",
+      "arm": "k5_full",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6fd7f3782ee7eb7a931501460fdf2aa0d94e3940f85571c87aafd32306078151",
+      "usage": {
+        "input": 888,
+        "output": 126,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 78,
+        "totalTokens": 1014,
+        "cost": {
+          "input": 0.00012432,
+          "output": 0.00003528,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0001596
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH03",
+      "slice": "single",
+      "arm": "k5_full",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6fd7f3782ee7eb7a931501460fdf2aa0d94e3940f85571c87aafd32306078151",
+      "usage": {
+        "input": 120,
+        "output": 248,
+        "cacheRead": 768,
+        "cacheWrite": 0,
+        "reasoning": 200,
+        "totalTokens": 1136,
+        "cost": {
+          "input": 0.000016800000000000002,
+          "output": 0.00006944,
+          "cacheRead": 0.0000021503999999999998,
+          "cacheWrite": 0,
+          "total": 0.0000883904
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH03",
+      "slice": "single",
+      "arm": "k5_full",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6fd7f3782ee7eb7a931501460fdf2aa0d94e3940f85571c87aafd32306078151",
+      "usage": {
+        "input": 120,
+        "output": 235,
+        "cacheRead": 768,
+        "cacheWrite": 0,
+        "reasoning": 187,
+        "totalTokens": 1123,
+        "cost": {
+          "input": 0.000016800000000000002,
+          "output": 0.0000658,
+          "cacheRead": 0.0000021503999999999998,
+          "cacheWrite": 0,
+          "total": 0.0000847504
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH03",
+      "slice": "single",
+      "arm": "k3_full",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6fd7f3782ee7eb7a931501460fdf2aa0d94e3940f85571c87aafd32306078151",
+      "usage": {
+        "input": 605,
+        "output": 137,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 89,
+        "totalTokens": 742,
+        "cost": {
+          "input": 0.00008470000000000001,
+          "output": 0.000038360000000000005,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00012306000000000003
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH03",
+      "slice": "single",
+      "arm": "k3_full",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6fd7f3782ee7eb7a931501460fdf2aa0d94e3940f85571c87aafd32306078151",
+      "usage": {
+        "input": 93,
+        "output": 106,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 58,
+        "totalTokens": 711,
+        "cost": {
+          "input": 0.00001302,
+          "output": 0.00002968,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000441336
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH03",
+      "slice": "single",
+      "arm": "k3_full",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6fd7f3782ee7eb7a931501460fdf2aa0d94e3940f85571c87aafd32306078151",
+      "usage": {
+        "input": 93,
+        "output": 177,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 129,
+        "totalTokens": 782,
+        "cost": {
+          "input": 0.00001302,
+          "output": 0.000049560000000000007,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.00006401360000000001
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH03",
+      "slice": "single",
+      "arm": "k3_120",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6fd7f3782ee7eb7a931501460fdf2aa0d94e3940f85571c87aafd32306078151",
+      "usage": {
+        "input": 510,
+        "output": 237,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 189,
+        "totalTokens": 747,
+        "cost": {
+          "input": 0.0000714,
+          "output": 0.00006636000000000001,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00013776
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH03",
+      "slice": "single",
+      "arm": "k3_120",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6fd7f3782ee7eb7a931501460fdf2aa0d94e3940f85571c87aafd32306078151",
+      "usage": {
+        "input": 126,
+        "output": 135,
+        "cacheRead": 384,
+        "cacheWrite": 0,
+        "reasoning": 87,
+        "totalTokens": 645,
+        "cost": {
+          "input": 0.00001764,
+          "output": 0.000037800000000000004,
+          "cacheRead": 0.0000010751999999999999,
+          "cacheWrite": 0,
+          "total": 0.000056515200000000004
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH03",
+      "slice": "single",
+      "arm": "k3_120",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6fd7f3782ee7eb7a931501460fdf2aa0d94e3940f85571c87aafd32306078151",
+      "usage": {
+        "input": 126,
+        "output": 134,
+        "cacheRead": 384,
+        "cacheWrite": 0,
+        "reasoning": 86,
+        "totalTokens": 644,
+        "cost": {
+          "input": 0.00001764,
+          "output": 0.00003752,
+          "cacheRead": 0.0000010751999999999999,
+          "cacheWrite": 0,
+          "total": 0.0000562352
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH03",
+      "slice": "single",
+      "arm": "k3_240",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6fd7f3782ee7eb7a931501460fdf2aa0d94e3940f85571c87aafd32306078151",
+      "usage": {
+        "input": 305,
+        "output": 150,
+        "cacheRead": 256,
+        "cacheWrite": 0,
+        "reasoning": 102,
+        "totalTokens": 711,
+        "cost": {
+          "input": 0.0000427,
+          "output": 0.000042000000000000004,
+          "cacheRead": 7.168e-7,
+          "cacheWrite": 0,
+          "total": 0.0000854168
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH03",
+      "slice": "single",
+      "arm": "k3_240",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6fd7f3782ee7eb7a931501460fdf2aa0d94e3940f85571c87aafd32306078151",
+      "usage": {
+        "input": 49,
+        "output": 137,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 89,
+        "totalTokens": 698,
+        "cost": {
+          "input": 0.00000686,
+          "output": 0.000038360000000000005,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.000046653600000000003
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH03",
+      "slice": "single",
+      "arm": "k3_240",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6fd7f3782ee7eb7a931501460fdf2aa0d94e3940f85571c87aafd32306078151",
+      "usage": {
+        "input": 49,
+        "output": 157,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 109,
+        "totalTokens": 718,
+        "cost": {
+          "input": 0.00000686,
+          "output": 0.000043960000000000006,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.000052253600000000004
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH03",
+      "slice": "single",
+      "arm": "k3_480",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6fd7f3782ee7eb7a931501460fdf2aa0d94e3940f85571c87aafd32306078151",
+      "usage": {
+        "input": 93,
+        "output": 167,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 119,
+        "totalTokens": 772,
+        "cost": {
+          "input": 0.00001302,
+          "output": 0.000046760000000000006,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.00006121360000000001
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH03",
+      "slice": "single",
+      "arm": "k3_480",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6fd7f3782ee7eb7a931501460fdf2aa0d94e3940f85571c87aafd32306078151",
+      "usage": {
+        "input": 93,
+        "output": 234,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 186,
+        "totalTokens": 839,
+        "cost": {
+          "input": 0.00001302,
+          "output": 0.00006552000000000001,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.00007997360000000002
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH03",
+      "slice": "single",
+      "arm": "k3_480",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6fd7f3782ee7eb7a931501460fdf2aa0d94e3940f85571c87aafd32306078151",
+      "usage": {
+        "input": 93,
+        "output": 150,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 102,
+        "totalTokens": 755,
+        "cost": {
+          "input": 0.00001302,
+          "output": 0.000042000000000000004,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.000056453600000000004
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH04",
+      "slice": "multi",
+      "arm": "k5_full",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:0b0d687f5de892f5968ff0880190b74fcda0c8cb7d1868c5e7907e5ea20b0f71",
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6edd75a4cbd9610ac2468afe4e8c730e7665834499fbc35dabd6c3f51eb2fff5",
+      "usage": {
+        "input": 903,
+        "output": 596,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 504,
+        "totalTokens": 1499,
+        "cost": {
+          "input": 0.00012642,
+          "output": 0.00016688,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00029330000000000003
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH04",
+      "slice": "multi",
+      "arm": "k5_full",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:0b0d687f5de892f5968ff0880190b74fcda0c8cb7d1868c5e7907e5ea20b0f71",
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6edd75a4cbd9610ac2468afe4e8c730e7665834499fbc35dabd6c3f51eb2fff5",
+      "usage": {
+        "input": 7,
+        "output": 1619,
+        "cacheRead": 896,
+        "cacheWrite": 0,
+        "reasoning": 1527,
+        "totalTokens": 2522,
+        "cost": {
+          "input": 9.800000000000001e-7,
+          "output": 0.00045332000000000006,
+          "cacheRead": 0.0000025088,
+          "cacheWrite": 0,
+          "total": 0.00045680880000000006
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH04",
+      "slice": "multi",
+      "arm": "k5_full",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:0b0d687f5de892f5968ff0880190b74fcda0c8cb7d1868c5e7907e5ea20b0f71",
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6edd75a4cbd9610ac2468afe4e8c730e7665834499fbc35dabd6c3f51eb2fff5",
+      "usage": {
+        "input": 7,
+        "output": 778,
+        "cacheRead": 896,
+        "cacheWrite": 0,
+        "reasoning": 686,
+        "totalTokens": 1681,
+        "cost": {
+          "input": 9.800000000000001e-7,
+          "output": 0.00021784000000000001,
+          "cacheRead": 0.0000025088,
+          "cacheWrite": 0,
+          "total": 0.00022132880000000002
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH04",
+      "slice": "multi",
+      "arm": "k3_full",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:0b0d687f5de892f5968ff0880190b74fcda0c8cb7d1868c5e7907e5ea20b0f71",
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6edd75a4cbd9610ac2468afe4e8c730e7665834499fbc35dabd6c3f51eb2fff5",
+      "usage": {
+        "input": 629,
+        "output": 343,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 251,
+        "totalTokens": 972,
+        "cost": {
+          "input": 0.00008806000000000001,
+          "output": 0.00009604000000000001,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00018410000000000003
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH04",
+      "slice": "multi",
+      "arm": "k3_full",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:0b0d687f5de892f5968ff0880190b74fcda0c8cb7d1868c5e7907e5ea20b0f71",
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6edd75a4cbd9610ac2468afe4e8c730e7665834499fbc35dabd6c3f51eb2fff5",
+      "usage": {
+        "input": 117,
+        "output": 285,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 193,
+        "totalTokens": 914,
+        "cost": {
+          "input": 0.000016380000000000002,
+          "output": 0.0000798,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000976136
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH04",
+      "slice": "multi",
+      "arm": "k3_full",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:0b0d687f5de892f5968ff0880190b74fcda0c8cb7d1868c5e7907e5ea20b0f71",
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6edd75a4cbd9610ac2468afe4e8c730e7665834499fbc35dabd6c3f51eb2fff5",
+      "usage": {
+        "input": 117,
+        "output": 301,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 209,
+        "totalTokens": 930,
+        "cost": {
+          "input": 0.000016380000000000002,
+          "output": 0.00008428,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0001020936
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH04",
+      "slice": "multi",
+      "arm": "k3_120",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d",
+        "skill:0b0d687f5de892f5968ff0880190b74fcda0c8cb7d1868c5e7907e5ea20b0f71"
+      ],
+      "responseHash": "sha256:10568c33e70ad4f51a8293c49a7772b1bc583e77207429377fef36c560d04957",
+      "usage": {
+        "input": 516,
+        "output": 839,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 747,
+        "totalTokens": 1355,
+        "cost": {
+          "input": 0.00007224,
+          "output": 0.00023492,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00030716
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH04",
+      "slice": "multi",
+      "arm": "k3_120",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:0b0d687f5de892f5968ff0880190b74fcda0c8cb7d1868c5e7907e5ea20b0f71",
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6edd75a4cbd9610ac2468afe4e8c730e7665834499fbc35dabd6c3f51eb2fff5",
+      "usage": {
+        "input": 4,
+        "output": 516,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 424,
+        "totalTokens": 1032,
+        "cost": {
+          "input": 5.6e-7,
+          "output": 0.00014448,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0001464736
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH04",
+      "slice": "multi",
+      "arm": "k3_120",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:0b0d687f5de892f5968ff0880190b74fcda0c8cb7d1868c5e7907e5ea20b0f71",
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6edd75a4cbd9610ac2468afe4e8c730e7665834499fbc35dabd6c3f51eb2fff5",
+      "usage": {
+        "input": 4,
+        "output": 319,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 227,
+        "totalTokens": 835,
+        "cost": {
+          "input": 5.6e-7,
+          "output": 0.00008932,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000913136
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH04",
+      "slice": "multi",
+      "arm": "k3_240",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:0b0d687f5de892f5968ff0880190b74fcda0c8cb7d1868c5e7907e5ea20b0f71",
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6edd75a4cbd9610ac2468afe4e8c730e7665834499fbc35dabd6c3f51eb2fff5",
+      "usage": {
+        "input": 326,
+        "output": 432,
+        "cacheRead": 256,
+        "cacheWrite": 0,
+        "reasoning": 340,
+        "totalTokens": 1014,
+        "cost": {
+          "input": 0.000045640000000000003,
+          "output": 0.00012096000000000001,
+          "cacheRead": 7.168e-7,
+          "cacheWrite": 0,
+          "total": 0.0001673168
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH04",
+      "slice": "multi",
+      "arm": "k3_240",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:0b0d687f5de892f5968ff0880190b74fcda0c8cb7d1868c5e7907e5ea20b0f71",
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6edd75a4cbd9610ac2468afe4e8c730e7665834499fbc35dabd6c3f51eb2fff5",
+      "usage": {
+        "input": 70,
+        "output": 1076,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 984,
+        "totalTokens": 1658,
+        "cost": {
+          "input": 0.000009800000000000001,
+          "output": 0.00030128,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.00031251360000000004
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH04",
+      "slice": "multi",
+      "arm": "k3_240",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:0b0d687f5de892f5968ff0880190b74fcda0c8cb7d1868c5e7907e5ea20b0f71",
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6edd75a4cbd9610ac2468afe4e8c730e7665834499fbc35dabd6c3f51eb2fff5",
+      "usage": {
+        "input": 70,
+        "output": 214,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 122,
+        "totalTokens": 796,
+        "cost": {
+          "input": 0.000009800000000000001,
+          "output": 0.00005992,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000711536
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH04",
+      "slice": "multi",
+      "arm": "k3_480",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:0b0d687f5de892f5968ff0880190b74fcda0c8cb7d1868c5e7907e5ea20b0f71",
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6edd75a4cbd9610ac2468afe4e8c730e7665834499fbc35dabd6c3f51eb2fff5",
+      "usage": {
+        "input": 117,
+        "output": 620,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 528,
+        "totalTokens": 1249,
+        "cost": {
+          "input": 0.000016380000000000002,
+          "output": 0.00017360000000000002,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.00019141360000000002
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH04",
+      "slice": "multi",
+      "arm": "k3_480",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:0b0d687f5de892f5968ff0880190b74fcda0c8cb7d1868c5e7907e5ea20b0f71",
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6edd75a4cbd9610ac2468afe4e8c730e7665834499fbc35dabd6c3f51eb2fff5",
+      "usage": {
+        "input": 117,
+        "output": 270,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 178,
+        "totalTokens": 899,
+        "cost": {
+          "input": 0.000016380000000000002,
+          "output": 0.00007560000000000001,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.00009341360000000001
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH04",
+      "slice": "multi",
+      "arm": "k3_480",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:0b0d687f5de892f5968ff0880190b74fcda0c8cb7d1868c5e7907e5ea20b0f71",
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:6edd75a4cbd9610ac2468afe4e8c730e7665834499fbc35dabd6c3f51eb2fff5",
+      "usage": {
+        "input": 117,
+        "output": 2829,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 2737,
+        "totalTokens": 3458,
+        "cost": {
+          "input": 0.000016380000000000002,
+          "output": 0.0007921200000000001,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0008099336000000001
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH05",
+      "slice": "multi",
+      "arm": "k5_full",
+      "repeatIndex": 0,
+      "exactSetMatch": false,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:03165140889cff61f45938f8b8af2a38980514158712b650f541a1220edb0081"
+      ],
+      "responseHash": "sha256:bfab16445745eab395ea94420e9c8f5e1d7dd4b6e1e7867604bb3756d1ca3f72",
+      "usage": {
+        "input": 849,
+        "output": 8045,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 8000,
+        "totalTokens": 8894,
+        "cost": {
+          "input": 0.00011886000000000001,
+          "output": 0.0022526,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00237146
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH05",
+      "slice": "multi",
+      "arm": "k5_full",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:03165140889cff61f45938f8b8af2a38980514158712b650f541a1220edb0081",
+        "skill:e8da2ec737ed6579d59d7ebbc552b452d5f1a6e25cf470b5205751d607e39ec8"
+      ],
+      "responseHash": "sha256:15d011ed42902daee541a7469123e48e87914cd481490665f467b55f710f06c2",
+      "usage": {
+        "input": 81,
+        "output": 1735,
+        "cacheRead": 768,
+        "cacheWrite": 0,
+        "reasoning": 1650,
+        "totalTokens": 2584,
+        "cost": {
+          "input": 0.000011340000000000002,
+          "output": 0.00048580000000000004,
+          "cacheRead": 0.0000021503999999999998,
+          "cacheWrite": 0,
+          "total": 0.0004992904000000001
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH05",
+      "slice": "multi",
+      "arm": "k5_full",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:03165140889cff61f45938f8b8af2a38980514158712b650f541a1220edb0081",
+        "skill:e8da2ec737ed6579d59d7ebbc552b452d5f1a6e25cf470b5205751d607e39ec8"
+      ],
+      "responseHash": "sha256:15d011ed42902daee541a7469123e48e87914cd481490665f467b55f710f06c2",
+      "usage": {
+        "input": 81,
+        "output": 1839,
+        "cacheRead": 768,
+        "cacheWrite": 0,
+        "reasoning": 1754,
+        "totalTokens": 2688,
+        "cost": {
+          "input": 0.000011340000000000002,
+          "output": 0.00051492,
+          "cacheRead": 0.0000021503999999999998,
+          "cacheWrite": 0,
+          "total": 0.0005284104
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH05",
+      "slice": "multi",
+      "arm": "k3_full",
+      "repeatIndex": 0,
+      "exactSetMatch": false,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:03165140889cff61f45938f8b8af2a38980514158712b650f541a1220edb0081"
+      ],
+      "responseHash": "sha256:bfab16445745eab395ea94420e9c8f5e1d7dd4b6e1e7867604bb3756d1ca3f72",
+      "usage": {
+        "input": 596,
+        "output": 1340,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 1295,
+        "totalTokens": 1936,
+        "cost": {
+          "input": 0.00008344,
+          "output": 0.0003752,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00045864
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH05",
+      "slice": "multi",
+      "arm": "k3_full",
+      "repeatIndex": 1,
+      "exactSetMatch": false,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:03165140889cff61f45938f8b8af2a38980514158712b650f541a1220edb0081"
+      ],
+      "responseHash": "sha256:bfab16445745eab395ea94420e9c8f5e1d7dd4b6e1e7867604bb3756d1ca3f72",
+      "usage": {
+        "input": 84,
+        "output": 228,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 183,
+        "totalTokens": 824,
+        "cost": {
+          "input": 0.000011760000000000001,
+          "output": 0.00006384,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000770336
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH05",
+      "slice": "multi",
+      "arm": "k3_full",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:03165140889cff61f45938f8b8af2a38980514158712b650f541a1220edb0081",
+        "skill:e8da2ec737ed6579d59d7ebbc552b452d5f1a6e25cf470b5205751d607e39ec8"
+      ],
+      "responseHash": "sha256:15d011ed42902daee541a7469123e48e87914cd481490665f467b55f710f06c2",
+      "usage": {
+        "input": 84,
+        "output": 7105,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 7020,
+        "totalTokens": 7701,
+        "cost": {
+          "input": 0.000011760000000000001,
+          "output": 0.0019894,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0020025936
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH05",
+      "slice": "multi",
+      "arm": "k3_120",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:03165140889cff61f45938f8b8af2a38980514158712b650f541a1220edb0081",
+        "skill:e8da2ec737ed6579d59d7ebbc552b452d5f1a6e25cf470b5205751d607e39ec8"
+      ],
+      "responseHash": "sha256:15d011ed42902daee541a7469123e48e87914cd481490665f467b55f710f06c2",
+      "usage": {
+        "input": 501,
+        "output": 8121,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 8036,
+        "totalTokens": 8622,
+        "cost": {
+          "input": 0.00007014,
+          "output": 0.0022738800000000003,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0023440200000000005
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH05",
+      "slice": "multi",
+      "arm": "k3_120",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:03165140889cff61f45938f8b8af2a38980514158712b650f541a1220edb0081",
+        "skill:e8da2ec737ed6579d59d7ebbc552b452d5f1a6e25cf470b5205751d607e39ec8"
+      ],
+      "responseHash": "sha256:15d011ed42902daee541a7469123e48e87914cd481490665f467b55f710f06c2",
+      "usage": {
+        "input": 117,
+        "output": 370,
+        "cacheRead": 384,
+        "cacheWrite": 0,
+        "reasoning": 285,
+        "totalTokens": 871,
+        "cost": {
+          "input": 0.000016380000000000002,
+          "output": 0.00010360000000000001,
+          "cacheRead": 0.0000010751999999999999,
+          "cacheWrite": 0,
+          "total": 0.00012105520000000001
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH05",
+      "slice": "multi",
+      "arm": "k3_120",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:03165140889cff61f45938f8b8af2a38980514158712b650f541a1220edb0081",
+        "skill:e8da2ec737ed6579d59d7ebbc552b452d5f1a6e25cf470b5205751d607e39ec8"
+      ],
+      "responseHash": "sha256:15d011ed42902daee541a7469123e48e87914cd481490665f467b55f710f06c2",
+      "usage": {
+        "input": 117,
+        "output": 358,
+        "cacheRead": 384,
+        "cacheWrite": 0,
+        "reasoning": 273,
+        "totalTokens": 859,
+        "cost": {
+          "input": 0.000016380000000000002,
+          "output": 0.00010024,
+          "cacheRead": 0.0000010751999999999999,
+          "cacheWrite": 0,
+          "total": 0.0001176952
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH05",
+      "slice": "multi",
+      "arm": "k3_240",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:03165140889cff61f45938f8b8af2a38980514158712b650f541a1220edb0081",
+        "skill:e8da2ec737ed6579d59d7ebbc552b452d5f1a6e25cf470b5205751d607e39ec8"
+      ],
+      "responseHash": "sha256:15d011ed42902daee541a7469123e48e87914cd481490665f467b55f710f06c2",
+      "usage": {
+        "input": 295,
+        "output": 612,
+        "cacheRead": 256,
+        "cacheWrite": 0,
+        "reasoning": 527,
+        "totalTokens": 1163,
+        "cost": {
+          "input": 0.0000413,
+          "output": 0.00017136,
+          "cacheRead": 7.168e-7,
+          "cacheWrite": 0,
+          "total": 0.0002133768
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH05",
+      "slice": "multi",
+      "arm": "k3_240",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:03165140889cff61f45938f8b8af2a38980514158712b650f541a1220edb0081",
+        "skill:e8da2ec737ed6579d59d7ebbc552b452d5f1a6e25cf470b5205751d607e39ec8"
+      ],
+      "responseHash": "sha256:15d011ed42902daee541a7469123e48e87914cd481490665f467b55f710f06c2",
+      "usage": {
+        "input": 39,
+        "output": 623,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 538,
+        "totalTokens": 1174,
+        "cost": {
+          "input": 0.00000546,
+          "output": 0.00017444000000000002,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0001813336
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH05",
+      "slice": "multi",
+      "arm": "k3_240",
+      "repeatIndex": 2,
+      "exactSetMatch": false,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:03165140889cff61f45938f8b8af2a38980514158712b650f541a1220edb0081"
+      ],
+      "responseHash": "sha256:bfab16445745eab395ea94420e9c8f5e1d7dd4b6e1e7867604bb3756d1ca3f72",
+      "usage": {
+        "input": 39,
+        "output": 4262,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 4217,
+        "totalTokens": 4813,
+        "cost": {
+          "input": 0.00000546,
+          "output": 0.00119336,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0012002536000000003
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH05",
+      "slice": "multi",
+      "arm": "k3_480",
+      "repeatIndex": 0,
+      "exactSetMatch": false,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:03165140889cff61f45938f8b8af2a38980514158712b650f541a1220edb0081"
+      ],
+      "responseHash": "sha256:bfab16445745eab395ea94420e9c8f5e1d7dd4b6e1e7867604bb3756d1ca3f72",
+      "usage": {
+        "input": 84,
+        "output": 3684,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 3639,
+        "totalTokens": 4280,
+        "cost": {
+          "input": 0.000011760000000000001,
+          "output": 0.00103152,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0010447136
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH05",
+      "slice": "multi",
+      "arm": "k3_480",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:03165140889cff61f45938f8b8af2a38980514158712b650f541a1220edb0081",
+        "skill:e8da2ec737ed6579d59d7ebbc552b452d5f1a6e25cf470b5205751d607e39ec8"
+      ],
+      "responseHash": "sha256:15d011ed42902daee541a7469123e48e87914cd481490665f467b55f710f06c2",
+      "usage": {
+        "input": 84,
+        "output": 7219,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 7134,
+        "totalTokens": 7815,
+        "cost": {
+          "input": 0.000011760000000000001,
+          "output": 0.00202132,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0020345136
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH05",
+      "slice": "multi",
+      "arm": "k3_480",
+      "repeatIndex": 2,
+      "exactSetMatch": false,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:03165140889cff61f45938f8b8af2a38980514158712b650f541a1220edb0081"
+      ],
+      "responseHash": "sha256:bfab16445745eab395ea94420e9c8f5e1d7dd4b6e1e7867604bb3756d1ca3f72",
+      "usage": {
+        "input": 84,
+        "output": 6340,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 6295,
+        "totalTokens": 6936,
+        "cost": {
+          "input": 0.000011760000000000001,
+          "output": 0.0017752000000000002,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0017883936000000003
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH06",
+      "slice": "multi",
+      "arm": "k5_full",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:bec8e35a8e60b62db96e41a97f5ba935202b9c889add41060d989ee126aac730",
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:f3750efbc355ddc5bd6c87ce9dc6e6bca49fd9b3f2514f5b0cba7bf6a4fdaa3f",
+      "usage": {
+        "input": 1002,
+        "output": 1994,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 1908,
+        "totalTokens": 2996,
+        "cost": {
+          "input": 0.00014028,
+          "output": 0.0005583200000000001,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0006986000000000001
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH06",
+      "slice": "multi",
+      "arm": "k5_full",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:bec8e35a8e60b62db96e41a97f5ba935202b9c889add41060d989ee126aac730",
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:f3750efbc355ddc5bd6c87ce9dc6e6bca49fd9b3f2514f5b0cba7bf6a4fdaa3f",
+      "usage": {
+        "input": 106,
+        "output": 761,
+        "cacheRead": 896,
+        "cacheWrite": 0,
+        "reasoning": 675,
+        "totalTokens": 1763,
+        "cost": {
+          "input": 0.00001484,
+          "output": 0.00021308,
+          "cacheRead": 0.0000025088,
+          "cacheWrite": 0,
+          "total": 0.0002304288
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH06",
+      "slice": "multi",
+      "arm": "k5_full",
+      "repeatIndex": 2,
+      "exactSetMatch": false,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:bec8e35a8e60b62db96e41a97f5ba935202b9c889add41060d989ee126aac730"
+      ],
+      "responseHash": "sha256:3f5840de84c584cc5f6bca62686be177381934629ec2212e64e6904a138942b4",
+      "usage": {
+        "input": 106,
+        "output": 467,
+        "cacheRead": 896,
+        "cacheWrite": 0,
+        "reasoning": 420,
+        "totalTokens": 1469,
+        "cost": {
+          "input": 0.00001484,
+          "output": 0.00013076,
+          "cacheRead": 0.0000025088,
+          "cacheWrite": 0,
+          "total": 0.00014810880000000001
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH06",
+      "slice": "multi",
+      "arm": "k3_full",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:bec8e35a8e60b62db96e41a97f5ba935202b9c889add41060d989ee126aac730",
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:f3750efbc355ddc5bd6c87ce9dc6e6bca49fd9b3f2514f5b0cba7bf6a4fdaa3f",
+      "usage": {
+        "input": 666,
+        "output": 2106,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 2020,
+        "totalTokens": 2772,
+        "cost": {
+          "input": 0.00009324000000000001,
+          "output": 0.0005896800000000001,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0006829200000000001
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH06",
+      "slice": "multi",
+      "arm": "k3_full",
+      "repeatIndex": 1,
+      "exactSetMatch": false,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:bec8e35a8e60b62db96e41a97f5ba935202b9c889add41060d989ee126aac730"
+      ],
+      "responseHash": "sha256:3f5840de84c584cc5f6bca62686be177381934629ec2212e64e6904a138942b4",
+      "usage": {
+        "input": 26,
+        "output": 242,
+        "cacheRead": 640,
+        "cacheWrite": 0,
+        "reasoning": 195,
+        "totalTokens": 908,
+        "cost": {
+          "input": 0.0000036400000000000003,
+          "output": 0.00006776,
+          "cacheRead": 0.000001792,
+          "cacheWrite": 0,
+          "total": 0.000073192
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH06",
+      "slice": "multi",
+      "arm": "k3_full",
+      "repeatIndex": 2,
+      "exactSetMatch": false,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:bec8e35a8e60b62db96e41a97f5ba935202b9c889add41060d989ee126aac730"
+      ],
+      "responseHash": "sha256:3f5840de84c584cc5f6bca62686be177381934629ec2212e64e6904a138942b4",
+      "usage": {
+        "input": 26,
+        "output": 535,
+        "cacheRead": 640,
+        "cacheWrite": 0,
+        "reasoning": 488,
+        "totalTokens": 1201,
+        "cost": {
+          "input": 0.0000036400000000000003,
+          "output": 0.0001498,
+          "cacheRead": 0.000001792,
+          "cacheWrite": 0,
+          "total": 0.00015523200000000002
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH06",
+      "slice": "multi",
+      "arm": "k3_120",
+      "repeatIndex": 0,
+      "exactSetMatch": false,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:bec8e35a8e60b62db96e41a97f5ba935202b9c889add41060d989ee126aac730"
+      ],
+      "responseHash": "sha256:3f5840de84c584cc5f6bca62686be177381934629ec2212e64e6904a138942b4",
+      "usage": {
+        "input": 525,
+        "output": 458,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 411,
+        "totalTokens": 983,
+        "cost": {
+          "input": 0.00007350000000000001,
+          "output": 0.00012824,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00020174
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH06",
+      "slice": "multi",
+      "arm": "k3_120",
+      "repeatIndex": 1,
+      "exactSetMatch": false,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:bec8e35a8e60b62db96e41a97f5ba935202b9c889add41060d989ee126aac730"
+      ],
+      "responseHash": "sha256:3f5840de84c584cc5f6bca62686be177381934629ec2212e64e6904a138942b4",
+      "usage": {
+        "input": 13,
+        "output": 6334,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 6287,
+        "totalTokens": 6859,
+        "cost": {
+          "input": 0.0000018200000000000002,
+          "output": 0.0017735200000000002,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0017767736000000004
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH06",
+      "slice": "multi",
+      "arm": "k3_120",
+      "repeatIndex": 2,
+      "exactSetMatch": false,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:bec8e35a8e60b62db96e41a97f5ba935202b9c889add41060d989ee126aac730"
+      ],
+      "responseHash": "sha256:3f5840de84c584cc5f6bca62686be177381934629ec2212e64e6904a138942b4",
+      "usage": {
+        "input": 13,
+        "output": 709,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 662,
+        "totalTokens": 1234,
+        "cost": {
+          "input": 0.0000018200000000000002,
+          "output": 0.00019852000000000002,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.00020177360000000002
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH06",
+      "slice": "multi",
+      "arm": "k3_240",
+      "repeatIndex": 0,
+      "exactSetMatch": false,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:bec8e35a8e60b62db96e41a97f5ba935202b9c889add41060d989ee126aac730"
+      ],
+      "responseHash": "sha256:3f5840de84c584cc5f6bca62686be177381934629ec2212e64e6904a138942b4",
+      "usage": {
+        "input": 332,
+        "output": 534,
+        "cacheRead": 256,
+        "cacheWrite": 0,
+        "reasoning": 487,
+        "totalTokens": 1122,
+        "cost": {
+          "input": 0.00004648,
+          "output": 0.00014952000000000002,
+          "cacheRead": 7.168e-7,
+          "cacheWrite": 0,
+          "total": 0.00019671680000000002
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH06",
+      "slice": "multi",
+      "arm": "k3_240",
+      "repeatIndex": 1,
+      "exactSetMatch": false,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:bec8e35a8e60b62db96e41a97f5ba935202b9c889add41060d989ee126aac730"
+      ],
+      "responseHash": "sha256:3f5840de84c584cc5f6bca62686be177381934629ec2212e64e6904a138942b4",
+      "usage": {
+        "input": 76,
+        "output": 551,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 504,
+        "totalTokens": 1139,
+        "cost": {
+          "input": 0.000010640000000000001,
+          "output": 0.00015428000000000002,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0001663536
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH06",
+      "slice": "multi",
+      "arm": "k3_240",
+      "repeatIndex": 2,
+      "exactSetMatch": false,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:bec8e35a8e60b62db96e41a97f5ba935202b9c889add41060d989ee126aac730"
+      ],
+      "responseHash": "sha256:3f5840de84c584cc5f6bca62686be177381934629ec2212e64e6904a138942b4",
+      "usage": {
+        "input": 76,
+        "output": 2111,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 2064,
+        "totalTokens": 2699,
+        "cost": {
+          "input": 0.000010640000000000001,
+          "output": 0.00059108,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0006031536
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH06",
+      "slice": "multi",
+      "arm": "k3_480",
+      "repeatIndex": 0,
+      "exactSetMatch": false,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:bec8e35a8e60b62db96e41a97f5ba935202b9c889add41060d989ee126aac730"
+      ],
+      "responseHash": "sha256:3f5840de84c584cc5f6bca62686be177381934629ec2212e64e6904a138942b4",
+      "usage": {
+        "input": 21,
+        "output": 547,
+        "cacheRead": 640,
+        "cacheWrite": 0,
+        "reasoning": 500,
+        "totalTokens": 1208,
+        "cost": {
+          "input": 0.0000029400000000000002,
+          "output": 0.00015316,
+          "cacheRead": 0.000001792,
+          "cacheWrite": 0,
+          "total": 0.000157892
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH06",
+      "slice": "multi",
+      "arm": "k3_480",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:bec8e35a8e60b62db96e41a97f5ba935202b9c889add41060d989ee126aac730",
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:f3750efbc355ddc5bd6c87ce9dc6e6bca49fd9b3f2514f5b0cba7bf6a4fdaa3f",
+      "usage": {
+        "input": 21,
+        "output": 1481,
+        "cacheRead": 640,
+        "cacheWrite": 0,
+        "reasoning": 1395,
+        "totalTokens": 2142,
+        "cost": {
+          "input": 0.0000029400000000000002,
+          "output": 0.00041468,
+          "cacheRead": 0.000001792,
+          "cacheWrite": 0,
+          "total": 0.00041941200000000003
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH06",
+      "slice": "multi",
+      "arm": "k3_480",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:bec8e35a8e60b62db96e41a97f5ba935202b9c889add41060d989ee126aac730",
+        "skill:669a5a164b1141e9d42f7cf0974122b71ec705616bb9fe6a5dcd34956162130d"
+      ],
+      "responseHash": "sha256:f3750efbc355ddc5bd6c87ce9dc6e6bca49fd9b3f2514f5b0cba7bf6a4fdaa3f",
+      "usage": {
+        "input": 21,
+        "output": 685,
+        "cacheRead": 640,
+        "cacheWrite": 0,
+        "reasoning": 599,
+        "totalTokens": 1346,
+        "cost": {
+          "input": 0.0000029400000000000002,
+          "output": 0.0001918,
+          "cacheRead": 0.000001792,
+          "cacheWrite": 0,
+          "total": 0.000196532
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH07",
+      "slice": "no_skill",
+      "arm": "k5_full",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 864,
+        "output": 78,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 69,
+        "totalTokens": 942,
+        "cost": {
+          "input": 0.00012096000000000001,
+          "output": 0.00002184,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0001428
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH07",
+      "slice": "no_skill",
+      "arm": "k5_full",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 96,
+        "output": 53,
+        "cacheRead": 768,
+        "cacheWrite": 0,
+        "reasoning": 44,
+        "totalTokens": 917,
+        "cost": {
+          "input": 0.00001344,
+          "output": 0.00001484,
+          "cacheRead": 0.0000021503999999999998,
+          "cacheWrite": 0,
+          "total": 0.0000304304
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH07",
+      "slice": "no_skill",
+      "arm": "k5_full",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 96,
+        "output": 71,
+        "cacheRead": 768,
+        "cacheWrite": 0,
+        "reasoning": 62,
+        "totalTokens": 935,
+        "cost": {
+          "input": 0.00001344,
+          "output": 0.000019880000000000003,
+          "cacheRead": 0.0000021503999999999998,
+          "cacheWrite": 0,
+          "total": 0.0000354704
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH07",
+      "slice": "no_skill",
+      "arm": "k3_full",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 542,
+        "output": 74,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 65,
+        "totalTokens": 616,
+        "cost": {
+          "input": 0.00007588,
+          "output": 0.00002072,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0000966
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH07",
+      "slice": "no_skill",
+      "arm": "k3_full",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 30,
+        "output": 83,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 74,
+        "totalTokens": 625,
+        "cost": {
+          "input": 0.0000042000000000000004,
+          "output": 0.00002324,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000288736
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH07",
+      "slice": "no_skill",
+      "arm": "k3_full",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 30,
+        "output": 88,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 79,
+        "totalTokens": 630,
+        "cost": {
+          "input": 0.0000042000000000000004,
+          "output": 0.00002464,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000302736
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH07",
+      "slice": "no_skill",
+      "arm": "k3_120",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 481,
+        "output": 100,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 91,
+        "totalTokens": 581,
+        "cost": {
+          "input": 0.00006734,
+          "output": 0.000028000000000000003,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00009534
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH07",
+      "slice": "no_skill",
+      "arm": "k3_120",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 97,
+        "output": 113,
+        "cacheRead": 384,
+        "cacheWrite": 0,
+        "reasoning": 104,
+        "totalTokens": 594,
+        "cost": {
+          "input": 0.00001358,
+          "output": 0.00003164,
+          "cacheRead": 0.0000010751999999999999,
+          "cacheWrite": 0,
+          "total": 0.000046295200000000004
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH07",
+      "slice": "no_skill",
+      "arm": "k3_120",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 97,
+        "output": 49,
+        "cacheRead": 384,
+        "cacheWrite": 0,
+        "reasoning": 40,
+        "totalTokens": 530,
+        "cost": {
+          "input": 0.00001358,
+          "output": 0.00001372,
+          "cacheRead": 0.0000010751999999999999,
+          "cacheWrite": 0,
+          "total": 0.0000283752
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH07",
+      "slice": "no_skill",
+      "arm": "k3_240",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 25,
+        "output": 122,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 113,
+        "totalTokens": 659,
+        "cost": {
+          "input": 0.0000035000000000000004,
+          "output": 0.000034160000000000005,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000390936
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH07",
+      "slice": "no_skill",
+      "arm": "k3_240",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 25,
+        "output": 78,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 69,
+        "totalTokens": 615,
+        "cost": {
+          "input": 0.0000035000000000000004,
+          "output": 0.00002184,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000267736
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH07",
+      "slice": "no_skill",
+      "arm": "k3_240",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 25,
+        "output": 69,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 60,
+        "totalTokens": 606,
+        "cost": {
+          "input": 0.0000035000000000000004,
+          "output": 0.00001932,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000242536
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH07",
+      "slice": "no_skill",
+      "arm": "k3_480",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 30,
+        "output": 108,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 99,
+        "totalTokens": 650,
+        "cost": {
+          "input": 0.0000042000000000000004,
+          "output": 0.000030240000000000002,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000358736
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH07",
+      "slice": "no_skill",
+      "arm": "k3_480",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 30,
+        "output": 82,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 73,
+        "totalTokens": 624,
+        "cost": {
+          "input": 0.0000042000000000000004,
+          "output": 0.00002296,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000285936
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH07",
+      "slice": "no_skill",
+      "arm": "k3_480",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 30,
+        "output": 166,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 157,
+        "totalTokens": 708,
+        "cost": {
+          "input": 0.0000042000000000000004,
+          "output": 0.00004648,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000521136
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH08",
+      "slice": "no_skill",
+      "arm": "k5_full",
+      "repeatIndex": 0,
+      "exactSetMatch": false,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:0b0d687f5de892f5968ff0880190b74fcda0c8cb7d1868c5e7907e5ea20b0f71"
+      ],
+      "responseHash": "sha256:cf2e592f8a25a7cfcab4fdf3ff60dcb9f90e2a2b5a5ffbbb453943549fe74208",
+      "usage": {
+        "input": 891,
+        "output": 328,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 275,
+        "totalTokens": 1219,
+        "cost": {
+          "input": 0.00012474,
+          "output": 0.00009184,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00021658000000000002
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH08",
+      "slice": "no_skill",
+      "arm": "k5_full",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 123,
+        "output": 122,
+        "cacheRead": 768,
+        "cacheWrite": 0,
+        "reasoning": 113,
+        "totalTokens": 1013,
+        "cost": {
+          "input": 0.00001722,
+          "output": 0.000034160000000000005,
+          "cacheRead": 0.0000021503999999999998,
+          "cacheWrite": 0,
+          "total": 0.000053530400000000005
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH08",
+      "slice": "no_skill",
+      "arm": "k5_full",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 123,
+        "output": 658,
+        "cacheRead": 768,
+        "cacheWrite": 0,
+        "reasoning": 649,
+        "totalTokens": 1549,
+        "cost": {
+          "input": 0.00001722,
+          "output": 0.00018424,
+          "cacheRead": 0.0000021503999999999998,
+          "cacheWrite": 0,
+          "total": 0.0002036104
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH08",
+      "slice": "no_skill",
+      "arm": "k3_full",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 573,
+        "output": 184,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 175,
+        "totalTokens": 757,
+        "cost": {
+          "input": 0.00008022,
+          "output": 0.00005152,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00013174
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH08",
+      "slice": "no_skill",
+      "arm": "k3_full",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 61,
+        "output": 111,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 102,
+        "totalTokens": 684,
+        "cost": {
+          "input": 0.000008540000000000001,
+          "output": 0.00003108,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000410536
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH08",
+      "slice": "no_skill",
+      "arm": "k3_full",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 61,
+        "output": 184,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 175,
+        "totalTokens": 757,
+        "cost": {
+          "input": 0.000008540000000000001,
+          "output": 0.00005152,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000614936
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH08",
+      "slice": "no_skill",
+      "arm": "k3_120",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 508,
+        "output": 427,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 418,
+        "totalTokens": 935,
+        "cost": {
+          "input": 0.00007112000000000001,
+          "output": 0.00011956000000000001,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00019068000000000004
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH08",
+      "slice": "no_skill",
+      "arm": "k3_120",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 124,
+        "output": 104,
+        "cacheRead": 384,
+        "cacheWrite": 0,
+        "reasoning": 95,
+        "totalTokens": 612,
+        "cost": {
+          "input": 0.00001736,
+          "output": 0.000029120000000000002,
+          "cacheRead": 0.0000010751999999999999,
+          "cacheWrite": 0,
+          "total": 0.0000475552
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH08",
+      "slice": "no_skill",
+      "arm": "k3_120",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 124,
+        "output": 336,
+        "cacheRead": 384,
+        "cacheWrite": 0,
+        "reasoning": 327,
+        "totalTokens": 844,
+        "cost": {
+          "input": 0.00001736,
+          "output": 0.00009408000000000001,
+          "cacheRead": 0.0000010751999999999999,
+          "cacheWrite": 0,
+          "total": 0.0001125152
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH08",
+      "slice": "no_skill",
+      "arm": "k3_240",
+      "repeatIndex": 0,
+      "exactSetMatch": false,
+      "parseOk": true,
+      "selectedSkillIds": [
+        "skill:0b0d687f5de892f5968ff0880190b74fcda0c8cb7d1868c5e7907e5ea20b0f71"
+      ],
+      "responseHash": "sha256:cf2e592f8a25a7cfcab4fdf3ff60dcb9f90e2a2b5a5ffbbb453943549fe74208",
+      "usage": {
+        "input": 298,
+        "output": 164,
+        "cacheRead": 256,
+        "cacheWrite": 0,
+        "reasoning": 111,
+        "totalTokens": 718,
+        "cost": {
+          "input": 0.00004172,
+          "output": 0.00004592,
+          "cacheRead": 7.168e-7,
+          "cacheWrite": 0,
+          "total": 0.0000883568
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH08",
+      "slice": "no_skill",
+      "arm": "k3_240",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 42,
+        "output": 640,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 631,
+        "totalTokens": 1194,
+        "cost": {
+          "input": 0.0000058800000000000005,
+          "output": 0.00017920000000000002,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0001865136
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH08",
+      "slice": "no_skill",
+      "arm": "k3_240",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 42,
+        "output": 112,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 103,
+        "totalTokens": 666,
+        "cost": {
+          "input": 0.0000058800000000000005,
+          "output": 0.000031360000000000005,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000386736
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH08",
+      "slice": "no_skill",
+      "arm": "k3_480",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 61,
+        "output": 94,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 85,
+        "totalTokens": 667,
+        "cost": {
+          "input": 0.000008540000000000001,
+          "output": 0.000026320000000000002,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000362936
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH08",
+      "slice": "no_skill",
+      "arm": "k3_480",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 61,
+        "output": 275,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 266,
+        "totalTokens": 848,
+        "cost": {
+          "input": 0.000008540000000000001,
+          "output": 0.000077,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000869736
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH08",
+      "slice": "no_skill",
+      "arm": "k3_480",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 61,
+        "output": 92,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 83,
+        "totalTokens": 665,
+        "cost": {
+          "input": 0.000008540000000000001,
+          "output": 0.00002576,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000357336
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH09",
+      "slice": "no_skill",
+      "arm": "k5_full",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 882,
+        "output": 110,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 101,
+        "totalTokens": 992,
+        "cost": {
+          "input": 0.00012348,
+          "output": 0.0000308,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00015428000000000002
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH09",
+      "slice": "no_skill",
+      "arm": "k5_full",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 114,
+        "output": 83,
+        "cacheRead": 768,
+        "cacheWrite": 0,
+        "reasoning": 74,
+        "totalTokens": 965,
+        "cost": {
+          "input": 0.00001596,
+          "output": 0.00002324,
+          "cacheRead": 0.0000021503999999999998,
+          "cacheWrite": 0,
+          "total": 0.0000413504
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH09",
+      "slice": "no_skill",
+      "arm": "k5_full",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 114,
+        "output": 224,
+        "cacheRead": 768,
+        "cacheWrite": 0,
+        "reasoning": 215,
+        "totalTokens": 1106,
+        "cost": {
+          "input": 0.00001596,
+          "output": 0.00006272000000000001,
+          "cacheRead": 0.0000021503999999999998,
+          "cacheWrite": 0,
+          "total": 0.00008083040000000001
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH09",
+      "slice": "no_skill",
+      "arm": "k3_full",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 626,
+        "output": 100,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 91,
+        "totalTokens": 726,
+        "cost": {
+          "input": 0.00008764000000000001,
+          "output": 0.000028000000000000003,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00011564000000000001
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH09",
+      "slice": "no_skill",
+      "arm": "k3_full",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 114,
+        "output": 47,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 38,
+        "totalTokens": 673,
+        "cost": {
+          "input": 0.00001596,
+          "output": 0.000013160000000000001,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000305536
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH09",
+      "slice": "no_skill",
+      "arm": "k3_full",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 114,
+        "output": 38,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 29,
+        "totalTokens": 664,
+        "cost": {
+          "input": 0.00001596,
+          "output": 0.000010640000000000001,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.000028033600000000002
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH09",
+      "slice": "no_skill",
+      "arm": "k3_120",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 500,
+        "output": 36,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 27,
+        "totalTokens": 536,
+        "cost": {
+          "input": 0.00007000000000000001,
+          "output": 0.00001008,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00008008
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH09",
+      "slice": "no_skill",
+      "arm": "k3_120",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 116,
+        "output": 61,
+        "cacheRead": 384,
+        "cacheWrite": 0,
+        "reasoning": 52,
+        "totalTokens": 561,
+        "cost": {
+          "input": 0.00001624,
+          "output": 0.000017080000000000002,
+          "cacheRead": 0.0000010751999999999999,
+          "cacheWrite": 0,
+          "total": 0.0000343952
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH09",
+      "slice": "no_skill",
+      "arm": "k3_120",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 116,
+        "output": 92,
+        "cacheRead": 384,
+        "cacheWrite": 0,
+        "reasoning": 83,
+        "totalTokens": 592,
+        "cost": {
+          "input": 0.00001624,
+          "output": 0.00002576,
+          "cacheRead": 0.0000010751999999999999,
+          "cacheWrite": 0,
+          "total": 0.000043075200000000004
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH09",
+      "slice": "no_skill",
+      "arm": "k3_240",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 306,
+        "output": 37,
+        "cacheRead": 256,
+        "cacheWrite": 0,
+        "reasoning": 28,
+        "totalTokens": 599,
+        "cost": {
+          "input": 0.00004284,
+          "output": 0.00001036,
+          "cacheRead": 7.168e-7,
+          "cacheWrite": 0,
+          "total": 0.000053916800000000005
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH09",
+      "slice": "no_skill",
+      "arm": "k3_240",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 50,
+        "output": 53,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 44,
+        "totalTokens": 615,
+        "cost": {
+          "input": 0.000007000000000000001,
+          "output": 0.00001484,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000232736
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH09",
+      "slice": "no_skill",
+      "arm": "k3_240",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 50,
+        "output": 87,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 78,
+        "totalTokens": 649,
+        "cost": {
+          "input": 0.000007000000000000001,
+          "output": 0.00002436,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000327936
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH09",
+      "slice": "no_skill",
+      "arm": "k3_480",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 226,
+        "output": 54,
+        "cacheRead": 384,
+        "cacheWrite": 0,
+        "reasoning": 45,
+        "totalTokens": 664,
+        "cost": {
+          "input": 0.00003164,
+          "output": 0.000015120000000000001,
+          "cacheRead": 0.0000010751999999999999,
+          "cacheWrite": 0,
+          "total": 0.000047835200000000006
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH09",
+      "slice": "no_skill",
+      "arm": "k3_480",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 98,
+        "output": 66,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 57,
+        "totalTokens": 676,
+        "cost": {
+          "input": 0.00001372,
+          "output": 0.000018480000000000003,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000336336
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH09",
+      "slice": "no_skill",
+      "arm": "k3_480",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 98,
+        "output": 30,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 21,
+        "totalTokens": 640,
+        "cost": {
+          "input": 0.00001372,
+          "output": 0.000008400000000000001,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000235536
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH10",
+      "slice": "hard_confuser",
+      "arm": "k5_full",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 926,
+        "output": 217,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 208,
+        "totalTokens": 1143,
+        "cost": {
+          "input": 0.00012964,
+          "output": 0.00006076,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00019040000000000002
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH10",
+      "slice": "hard_confuser",
+      "arm": "k5_full",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 30,
+        "output": 40,
+        "cacheRead": 896,
+        "cacheWrite": 0,
+        "reasoning": 31,
+        "totalTokens": 966,
+        "cost": {
+          "input": 0.0000042000000000000004,
+          "output": 0.000011200000000000001,
+          "cacheRead": 0.0000025088,
+          "cacheWrite": 0,
+          "total": 0.0000179088
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH10",
+      "slice": "hard_confuser",
+      "arm": "k5_full",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 30,
+        "output": 223,
+        "cacheRead": 896,
+        "cacheWrite": 0,
+        "reasoning": 214,
+        "totalTokens": 1149,
+        "cost": {
+          "input": 0.0000042000000000000004,
+          "output": 0.00006244,
+          "cacheRead": 0.0000025088,
+          "cacheWrite": 0,
+          "total": 0.0000691488
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH10",
+      "slice": "hard_confuser",
+      "arm": "k3_full",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 604,
+        "output": 111,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 102,
+        "totalTokens": 715,
+        "cost": {
+          "input": 0.00008456,
+          "output": 0.00003108,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00011564
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH10",
+      "slice": "hard_confuser",
+      "arm": "k3_full",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 92,
+        "output": 142,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 133,
+        "totalTokens": 746,
+        "cost": {
+          "input": 0.00001288,
+          "output": 0.000039760000000000006,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.000054073600000000004
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH10",
+      "slice": "hard_confuser",
+      "arm": "k3_full",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 92,
+        "output": 111,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 102,
+        "totalTokens": 715,
+        "cost": {
+          "input": 0.00001288,
+          "output": 0.00003108,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000453936
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH10",
+      "slice": "hard_confuser",
+      "arm": "k3_120",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 509,
+        "output": 75,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 66,
+        "totalTokens": 584,
+        "cost": {
+          "input": 0.00007126,
+          "output": 0.000021000000000000002,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00009226000000000001
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH10",
+      "slice": "hard_confuser",
+      "arm": "k3_120",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 125,
+        "output": 103,
+        "cacheRead": 384,
+        "cacheWrite": 0,
+        "reasoning": 94,
+        "totalTokens": 612,
+        "cost": {
+          "input": 0.000017500000000000002,
+          "output": 0.000028840000000000002,
+          "cacheRead": 0.0000010751999999999999,
+          "cacheWrite": 0,
+          "total": 0.000047415200000000006
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH10",
+      "slice": "hard_confuser",
+      "arm": "k3_120",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 125,
+        "output": 63,
+        "cacheRead": 384,
+        "cacheWrite": 0,
+        "reasoning": 54,
+        "totalTokens": 572,
+        "cost": {
+          "input": 0.000017500000000000002,
+          "output": 0.00001764,
+          "cacheRead": 0.0000010751999999999999,
+          "cacheWrite": 0,
+          "total": 0.000036215200000000005
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH10",
+      "slice": "hard_confuser",
+      "arm": "k3_240",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 304,
+        "output": 82,
+        "cacheRead": 256,
+        "cacheWrite": 0,
+        "reasoning": 73,
+        "totalTokens": 642,
+        "cost": {
+          "input": 0.000042560000000000006,
+          "output": 0.00002296,
+          "cacheRead": 7.168e-7,
+          "cacheWrite": 0,
+          "total": 0.00006623680000000001
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH10",
+      "slice": "hard_confuser",
+      "arm": "k3_240",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 48,
+        "output": 121,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 112,
+        "totalTokens": 681,
+        "cost": {
+          "input": 0.00000672,
+          "output": 0.00003388,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000420336
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH10",
+      "slice": "hard_confuser",
+      "arm": "k3_240",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 48,
+        "output": 119,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 110,
+        "totalTokens": 679,
+        "cost": {
+          "input": 0.00000672,
+          "output": 0.00003332,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000414736
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH10",
+      "slice": "hard_confuser",
+      "arm": "k3_480",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 92,
+        "output": 67,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 58,
+        "totalTokens": 671,
+        "cost": {
+          "input": 0.00001288,
+          "output": 0.00001876,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000330736
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH10",
+      "slice": "hard_confuser",
+      "arm": "k3_480",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 92,
+        "output": 85,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 76,
+        "totalTokens": 689,
+        "cost": {
+          "input": 0.00001288,
+          "output": 0.000023800000000000003,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000381136
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH10",
+      "slice": "hard_confuser",
+      "arm": "k3_480",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 92,
+        "output": 93,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 84,
+        "totalTokens": 697,
+        "cost": {
+          "input": 0.00001288,
+          "output": 0.00002604,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000403536
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH11",
+      "slice": "hard_confuser",
+      "arm": "k5_full",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 920,
+        "output": 126,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 117,
+        "totalTokens": 1046,
+        "cost": {
+          "input": 0.00012880000000000001,
+          "output": 0.00003528,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00016408000000000001
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH11",
+      "slice": "hard_confuser",
+      "arm": "k5_full",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 24,
+        "output": 133,
+        "cacheRead": 896,
+        "cacheWrite": 0,
+        "reasoning": 124,
+        "totalTokens": 1053,
+        "cost": {
+          "input": 0.00000336,
+          "output": 0.00003724,
+          "cacheRead": 0.0000025088,
+          "cacheWrite": 0,
+          "total": 0.0000431088
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH11",
+      "slice": "hard_confuser",
+      "arm": "k5_full",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 24,
+        "output": 88,
+        "cacheRead": 896,
+        "cacheWrite": 0,
+        "reasoning": 79,
+        "totalTokens": 1008,
+        "cost": {
+          "input": 0.00000336,
+          "output": 0.00002464,
+          "cacheRead": 0.0000025088,
+          "cacheWrite": 0,
+          "total": 0.000030508800000000002
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH11",
+      "slice": "hard_confuser",
+      "arm": "k3_full",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 598,
+        "output": 55,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 46,
+        "totalTokens": 653,
+        "cost": {
+          "input": 0.00008372,
+          "output": 0.0000154,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00009912000000000001
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH11",
+      "slice": "hard_confuser",
+      "arm": "k3_full",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 86,
+        "output": 144,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 135,
+        "totalTokens": 742,
+        "cost": {
+          "input": 0.000012040000000000002,
+          "output": 0.00004032,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000537936
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH11",
+      "slice": "hard_confuser",
+      "arm": "k3_full",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 86,
+        "output": 95,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 86,
+        "totalTokens": 693,
+        "cost": {
+          "input": 0.000012040000000000002,
+          "output": 0.000026600000000000003,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000400736
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH11",
+      "slice": "hard_confuser",
+      "arm": "k3_120",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 518,
+        "output": 90,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 81,
+        "totalTokens": 608,
+        "cost": {
+          "input": 0.00007252,
+          "output": 0.000025200000000000003,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00009772
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH11",
+      "slice": "hard_confuser",
+      "arm": "k3_120",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 6,
+        "output": 92,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 83,
+        "totalTokens": 610,
+        "cost": {
+          "input": 8.4e-7,
+          "output": 0.00002576,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000280336
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH11",
+      "slice": "hard_confuser",
+      "arm": "k3_120",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 6,
+        "output": 118,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 109,
+        "totalTokens": 636,
+        "cost": {
+          "input": 8.4e-7,
+          "output": 0.00003304,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000353136
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH11",
+      "slice": "hard_confuser",
+      "arm": "k3_240",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 321,
+        "output": 225,
+        "cacheRead": 256,
+        "cacheWrite": 0,
+        "reasoning": 216,
+        "totalTokens": 802,
+        "cost": {
+          "input": 0.00004494,
+          "output": 0.000063,
+          "cacheRead": 7.168e-7,
+          "cacheWrite": 0,
+          "total": 0.0001086568
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH11",
+      "slice": "hard_confuser",
+      "arm": "k3_240",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 65,
+        "output": 112,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 103,
+        "totalTokens": 689,
+        "cost": {
+          "input": 0.000009100000000000001,
+          "output": 0.000031360000000000005,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000418936
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH11",
+      "slice": "hard_confuser",
+      "arm": "k3_240",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 65,
+        "output": 88,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 79,
+        "totalTokens": 665,
+        "cost": {
+          "input": 0.000009100000000000001,
+          "output": 0.00002464,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000351736
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH11",
+      "slice": "hard_confuser",
+      "arm": "k3_480",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 86,
+        "output": 95,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 86,
+        "totalTokens": 693,
+        "cost": {
+          "input": 0.000012040000000000002,
+          "output": 0.000026600000000000003,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000400736
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH11",
+      "slice": "hard_confuser",
+      "arm": "k3_480",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 86,
+        "output": 127,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 118,
+        "totalTokens": 725,
+        "cost": {
+          "input": 0.000012040000000000002,
+          "output": 0.000035560000000000005,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.000049033600000000004
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH11",
+      "slice": "hard_confuser",
+      "arm": "k3_480",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 86,
+        "output": 99,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 90,
+        "totalTokens": 697,
+        "cost": {
+          "input": 0.000012040000000000002,
+          "output": 0.000027720000000000002,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.000041193600000000005
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH12",
+      "slice": "hard_confuser",
+      "arm": "k5_full",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 953,
+        "output": 247,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 238,
+        "totalTokens": 1200,
+        "cost": {
+          "input": 0.00013342,
+          "output": 0.00006916000000000001,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00020258
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH12",
+      "slice": "hard_confuser",
+      "arm": "k5_full",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 57,
+        "output": 122,
+        "cacheRead": 896,
+        "cacheWrite": 0,
+        "reasoning": 113,
+        "totalTokens": 1075,
+        "cost": {
+          "input": 0.00000798,
+          "output": 0.000034160000000000005,
+          "cacheRead": 0.0000025088,
+          "cacheWrite": 0,
+          "total": 0.000044648800000000005
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH12",
+      "slice": "hard_confuser",
+      "arm": "k5_full",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 57,
+        "output": 435,
+        "cacheRead": 896,
+        "cacheWrite": 0,
+        "reasoning": 426,
+        "totalTokens": 1388,
+        "cost": {
+          "input": 0.00000798,
+          "output": 0.0001218,
+          "cacheRead": 0.0000025088,
+          "cacheWrite": 0,
+          "total": 0.0001322888
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH12",
+      "slice": "hard_confuser",
+      "arm": "k3_full",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 652,
+        "output": 74,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 65,
+        "totalTokens": 726,
+        "cost": {
+          "input": 0.00009128000000000001,
+          "output": 0.00002072,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00011200000000000001
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH12",
+      "slice": "hard_confuser",
+      "arm": "k3_full",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 12,
+        "output": 195,
+        "cacheRead": 640,
+        "cacheWrite": 0,
+        "reasoning": 186,
+        "totalTokens": 847,
+        "cost": {
+          "input": 0.00000168,
+          "output": 0.000054600000000000006,
+          "cacheRead": 0.000001792,
+          "cacheWrite": 0,
+          "total": 0.000058072
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH12",
+      "slice": "hard_confuser",
+      "arm": "k3_full",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 12,
+        "output": 144,
+        "cacheRead": 640,
+        "cacheWrite": 0,
+        "reasoning": 135,
+        "totalTokens": 796,
+        "cost": {
+          "input": 0.00000168,
+          "output": 0.00004032,
+          "cacheRead": 0.000001792,
+          "cacheWrite": 0,
+          "total": 0.000043792
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH12",
+      "slice": "hard_confuser",
+      "arm": "k3_120",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 514,
+        "output": 183,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 174,
+        "totalTokens": 697,
+        "cost": {
+          "input": 0.00007196000000000001,
+          "output": 0.000051240000000000004,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0001232
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH12",
+      "slice": "hard_confuser",
+      "arm": "k3_120",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 2,
+        "output": 211,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 202,
+        "totalTokens": 725,
+        "cost": {
+          "input": 2.8e-7,
+          "output": 0.000059080000000000004,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000607936
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH12",
+      "slice": "hard_confuser",
+      "arm": "k3_120",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 2,
+        "output": 84,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 75,
+        "totalTokens": 598,
+        "cost": {
+          "input": 2.8e-7,
+          "output": 0.000023520000000000002,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.000025233600000000002
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH12",
+      "slice": "hard_confuser",
+      "arm": "k3_240",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 320,
+        "output": 123,
+        "cacheRead": 256,
+        "cacheWrite": 0,
+        "reasoning": 114,
+        "totalTokens": 699,
+        "cost": {
+          "input": 0.000044800000000000005,
+          "output": 0.00003444,
+          "cacheRead": 7.168e-7,
+          "cacheWrite": 0,
+          "total": 0.0000799568
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH12",
+      "slice": "hard_confuser",
+      "arm": "k3_240",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 64,
+        "output": 311,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 302,
+        "totalTokens": 887,
+        "cost": {
+          "input": 0.00000896,
+          "output": 0.00008708,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.0000974736
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH12",
+      "slice": "hard_confuser",
+      "arm": "k3_240",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 64,
+        "output": 135,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "reasoning": 126,
+        "totalTokens": 711,
+        "cost": {
+          "input": 0.00000896,
+          "output": 0.000037800000000000004,
+          "cacheRead": 0.0000014336,
+          "cacheWrite": 0,
+          "total": 0.000048193600000000006
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH12",
+      "slice": "hard_confuser",
+      "arm": "k3_480",
+      "repeatIndex": 0,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 391,
+        "output": 134,
+        "cacheRead": 256,
+        "cacheWrite": 0,
+        "reasoning": 125,
+        "totalTokens": 781,
+        "cost": {
+          "input": 0.00005474,
+          "output": 0.00003752,
+          "cacheRead": 7.168e-7,
+          "cacheWrite": 0,
+          "total": 0.0000929768
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH12",
+      "slice": "hard_confuser",
+      "arm": "k3_480",
+      "repeatIndex": 1,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 7,
+        "output": 144,
+        "cacheRead": 640,
+        "cacheWrite": 0,
+        "reasoning": 135,
+        "totalTokens": 791,
+        "cost": {
+          "input": 9.800000000000001e-7,
+          "output": 0.00004032,
+          "cacheRead": 0.000001792,
+          "cacheWrite": 0,
+          "total": 0.000043092
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "caseId": "CBH12",
+      "slice": "hard_confuser",
+      "arm": "k3_480",
+      "repeatIndex": 2,
+      "exactSetMatch": true,
+      "parseOk": true,
+      "selectedSkillIds": [],
+      "responseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b",
+      "usage": {
+        "input": 7,
+        "output": 268,
+        "cacheRead": 640,
+        "cacheWrite": 0,
+        "reasoning": 259,
+        "totalTokens": 915,
+        "cost": {
+          "input": 9.800000000000001e-7,
+          "output": 0.00007504,
+          "cacheRead": 0.000001792,
+          "cacheWrite": 0,
+          "total": 0.00007781199999999999
+        }
+      },
+      "stopReason": "stop"
+    }
+  ]
+}

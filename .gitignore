@@ -4,3 +4,4 @@ node_modules/
 fixtures/skills/docx/
 __pycache__/
 .tmp-*/
+.serena/

@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "sourceMode": "real_host_model",
+  "generatedAt": "2026-08-20T06:55:51.907Z",
+  "protocolRevision": "selection-supplemental-host-v1",
+  "protocolPromptHash": "sha256:1dd515b13bfd5e5ccec3c016fdcc39cef335fff2674af3fa9c04ed5666f3fcb4",
+  "catalogHash": "sha256:9190e01aa3ea13951f7b60027fb03aeae79cf1c056cebe74acc7e24d939ffcd7",
+  "devGoldSetHash": "sha256:45af7f527178dd47903845984b64916a827e1cb6be747cec90cd87d614708966",
+  "model": {
+    "provider": "deepseek",
+    "modelId": "deepseek-v4-flash",
+    "api": "openai-completions",
+    "thinkingLevel": "high",
+    "temperature": "host_default_unavailable"
+  },
+  "boundaries": {
+    "focusedDevMissDiagnosticOnly": true,
+    "comparableToOriginalPairedArms": false,
+    "rawPromptsStored": false,
+    "rawResponsesStored": false,
+    "sessionPersistence": false,
+    "practiceObserverEnabled": false,
+    "userEnvironmentWrites": false
+  },
+  "cases": [
+    {
+      "caseId": "D01",
+      "queryHash": "sha256:2b1d818e7cdcbf01b94fe9998d2b2e60cbbdb20f501d806b8c18f65cc00655a6",
+      "goldSkillIds": [
+        "skill:2693c89e1de701aaad7cef99edaf14720ab58056b01d84b62bfc56c7d1d056d3"
+      ],
+      "initialCandidateIds": [
+        "skill:7660aa59099eaf428a38707b22ad78d930f95735b9131f688d889196941eec15"
+      ],
+      "initialRetrievalGoldAvailable": false,
+      "searchCalls": [
+        {
+          "queryHash": "sha256:4db978ab2ade5fedece92be92a71bd163832e1a1fc83360b13b6adfbdc51fd8b",
+          "queryLength": 30,
+          "hasLatin": true,
+          "limit": null
+        }
+      ],
+      "searchSkillsCalled": true,
+      "searchCallBoundRespected": true,
+      "validOutput": true,
+      "selectedSkillIds": [],
+      "exactSetMatch": false,
+      "adapterErrors": [],
+      "assistantTurnCount": 2,
+      "usage": {
+        "input": 1569,
+        "output": 231,
+        "cacheRead": 1664,
+        "cacheWrite": 0,
+        "reasoning": 166,
+        "totalTokens": 3464
+      },
+      "latencyMs": 4741.4046,
+      "rawResponseHash": "sha256:341f26cf24c58da9ecdc790b9d9d3e5264c1af34be63a998127816d09347e97b"
+    },
+    {
+      "caseId": "D04",
+      "queryHash": "sha256:1c9cdb8f276023b47fff996bcbf380305bc75cae3701982ab36349f15922dc4e",
+      "goldSkillIds": [
+        "skill:03165140889cff61f45938f8b8af2a38980514158712b650f541a1220edb0081"
+      ],
+      "initialCandidateIds": [],
+      "initialRetrievalGoldAvailable": false,
+      "searchCalls": [
+        {
+          "queryHash": "sha256:7398a1c5db704d195a4e41e96719ed85ef174b805a97e3e0103f62f74a956f51",
+          "queryLength": 40,
+          "hasLatin": true,
+          "limit": null
+        }
+      ],
+      "searchSkillsCalled": true,
+      "searchCallBoundRespected": true,
+      "validOutput": true,
+      "selectedSkillIds": [
+        "skill:03165140889cff61f45938f8b8af2a38980514158712b650f541a1220edb0081"
+      ],
+      "exactSetMatch": true,
+      "adapterErrors": [],
+      "assistantTurnCount": 2,
+      "usage": {
+        "input": 1892,
+        "output": 476,
+        "cacheRead": 1536,
+        "cacheWrite": 0,
+        "reasoning": 381,
+        "totalTokens": 3904
+      },
+      "latencyMs": 5321.369500000001,
+      "rawResponseHash": "sha256:bfab16445745eab395ea94420e9c8f5e1d7dd4b6e1e7867604bb3756d1ca3f72"
+    }
+  ]
+}

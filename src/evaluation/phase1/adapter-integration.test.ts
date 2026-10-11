@@ -33,7 +33,12 @@ import path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { formatSkillsForPrompt } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, Skill } from "@earendil-works/pi-coding-agent";
+// 真实 prompt 构建路径：buildSystemPrompt 未从包顶层 export（exports map 仅 "." /
+// "./rpc-entry" / "./client"），改用项目 node_modules 内已验证 dist 文件的相对文件 URL。
+// 仅测试使用；生产 adapter 不依赖此内部路径。
+import { buildSystemPrompt } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/core/system-prompt.js";
 
 import { registerSkillCortex } from "../../adapters/pi/index.ts";
 import type { ShadowResult } from "../../adapters/pi/index.ts";
@@ -82,6 +87,12 @@ function getSearchTool(pi: FakePi): SearchToolLike {
   return tool as SearchToolLike;
 }
 
+function getLoadTool(pi: FakePi): SearchToolLike {
+  const tool = pi.tools.find((t) => (t as { name?: string }).name === "load_skill");
+  assert.ok(tool, "load_skill tool not registered");
+  return tool as SearchToolLike;
+}
+
 interface SearchDetails {
   ready: boolean;
   category?: string;
@@ -94,12 +105,32 @@ function detailsOf(result: HostToolResultLike): SearchDetails {
   return result.details as SearchDetails;
 }
 
+interface LoadDetails {
+  ready: boolean;
+  category?: string;
+  name?: string;
+  scope?: string;
+}
+
+function loadDetailsOf(result: HostToolResultLike): LoadDetails {
+  return result.details as LoadDetails;
+}
+
 function resultText(result: HostToolResultLike): string {
   return result.content.map((c) => (c.type === "text" ? c.text : "")).join("");
 }
 
 function makeEvent(prompt: string, skills: HostSkillLike[], systemPrompt = "BASE_SYSTEM_PROMPT") {
   return { prompt, systemPrompt, systemPromptOptions: { skills } };
+}
+
+/** 用真实 buildSystemPrompt 构造含全量 catalog 的 base system prompt（Pi 原生路径）。 */
+function buildNativePrompt(cwd: string, skills: HostSkillLike[]): string {
+  return buildSystemPrompt({
+    cwd,
+    skills: skills as unknown as Skill[],
+    contextFiles: [{ path: "CLAUDE.md", content: "PROJECT_RULE_MARKER" }],
+  });
 }
 
 async function makePackage(
@@ -164,27 +195,99 @@ describe("Phase 1 adapter integration/safety (black-box)", () => {
     assert.ok(shadow.cardText.includes("Read and merge PDF documents."));
   });
 
-  it("inject: bounded Top-K cards with full description + selection instructions, not unselected descriptions", async () => {
+  it("inject: removes Pi native full-catalog block; final prompt keeps only bounded Top-K (no unselected name/description/location)", async () => {
     const pi = new FakePi();
     registerSkillCortex(pi as unknown as ExtensionAPI, { mode: "inject", topK: 5 });
 
+    const skills = [pdf, docx, chart, codeReview, disabled];
     const result = await emit(
       pi,
-      makeEvent("merge PDF files", [pdf, docx, chart, codeReview, disabled], "ORIGINAL_SYSTEM_PROMPT"),
+      makeEvent("merge PDF files", skills, buildNativePrompt(root, skills)),
     );
 
-    assert.ok(result && typeof result === "object");
+    assert.ok(result && typeof result === "object", "inject must return a result object");
     const injected = (result as { systemPrompt?: string }).systemPrompt;
     assert.equal(typeof injected, "string");
-    assert.ok(injected!.startsWith("ORIGINAL_SYSTEM_PROMPT"), "original system prompt preserved");
 
-    assert.ok(injected!.includes("Read and merge PDF documents."));
+    // 原生全量 catalog block（含全部可见 Skill 的 name/description/location）必须被完整移除。
+    assert.ok(
+      !injected!.includes(formatSkillsForPrompt(skills as unknown as Skill[])),
+      "full native catalog block must be removed",
+    );
+
+    // 选中的 pdf：完整描述出现在候选卡中。
+    assert.ok(injected!.includes("Read and merge PDF documents."), "selected skill description present");
+
+    // 未选中 Skill 的 name / description / location 均不得出现。
+    for (const unselected of [docx, chart, codeReview]) {
+      assert.ok(!injected!.includes(`<name>${unselected.name}</name>`), `${unselected.name} name must be absent`);
+      assert.ok(!injected!.includes(unselected.description), `${unselected.name} description must be absent`);
+      assert.ok(!injected!.includes(unselected.filePath), `${unselected.name} location must be absent`);
+    }
+    // 禁用 Skill 既不进原生 block，也不进候选。
+    assert.ok(!injected!.includes("Run destructive admin operations."), "disabled skill description must be absent");
+
+    // 保留 project context 与 CWD（移除必须外科式，不得误删非 skills 内容）。
+    assert.ok(injected!.includes("PROJECT_RULE_MARKER"), "project context preserved");
+    assert.ok(injected!.includes("Current working directory:"), "CWD line preserved");
+
+    // 选择说明仍在。
     assert.ok(injected!.includes("Single skill"));
     assert.ok(injected!.includes("Multi-skill"));
     assert.ok(injected!.includes("No-skill"));
-    assert.ok(!injected!.includes("Create Word documents with formatting."));
-    assert.ok(!injected!.includes("Generate charts and data visualizations."));
-    assert.ok(!injected!.includes("Run destructive admin operations."));
+  });
+
+  it("inject prompt_rewrite failure (native block not found) fails open: no injection, no candidate block", async () => {
+    const pi = new FakePi();
+    const errors: Array<{ error: unknown; context: { phase: string } }> = [];
+    registerSkillCortex(pi as unknown as ExtensionAPI, {
+      mode: "inject",
+      onError: (error, context) => errors.push({ error, context }),
+    });
+
+    // 模拟 buildSystemPrompt 未嵌入 skills 的路径（如 read 工具不可用）：base prompt 不含原生 block。
+    const result = await emit(pi, makeEvent("merge PDF files", [pdf, docx], "You are an expert coding assistant."));
+
+    assert.equal(result, undefined, "prompt_rewrite 失败必须 fail open：不注入、不追加、保留原生慢路径");
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0]!.context.phase, "prompt_rewrite");
+    assert.ok(errors[0]!.error instanceof Error);
+  });
+
+  it("inject prompt_rewrite failure (native block non-unique) fails open: no injection, no candidate block", async () => {
+    const pi = new FakePi();
+    const errors: Array<{ error: unknown; context: { phase: string } }> = [];
+    registerSkillCortex(pi as unknown as ExtensionAPI, {
+      mode: "inject",
+      onError: (error, context) => errors.push({ error, context }),
+    });
+
+    // 原生 block 出现两次：无法唯一定位，必须 fail open，绝不返回“全量 + Top-K”。
+    const skills = [pdf, docx];
+    const block = formatSkillsForPrompt(skills as unknown as Skill[]);
+    const duplicatedPrompt = `prefix\n${block}\nsuffix\n${block}`;
+
+    const result = await emit(pi, makeEvent("merge PDF files", skills, duplicatedPrompt));
+
+    assert.equal(result, undefined, "非唯一原生 block 必须 fail open：不注入、不追加");
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0]!.context.phase, "prompt_rewrite");
+    assert.ok(errors[0]!.error instanceof Error);
+  });
+
+  it("inject with empty skills: no native block to remove, emits no-skill guidance only", async () => {
+    const pi = new FakePi();
+    registerSkillCortex(pi as unknown as ExtensionAPI, { mode: "inject", topK: 5 });
+
+    const result = await emit(pi, makeEvent("anything", [], buildNativePrompt(root, [])));
+
+    assert.ok(result && typeof result === "object", "inject must return a result object");
+    const injected = (result as { systemPrompt?: string }).systemPrompt;
+    assert.equal(typeof injected, "string");
+    assert.match(injected!, /no matching skills/);
+    assert.match(injected!, /No-skill/);
+    // 空 skills 无任何 Skill 元数据可泄漏。
+    assert.ok(!injected!.includes("<available_skills>"), "no native block when no skills");
   });
 
   it("disabled skill is not ingested into candidates", async () => {
@@ -236,6 +339,73 @@ describe("Phase 1 adapter integration/safety (black-box)", () => {
     assert.equal(missDetails.ready, true);
     assert.equal(missDetails.count, 0);
     assert.deepEqual(missDetails.matches, []);
+  });
+
+  it("onDiscovery attribution: rewrite 失败不产出 route snapshot；成功注入才报告 exposedToAgent=true", async () => {
+    // 失败路径（native block 缺失）：Main Agent 实际看不到 Top-K，不得留下可误归因快照。
+    const pi = new FakePi();
+    const snaps: Array<{ exposedToAgent?: boolean }> = [];
+    const errors: Array<{ error: unknown; context: { phase: string } }> = [];
+    registerSkillCortex(pi as unknown as ExtensionAPI, {
+      mode: "inject",
+      onDiscovery: (r) => snaps.push(r),
+      onError: (error, context) => errors.push({ error, context }),
+    });
+    const result = await emit(pi, makeEvent("merge PDF files", [pdf, docx], "You are an expert coding assistant."));
+    assert.equal(result, undefined, "rewrite 失败必须 fail open");
+    assert.equal(snaps.length, 0, "rewrite 失败不得产出 onDiscovery 快照");
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0]!.context.phase, "prompt_rewrite");
+
+    // 成功路径：最终 prompt 确定后报告 exposedToAgent=true / deliveryMode=inject。
+    const pi2 = new FakePi();
+    const snaps2: Array<{ exposedToAgent?: boolean; deliveryMode?: string }> = [];
+    registerSkillCortex(pi2 as unknown as ExtensionAPI, {
+      mode: "inject",
+      topK: 3,
+      onDiscovery: (r) => snaps2.push(r),
+    });
+    const skills = [pdf, docx, chart, codeReview];
+    const okResult = await emit(pi2, makeEvent("merge PDF files", skills, buildNativePrompt(root, skills)));
+    assert.ok(okResult && typeof okResult === "object", "inject 必须成功");
+    assert.equal(snaps2.length, 1);
+    assert.equal(snaps2[0]!.exposedToAgent, true);
+    assert.equal(snaps2[0]!.deliveryMode, "inject");
+  });
+
+  it("load_skill: project-owned on-demand load — bounded, revision-checked, fail-closed", async () => {
+    const pi = new FakePi();
+    registerSkillCortex(pi as unknown as ExtensionAPI, { topK: 5 });
+
+    const loadTool = getLoadTool(pi);
+    const searchTool = getSearchTool(pi);
+
+    // 摄入前：fail closed（not_initialized）。
+    const pre = await loadTool.execute("tcid", { skill_id: "skill:x", skill_revision: "rev:y" }, undefined, undefined, {});
+    assert.equal(loadDetailsOf(pre).category, "not_initialized");
+
+    // 摄入（fake host before_agent_start，shadow 模式也会填充 catalog）。
+    await emit(pi, makeEvent("merge PDF files", [pdf, docx, chart, codeReview]));
+
+    // search_skills → skillId/skillRevision（候选卡同源）。
+    const hit = await searchTool.execute("tcid", { query: "pdf", limit: 1 }, undefined, undefined, {});
+    const match = detailsOf(hit).matches[0] as { skillId: string; skillRevision: string; name: string };
+    assert.equal(match.name, "pdf");
+
+    // 成功加载：正文 + 最小 provenance，不泄漏其它 catalog 条目/绝对路径。
+    const ok = await loadTool.execute("tcid", { skill_id: match.skillId, skill_revision: match.skillRevision }, undefined, undefined, {});
+    assert.equal(loadDetailsOf(ok).category, "ok");
+    assert.equal(loadDetailsOf(ok).name, "pdf");
+    assert.match(resultText(ok), /Read and merge PDF documents\./);
+    assert.ok(!resultText(ok).includes("Create Word documents with formatting."), "不得泄漏其它 catalog 条目");
+
+    // unknown id → fail closed。
+    const unknown = await loadTool.execute("tcid", { skill_id: "skill:unknown", skill_revision: match.skillRevision }, undefined, undefined, {});
+    assert.equal(loadDetailsOf(unknown).category, "unknown_skill");
+
+    // revision mismatch → fail closed。
+    const mismatch = await loadTool.execute("tcid", { skill_id: match.skillId, skill_revision: "rev:wrong" }, undefined, undefined, {});
+    assert.equal(loadDetailsOf(mismatch).category, "revision_mismatch");
   });
 
   it("invalid path / Registry failure fails open: no prompt change, no throw, onError", async () => {

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Markdown Relative-Link Audit"
+  short_description: "Audit broken project-local Markdown file links"
+  default_prompt: "Use $markdown-relative-link-audit to report broken relative links in project Markdown files."

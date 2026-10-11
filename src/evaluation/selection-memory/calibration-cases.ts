@@ -1,0 +1,40 @@
+import {
+  SELECTION_MEMORY_SKILL_IDS as ID,
+  selectionMemoryCase,
+  type SelectionMemoryEvalCase,
+} from "./evidence-cases.ts";
+
+export const SELECTION_MEMORY_CALIBRATION_CASES: readonly SelectionMemoryEvalCase[] = Object.freeze([
+  selectionMemoryCase("SMC01", "calibration", "zh", "请为机场行李追踪平台选择跨区域消息传播、故障域和恢复策略，并形成架构取舍记录。", [ID.architecture], [ID.codebaseDesign, ID.architecture, ID.domainModeling, ID.research, ID.code], true),
+  selectionMemoryCase("SMC02", "calibration", "en", "Choose a resilient topology for a fleet-telemetry control plane and capture why its service boundaries were selected.", [ID.architecture], [ID.architecture, ID.domainModeling, ID.codebaseDesign, ID.code, ID.research], true),
+  selectionMemoryCase("SMC03", "calibration", "zh", "围绕低资源语音识别的群体偏差，跨多个论文数据库制定筛选流程并综合研究证据。", [ID.systematicReview], [ID.academicPaperReview, ID.systematicReview, ID.research, ID.researchPaperWriter, ID.githubDeepResearch], true),
+  selectionMemoryCase("SMC04", "calibration", "en", "Collect papers on compiler-generated tests through a reproducible database search, apply eligibility rules, and report themes recurring across the included papers.", [ID.systematicReview], [ID.systematicReview, ID.researchPaperWriter, ID.academicPaperReview, ID.research, ID.githubDeepResearch], true),
+  selectionMemoryCase("SMC05", "calibration", "zh", "我们准备上线一个 GraphQL 管理接口，想确认不同租户是否可能看到彼此的数据，并整理上线前需要处理的风险。", [ID.security], [ID.clawdefender, ID.security, ID.code, ID.codebaseDesign, ID.research], true),
+  selectionMemoryCase("SMC06", "calibration", "en", "Before shipping signed download links, determine whether a reused link or mismatched key could expose another user's file; list launch risks without changing code.", [ID.security], [ID.code, ID.security, ID.clawdefender, ID.codebaseDesign, ID.research], true),
+  selectionMemoryCase("SMC07", "calibration", "zh", "把不同传感器的漂移分布排成多条重叠曲线并导出 PNG，只交付图形，不解释数据。", [ID.chart], [ID.dataAnalysis, ID.chart, ID.imageGeneration, ID.code, ID.research], true),
+  selectionMemoryCase("SMC08", "calibration", "en", "Turn the supplied dependency counts into a circular node-and-ribbon graphic; return only the image.", [ID.chart], [ID.chart, ID.dataAnalysis, ID.imageGeneration, ID.research, ID.code], true),
+  selectionMemoryCase("SMC09", "calibration", "zh", "新同事看不懂事件订阅接口。请根据仓库代码整理一页参数、回调示例和兼容性约束，供接入者使用。", [ID.codeDocumentation], [ID.code, ID.codeDocumentation, ID.research, ID.codebaseDesign, ID.githubDeepResearch], true),
+  selectionMemoryCase("SMC10", "calibration", "en", "Clients may no longer need the legacy header. Check the standards body's current pages and give a linked answer we can rely on.", [ID.research], [ID.githubDeepResearch, ID.research, ID.codeDocumentation, ID.systematicReview, ID.code], true),
+  selectionMemoryCase("SMC11", "calibration", "zh", "从上传的赛事录像中导出 00:47 与 04:12 两个时间点的静态画面，并分别保存为 PNG。", [ID.videoFrames], [ID.ffmpegEditor, ID.videoFrames, ID.youtubeWatcher, ID.imageGeneration, ID.code], false),
+  selectionMemoryCase("SMC12", "calibration", "en", "Generate an original linocut-style illustration of an orbital greenhouse at night.", [ID.imageGeneration], [ID.imageGeneration, ID.imageToCode, ID.chart, ID.ffmpegEditor, ID.code], false),
+
+  selectionMemoryCase("SMC13", "calibration", "zh", "查阅支付平台官方版本说明确认新签名字段的现行语义，再结合仓库调用代码写一份带引用的开发者迁移页。", [ID.research, ID.codeDocumentation], [ID.codeDocumentation, ID.research, ID.githubDeepResearch, ID.code, ID.security], true),
+  selectionMemoryCase("SMC14", "calibration", "en", "Search and screen papers on autonomous debugging, code each included paper's publication-bias value, and turn those values into a funnel-shaped image.", [ID.systematicReview, ID.chart], [ID.chart, ID.systematicReview, ID.dataAnalysis, ID.academicPaperReview, ID.research], true),
+  selectionMemoryCase("SMC15", "calibration", "zh", "截取宣传片 01:05 的人物剪影作为构图参考，并生成一张全新的爵士音乐节海报。", [ID.videoFrames, ID.imageGeneration], [ID.imageGeneration, ID.videoFrames, ID.ffmpegEditor, ID.imageToCode, ID.youtubeWatcher], true),
+  selectionMemoryCase("SMC16", "calibration", "en", "Before shipping the client SDK, find whether its token storage could expose credentials or cross account boundaries, then create an integration page listing methods and safe constraints.", [ID.security, ID.codeDocumentation], [ID.security, ID.codeDocumentation, ID.code, ID.clawdefender, ID.codebaseDesign], true),
+  selectionMemoryCase("SMC17", "calibration", "zh", "为机密任务调度平台设计新的隔离架构和信任边界；同时检查现有消息路由代码是否可能把任务发到错误租户。交付 ADR 与代码风险清单。", [ID.architecture, ID.security], [ID.security, ID.architecture, ID.domainModeling, ID.codebaseDesign, ID.clawdefender], true),
+  selectionMemoryCase("SMC18", "calibration", "en", "The official standard may have changed its reporting requirement. Resolve the current rule, then use a predefined search and eligibility process to compare papers that applied it.", [ID.research, ID.systematicReview], [ID.research, ID.systematicReview, ID.academicPaperReview, ID.researchPaperWriter, ID.githubDeepResearch], true),
+
+  selectionMemoryCase("SMC19", "calibration", "zh", "为什么 OAuth 通常让客户端交换授权码，而不是把用户密码交给每个客户端？", [], [ID.security, ID.research, ID.codeDocumentation, ID.clawdefender, ID.code], true),
+  selectionMemoryCase("SMC20", "calibration", "zh", "什么时候折线形式比饼状形式更适合表达随时间发生的变化？", [], [ID.chart, ID.dataAnalysis, ID.imageGeneration, ID.research, ID.code], true),
+  selectionMemoryCase("SMC21", "calibration", "zh", "一段两分钟的视频等于多少秒？", [], [ID.videoFrames, ID.ffmpegEditor, ID.youtubeWatcher, ID.dataAnalysis, ID.code], true),
+  selectionMemoryCase("SMC22", "calibration", "zh", "系统性文献综述和随便阅读几篇相关论文，核心区别在哪里？", [], [ID.systematicReview, ID.academicPaperReview, ID.researchPaperWriter, ID.research, ID.codeDocumentation], true),
+  selectionMemoryCase("SMC23", "calibration", "zh", "紫色的互补色通常是什么颜色？", [], [ID.imageGeneration, ID.chart, ID.imageToCode, ID.research, ID.dataAnalysis], true),
+  selectionMemoryCase("SMC24", "calibration", "zh", "软件项目里的 README 和 CHANGELOG 通常分别解决什么问题？", [], [ID.codeDocumentation, ID.code, ID.research, ID.githubDeepResearch, ID.codebaseDesign], true),
+  selectionMemoryCase("SMC25", "calibration", "en", "Expand the abbreviation OAuth.", [], [ID.security, ID.research, ID.codeDocumentation, ID.clawdefender, ID.code], false),
+  selectionMemoryCase("SMC26", "calibration", "en", "What is a bar chart?", [], [ID.chart, ID.dataAnalysis, ID.imageGeneration, ID.research, ID.code], false),
+  selectionMemoryCase("SMC27", "calibration", "en", "How many milliseconds are in three seconds?", [], [ID.dataAnalysis, ID.videoFrames, ID.code, ID.research, ID.ffmpegEditor], false),
+  selectionMemoryCase("SMC28", "calibration", "en", "What does peer review mean?", [], [ID.systematicReview, ID.academicPaperReview, ID.research, ID.researchPaperWriter, ID.codeDocumentation], false),
+  selectionMemoryCase("SMC29", "calibration", "en", "What is an illustration?", [], [ID.imageGeneration, ID.chart, ID.imageToCode, ID.research, ID.code], false),
+  selectionMemoryCase("SMC30", "calibration", "en", "What is a source citation?", [], [ID.research, ID.systematicReview, ID.codeDocumentation, ID.academicPaperReview, ID.githubDeepResearch], false),
+]);
